@@ -199,3 +199,107 @@ describe("renderPage", () => {
     expect(html).not.toContain("cdn.");
   });
 });
+
+describe("renderPage XSS safety", () => {
+  it("escapes a <script> tag in the PR title, description and URL", () => {
+    const html = renderPage({
+      prTitle: '<script>alert("title")</script>',
+      prDescription: "before <script>alert(1)</script> after",
+      prUrl: 'https://github.com/a/b/pull/1"><script>alert(2)</script>',
+      fileDiffs: new Map(),
+      explanations: [],
+    });
+    expect(html).not.toContain("<script>alert");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("escapes a <script> tag in a category's name and description", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [
+        explanation({
+          category: { name: "<script>alert(1)</script>", description: "<img src=x onerror=1>" },
+          markdown: "Body.",
+        }),
+      ],
+    });
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).not.toContain("<img src=x onerror=1>");
+  });
+
+  it("escapes untrusted content inside the embedded mermaid-sources JSON, including a closing </script> sequence", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [
+        explanation({
+          markdown:
+            "## Production code\n\n```mermaid\ngraph TD\nA[</script><script>alert(1)</script>]\n```\n",
+        }),
+      ],
+    });
+    // The literal text must not produce a real closing tag followed by a new <script> element.
+    expect(html).not.toMatch(/<\/script>\s*<script>alert\(1\)/);
+    const root = parse(html);
+    const sources = JSON.parse(root.querySelector("#tulip-mermaid-sources")?.text ?? "[]");
+    expect(sources[0]).toContain("<script>alert(1)</script>");
+  });
+
+  it("escapes untrusted file content inside the embedded file-data JSON, including a closing </script> sequence", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff(
+      "</script><script>alert(1)</script>\n",
+      "</script><script>alert(1)</script>\n",
+    );
+    const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
+
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+    });
+
+    expect(html).not.toMatch(/<\/script>\s*<script>alert\(1\)/);
+    // The snippet block itself (server-rendered HTML, not JSON) must have the tag escaped too.
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  });
+
+  it("escapes a snippet ref's file path when used as an HTML attribute", () => {
+    // The same raw path is also embedded in the #tulip-file-data <script> JSON below — that's
+    // safe as-is (script element content isn't parsed as markup by the browser), so this test
+    // checks the attribute specifically rather than asserting on the whole page string.
+    const path = "src/<img src=x onerror=1>.ts";
+    const ref = serializeSnippetRef({
+      path,
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const fileDiffs = new Map<string, FileDiffData>([[path, { rows, embeddable: true }]]);
+
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+    });
+
+    const container = parse(html).querySelector(".snippet");
+    expect(container?.getAttribute("data-path")).toBe(path);
+    expect(container?.outerHTML).not.toContain("<img src=x onerror=1>");
+  });
+});

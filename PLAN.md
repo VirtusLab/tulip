@@ -52,7 +52,7 @@
 - [x] 7.2 Mermaid diagram rendering
 - [x] 7.3 Snippet substitution: markup refs → side-by-side unfoldable diffs with expandable context (github-style), honoring the unfold-by-default flag
 - [x] 7.4 Output assembly: temp directory with HTML page + open-in-browser instructions
-- [ ] 7.5 Tests: template rendering, snippet substitution
+- [x] 7.5 Tests: template rendering, snippet substitution
 
 ## Epic 8: End-to-end integration
 - [ ] 8.1 Pipeline orchestration: wire phases 1–3 + rendering, progress logging throughout
