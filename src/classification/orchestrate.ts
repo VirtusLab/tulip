@@ -2,6 +2,7 @@ import type { Category } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { classifyInBatches, type ResolvedChange } from "./classify.js";
+import { verifyAndRepairCoverage } from "./coverage.js";
 import { type ClassificationState, resolveNoneClassifications } from "./escape-hatch.js";
 import { prepareClassifiableChanges } from "./prepare.js";
 import type { CategoryAssignment, ClassifiableChange } from "./types.js";
@@ -29,9 +30,11 @@ export interface ClassifyChangesResult {
 }
 
 /**
- * Runs phase 2 end to end: classifies every change in `diff` (in batches, via haiku), resolving
- * any "none" replies through the phase-1 escape hatch (see ./escape-hatch.ts). Does not itself
- * verify coverage — see ./coverage.ts, which wraps this with the verify/repair step.
+ * Runs phase 2 end to end: classifies every change in `diff` (in batches, via haiku), resolves
+ * any "none" replies through the phase-1 escape hatch (see ./escape-hatch.ts), then verifies
+ * every non-ignored change ended up covered by >= 1 category, repairing gaps by re-asking the
+ * classifier (see ./coverage.ts). Throws {@link IncompleteCoverageError} (from ./coverage.js) if
+ * coverage still isn't complete after every repair attempt.
  */
 export async function classifyChanges(
   input: ClassifyChangesInput,
@@ -48,7 +51,19 @@ export async function classifyChanges(
     classifierSessionId: batchResult.sessionId,
     acceptedNewCategories: 0,
   };
-  const resolved = await resolveNoneClassifications(batchResult.resolved, changesById, state, deps);
+  const afterEscapeHatch = await resolveNoneClassifications(
+    batchResult.resolved,
+    changesById,
+    state,
+    deps,
+  );
+  const resolved = await verifyAndRepairCoverage(
+    changes,
+    changesById,
+    afterEscapeHatch,
+    state,
+    deps,
+  );
 
   return {
     categories: state.categories,

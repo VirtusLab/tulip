@@ -93,3 +93,27 @@ ${outcomes.map(formatEscapeHatchOutcome).join("\n\n")}
 
 Reply with an updated classification for just these changes.`;
 }
+
+/**
+ * Resumes the classifier to cover changes it didn't classify at all (see ./coverage.ts):
+ * reiterates the category list, rules and instructions (a later batch/round may have moved on),
+ * then re-lists just the uncovered changes.
+ */
+export function buildCoverageRepairPrompt(
+  categories: Category[],
+  missing: ClassifiableChange[],
+): string {
+  return `These changes were missed — they weren't covered by any category in your replies so
+far. Classify each of them now, using the same rules as before:
+
+The categories to classify changes into are:
+${formatCategoryList(categories)}
+
+${SPECIAL_CATEGORIES_EXPLANATION}
+
+${OUTPUT_INSTRUCTIONS}
+
+Changes:
+
+${formatChanges(missing)}`;
+}
