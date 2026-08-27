@@ -82,6 +82,38 @@ describe("renderPage", () => {
     expect(root.querySelector("#category-0")?.text).toContain("Just some prose, no headings.");
   });
 
+  it("renders the intro (text before the first subsection heading) alongside the subsections, not instead of them", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
+
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [
+        explanation({
+          markdown: `Intro prose.\n\n\`\`\`mermaid\ngraph TD\nA --> B\n\`\`\`\n\n${ref}\n\n## Production code\n\nProd body.\n\n## Test code\n\nTest body.\n`,
+        }),
+      ],
+    });
+
+    const root = parse(html);
+    const category = root.querySelector("#category-0");
+    expect(category?.text).toContain("Intro prose.");
+    expect(category?.querySelector("pre.mermaid")).not.toBeNull();
+    expect(category?.querySelector(".snippet")).not.toBeNull();
+    // ...and the subsections still render too.
+    expect(root.querySelector("#category-0-production")?.text).toContain("Prod body.");
+    expect(root.querySelector("#category-0-test")?.text).toContain("Test body.");
+  });
+
   it("includes a TOC entry per category and per present subsection", () => {
     const html = renderPage({
       prTitle: "t",

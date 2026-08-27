@@ -3,7 +3,11 @@ import { escapeHtml, escapeInlineScript } from "./escape.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { categoryId, subsectionId } from "./ids.js";
 import { type MarkdownRenderContext, renderCategoryMarkdown } from "./markdown.js";
-import { type CategorySubsection, splitCategoryMarkdown } from "./sections.js";
+import {
+  type CategorySections,
+  type CategorySubsection,
+  splitCategoryMarkdown,
+} from "./sections.js";
 import { buildToc, renderTocHtml } from "./toc.js";
 
 /** Everything the page template needs: PR context, the reviewed explanations in presentation
@@ -17,22 +21,26 @@ export interface PageInput {
   fileDiffs: Map<string, FileDiffData>;
 }
 
+const EMPTY_SECTIONS: CategorySections = { intro: "", subsections: [] };
+
 /** Renders the full, self-contained HTML page (assumes `assets/style.css`, `assets/app.js` and
  * `assets/vendor/mermaid.min.js` sit alongside `index.html` — see ./assemble.ts). */
 export function renderPage(input: PageInput): string {
-  const subsectionsPerCategory = input.explanations.map(
-    (explanation) => splitCategoryMarkdown(explanation.markdown).subsections,
+  // Split each category's markdown exactly once — both the TOC (which needs the subsection
+  // list) and the section body (which needs the intro too) read from this same array.
+  const parsedSections = input.explanations.map((explanation) =>
+    splitCategoryMarkdown(explanation.markdown),
   );
   const toc = buildToc(
     input.explanations.map((explanation) => explanation.category),
-    subsectionsPerCategory,
+    parsedSections.map((sections) => sections.subsections),
   );
 
   const ctx: MarkdownRenderContext = { mermaidSources: [], fileDiffs: input.fileDiffs };
   const description = renderCategoryMarkdown(input.prDescription, ctx);
   const sections = input.explanations
     .map((explanation, index) =>
-      renderCategorySection(explanation, index, subsectionsPerCategory[index] ?? [], ctx),
+      renderCategorySection(explanation, index, parsedSections[index] ?? EMPTY_SECTIONS, ctx),
     )
     .join("\n");
 
@@ -82,16 +90,23 @@ function embeddableFileData(
 function renderCategorySection(
   explanation: CategoryExplanation,
   index: number,
-  subsections: CategorySubsection[],
+  sections: CategorySections,
   ctx: MarkdownRenderContext,
 ): string {
   const { category } = explanation;
   const heading = `<h2>${escapeHtml(category.name)}</h2><p class="category-description">${escapeHtml(category.description)}</p>`;
 
-  const body =
-    subsections.length > 0
-      ? subsections.map((subsection) => renderSubsection(subsection, index, ctx)).join("\n")
-      : renderCategoryMarkdown(splitCategoryMarkdown(explanation.markdown).intro, ctx);
+  // The intro (anything before the first recognized subsection heading) must render
+  // unconditionally, alongside any subsections — not only when there are no subsections.
+  // Dropping it silently discarded prose/mermaid/snippet content that happened to precede a
+  // "## Production code"/"## Test code" heading (a real, reviewer-reported bug: epic 6's
+  // coverage check verifies every change is *referenced* somewhere in the markdown, not that
+  // the renderer actually emits every part of the markdown).
+  const introHtml = sections.intro.trim() ? renderCategoryMarkdown(sections.intro, ctx) : "";
+  const subsectionsHtml = sections.subsections
+    .map((subsection) => renderSubsection(subsection, index, ctx))
+    .join("\n");
+  const body = [introHtml, subsectionsHtml].filter((part) => part !== "").join("\n");
 
   return `<section id="${categoryId(index)}" class="category">\n${heading}\n${body}\n</section>`;
 }
