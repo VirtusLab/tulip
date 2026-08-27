@@ -2,7 +2,7 @@
 
 **Goal:** CLI tool (`tulip <PR URL>`) that analyzes a GitHub PR with LLMs and renders a reviewer-friendly HTML explanation.
 
-**Spec:** `specs.md`. Epics are listed in implementation order. Mark tasks `[x]` when done.
+**Spec:** `docs/adr/0001-initial-spec.md`. Epics are listed in implementation order. Mark tasks `[x]` when done.
 
 **Tech stack:** TypeScript, Node (latest LTS), pnpm, vitest. LLM via `claude -p` headless.
 
