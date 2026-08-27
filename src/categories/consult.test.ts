@@ -26,7 +26,9 @@ function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudePro
 
 describe("consultOnCategory", () => {
   it("requests a schema shaped as { accept, category? }", async () => {
-    const runClaudeProcess = vi.fn(async () => envelope({ accept: false }));
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ accept: false }),
+    );
 
     await consultOnCategory(INPUT, { runClaudeProcess });
 
@@ -47,7 +49,9 @@ describe("consultOnCategory", () => {
   });
 
   it("resumes the phase-1 session with the proposed name and change context", async () => {
-    const runClaudeProcess = vi.fn(async () => envelope({ accept: false }));
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ accept: false }),
+    );
 
     await consultOnCategory(INPUT, { runClaudeProcess });
 

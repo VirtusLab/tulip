@@ -25,7 +25,7 @@ function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudePro
 
 describe("generateCategories", () => {
   it("requests a schema shaped as { categories: [{ name, description }] }", async () => {
-    const runClaudeProcess = vi.fn(async () =>
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
     );
 
@@ -50,7 +50,7 @@ describe("generateCategories", () => {
   });
 
   it("sends a prompt containing the title, description, files, and category guidance", async () => {
-    const runClaudeProcess = vi.fn(async () =>
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
     );
 
