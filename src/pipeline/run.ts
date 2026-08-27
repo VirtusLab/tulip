@@ -71,7 +71,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     const diff = parseDiff(metadata.diff);
     warnOnFileListMismatch(metadata, diff, logger);
 
-    logger.debug("creating temporary checkout...");
+    logger.debug("creating checkout...");
     checkout = await runPhase("creating checkout", () =>
       doCreateCheckout(options.pr, { base: metadata.base, head: metadata.head }),
     );
@@ -118,6 +118,10 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     );
     logger.info(`generated explanations for ${explanations.length} categories`);
 
+    logger.info("preparing output page...");
+    // Safe: this phase only runs once "creating checkout" (above) has already succeeded, so
+    // `checkout` is always assigned by this point — TypeScript just can't see that across the
+    // try/finally.
     const { indexPath } = await runPhase("rendering", () =>
       doRenderExplanations(
         { prTitle: metadata.title, prDescription: metadata.body, prUrl, explanations },
@@ -131,7 +135,13 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   } finally {
     if (checkout) {
       logger.debug("cleaning up checkout...");
-      await checkout.cleanup();
+      try {
+        await checkout.cleanup();
+      } catch (error) {
+        // Never let a cleanup failure escape the finally: it would surface as an unhandled
+        // rejection past this function's own no-stack-trace error reporting above.
+        logger.info(`warning: failed to clean up checkout: ${causeMessage(error)}`);
+      }
     }
   }
 }

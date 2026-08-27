@@ -175,6 +175,7 @@ describe("run", () => {
     expect(lines.some((line) => line.includes("phase 1"))).toBe(true);
     expect(lines.some((line) => line.includes("phase 2"))).toBe(true);
     expect(lines.some((line) => line.includes("phase 3"))).toBe(true);
+    expect(lines.some((line) => line.includes("preparing output page"))).toBe(true);
   });
 
   it("warns when PrMetadata.files and the parsed diff disagree", async () => {
@@ -229,6 +230,11 @@ describe("run", () => {
     await run(options(), deps);
 
     expect(process.exitCode).toBe(1);
+    expect(deps.classifyChanges).not.toHaveBeenCalled();
+    expect(deps.explainCategories).not.toHaveBeenCalled();
+    expect(deps.renderExplanations).not.toHaveBeenCalled();
+    const checkout = await deps.createCheckout.mock.results[0]?.value;
+    expect(checkout.cleanup).toHaveBeenCalledTimes(1);
     const lines = infoLines(deps);
     expect(lines.some((line) => line === new ClaudeBinaryMissingError().message)).toBe(true);
   });
@@ -316,25 +322,65 @@ describe("run", () => {
     ).toBe(true);
   });
 
-  it("on a mid-pipeline failure, names the failing phase, cleans up the checkout, and skips later phases", async () => {
+  it("on a createCheckout failure, names the phase, sets exit code 1, and never calls cleanup", async () => {
     const deps = baseDeps();
-    deps.classifyChanges = vi.fn(async () => {
-      throw new Error("3 change(s) still uncovered by any category");
+    deps.createCheckout = vi.fn(async () => {
+      throw new Error("fatal: could not fetch head sha");
     });
 
     await run(options(), deps);
 
     expect(process.exitCode).toBe(1);
+    expect(deps.generateCategories).not.toHaveBeenCalled();
+    expect(deps.classifyChanges).not.toHaveBeenCalled();
     expect(deps.explainCategories).not.toHaveBeenCalled();
     expect(deps.renderExplanations).not.toHaveBeenCalled();
+    const lines = infoLines(deps);
+    expect(
+      lines.some(
+        (line) =>
+          line.includes("creating checkout failed") &&
+          line.includes("fatal: could not fetch head sha"),
+      ),
+    ).toBe(true);
+  });
+
+  it("on a renderExplanations failure, names the phase and still cleans up the checkout", async () => {
+    const deps = baseDeps();
+    deps.renderExplanations = vi.fn(async () => {
+      throw new Error("ENOSPC: no space left on device");
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
     const checkout = await deps.createCheckout.mock.results[0]?.value;
     expect(checkout.cleanup).toHaveBeenCalledTimes(1);
     const lines = infoLines(deps);
     expect(
       lines.some(
+        (line) => line.includes("rendering failed") && line.includes("no space left on device"),
+      ),
+    ).toBe(true);
+  });
+
+  it("on a checkout cleanup failure, logs a warning instead of letting it escape", async () => {
+    const deps = baseDeps();
+    const checkout = fakeCheckout();
+    checkout.cleanup.mockRejectedValueOnce(new Error("EBUSY: resource busy"));
+    deps.createCheckout = vi.fn(async () => checkout);
+
+    await expect(run(options(), deps)).resolves.toBeUndefined();
+
+    expect(checkout.cleanup).toHaveBeenCalledTimes(1);
+    expect(process.exitCode).toBeUndefined();
+    const lines = infoLines(deps);
+    expect(
+      lines.some(
         (line) =>
-          line.includes("phase 2 (classifying changes) failed") &&
-          line.includes("3 change(s) still uncovered by any category"),
+          line.includes("warning") &&
+          line.includes("clean up checkout") &&
+          line.includes("EBUSY: resource busy"),
       ),
     ).toBe(true);
   });
