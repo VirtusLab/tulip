@@ -42,7 +42,7 @@
 
 ## Epic 6: Phase 3 — category explanations
 - [x] 6.1 Snippet-reference markup: file + side (base/head) + line range + unfold flag; parser for it
-- [ ] 6.2 Per-category prompt (opus, fresh session): context, diffs vs. file+range refs by configurable threshold, explanation structure per spec
+- [x] 6.2 Per-category prompt (opus, fresh session): context, diffs vs. file+range refs by configurable threshold, explanation structure per spec
 - [ ] 6.3 Snippet coverage verification: all provided changes referenced; resume session to amend missing ones
 - [ ] 6.4 Review subagent: clarity/conciseness/correctness; fix & re-review loop, max 3 rounds
 - [ ] 6.5 Tests: markup parsing, coverage check, review loop control

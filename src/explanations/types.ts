@@ -1,0 +1,32 @@
+import type { Category } from "../categories/types.js";
+import type { ClassifiableChange } from "../classification/types.js";
+
+/**
+ * Public domain model for phase 3 (category explanations). Wire types and JSON schemas for
+ * talking to the explaining/reviewing sessions live separately, in ./wire.ts.
+ */
+
+/** What the explaining session (task 6.2) needs to write one category's explanation. */
+export interface ExplainCategoryInput {
+  prTitle: string;
+  prDescription: string;
+  category: Category;
+  /** This category's production-code changes (see src/classification/group.js). */
+  production: ClassifiableChange[];
+  /** This category's test-code changes. */
+  test: ClassifiableChange[];
+  /** Changes whose diff excerpt spans more lines than this are given as file+side+line-range
+   * references only, not verbatim (see src/pipeline/run.js's PipelineOptions). */
+  diffThreshold: number;
+}
+
+/** One issue a review pass raised against an explanation (task 6.4). */
+export interface ReviewIssue {
+  description: string;
+}
+
+/** Final, reviewed and coverage-verified result for one category. */
+export interface CategoryExplanation {
+  category: Category;
+  markdown: string;
+}
