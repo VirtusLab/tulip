@@ -1,3 +1,4 @@
+import { ClaudeOutputError } from "../claude/errors.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import type { JsonSchema } from "../claude/schema.js";
 import { resumeSession } from "../claude/session.js";
@@ -22,8 +23,11 @@ export interface ConsultCategoryInput {
 
 export interface ConsultCategoryResult {
   accept: boolean;
-  /** Present when accepted; may refine the proposed name/description. */
+  /** Present when accepted (always, enforced below); may refine the proposed name/description. */
   category?: Category;
+  /** Latest phase-1 session id. Resume the *next* consultation from this id, not the original
+   * generateCategories one, so each consultation sees categories accepted by earlier ones. */
+  sessionId: string;
 }
 
 const CONSULT_CATEGORY_SCHEMA: JsonSchema = {
@@ -46,9 +50,15 @@ ${change.excerpt}
 
 Should this new category be added? Reply with accept: true if it's a good,
 cohesive addition alongside the categories you already created — you may
-refine its name or description. Reply with accept: false if the change should
-instead fit one of the existing categories.`;
+refine its name or description. If you accept, you MUST also include a
+category object with its name and description; never accept without one.
+Reply with accept: false (and no category) if the change should instead fit
+one of the existing categories.`;
 }
+
+/** Shape actually validated against {@link CONSULT_CATEGORY_SCHEMA} — `sessionId` on
+ * {@link ConsultCategoryResult} comes from the session envelope, not the model's reply. */
+type ConsultCategoryResponse = Pick<ConsultCategoryResult, "accept" | "category">;
 
 /**
  * Escape hatch for phase 2 (epic 5): when the classifier can't fit a change into any existing
@@ -56,12 +66,16 @@ instead fit one of the existing categories.`;
  * asks whether the classifier's proposed new category is appropriate. On acceptance, the
  * classifier should continue with the (possibly refined) category added to its list; on
  * rejection, it should be told to pick from the existing categories instead.
+ *
+ * The returned `sessionId` may differ from `input.sessionId` — resume the *next* consultation
+ * (or any further phase-2 work needing the phase-1 session) from the returned id, so it's aware
+ * of categories accepted by this call.
  */
 export async function consultOnCategory(
   input: ConsultCategoryInput,
   deps: RunnerDeps = {},
 ): Promise<ConsultCategoryResult> {
-  const { result } = await resumeSession<ConsultCategoryResult>(
+  const { result, sessionId } = await resumeSession<ConsultCategoryResponse>(
     {
       sessionId: input.sessionId,
       schema: CONSULT_CATEGORY_SCHEMA,
@@ -69,5 +83,10 @@ export async function consultOnCategory(
     },
     deps,
   );
-  return result;
+
+  if (result.accept && !result.category) {
+    throw new ClaudeOutputError("claude accepted the new category but didn't include it");
+  }
+
+  return { ...result, sessionId };
 }

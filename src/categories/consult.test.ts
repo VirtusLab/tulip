@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
 import { type ConsultCategoryInput, consultOnCategory } from "./consult.js";
 
@@ -61,18 +62,35 @@ describe("consultOnCategory", () => {
 
   it("returns accept: true with the (possibly refined) category", async () => {
     const category = { name: "Config parsing", description: "Parses the config file." };
-    const runClaudeProcess = vi.fn(async () => envelope({ accept: true, category }));
+    const runClaudeProcess = vi.fn(async () => envelope({ accept: true, category }, "session-1"));
 
     const result = await consultOnCategory(INPUT, { runClaudeProcess });
 
-    expect(result).toEqual({ accept: true, category });
+    expect(result).toEqual({ accept: true, category, sessionId: "session-1" });
   });
 
   it("returns accept: false without a category on rejection", async () => {
-    const runClaudeProcess = vi.fn(async () => envelope({ accept: false }));
+    const runClaudeProcess = vi.fn(async () => envelope({ accept: false }, "session-1"));
 
     const result = await consultOnCategory(INPUT, { runClaudeProcess });
 
-    expect(result).toEqual({ accept: false });
+    expect(result).toEqual({ accept: false, sessionId: "session-1" });
+  });
+
+  it("returns the session id from resumeSession's response, not the input session id", async () => {
+    // Each consultation may advance the phase-1 session; callers must resume the *next*
+    // consultation from this returned id so it's aware of categories accepted so far.
+    const runClaudeProcess = vi.fn(async () => envelope({ accept: false }, "session-2"));
+
+    const result = await consultOnCategory(INPUT, { runClaudeProcess });
+
+    expect(INPUT.sessionId).toBe("session-1");
+    expect(result.sessionId).toBe("session-2");
+  });
+
+  it("rejects an accept: true response that omits the category", async () => {
+    const runClaudeProcess = vi.fn(async () => envelope({ accept: true }));
+
+    await expect(consultOnCategory(INPUT, { runClaudeProcess })).rejects.toThrow(ClaudeOutputError);
   });
 });
