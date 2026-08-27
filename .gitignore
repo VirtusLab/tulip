@@ -1,3 +1,7 @@
 .superpowers/
 node_modules/
 dist/
+
+# Refreshed from node_modules/mermaid by scripts/copy-assets.mjs on every build — see that
+# script's comment. Not hand-maintained, so not checked in.
+/src/rendering/assets/vendor/mermaid.min.js
