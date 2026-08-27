@@ -6,12 +6,11 @@ import { type ClassificationState, resolveNoneClassifications } from "./escape-h
 import { buildCoverageRepairPrompt } from "./prompt.js";
 import {
   type CategoryAssignment,
-  CLASSIFY_BATCH_SCHEMA,
   type ClassifiableChange,
-  type ClassifyBatchResponse,
   IGNORE_CATEGORY,
   NONE_CATEGORY,
 } from "./types.js";
+import { CLASSIFY_BATCH_SCHEMA, type ClassifyBatchResponse } from "./wire.js";
 
 /** Coverage repair attempts before giving up (see spec: "ask the classifying agent to classify
  * the missing changes"; the spec sets no cap, this bounds it to avoid an unbounded retry loop). */

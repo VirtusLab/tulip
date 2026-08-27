@@ -4,11 +4,8 @@ import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
 import { buildEscapeHatchResumePrompt, type EscapeHatchOutcome } from "./prompt.js";
-import {
-  CLASSIFY_BATCH_SCHEMA,
-  type ClassifiableChange,
-  type ClassifyBatchResponse,
-} from "./types.js";
+import type { ClassifiableChange } from "./types.js";
+import { CLASSIFY_BATCH_SCHEMA, type ClassifyBatchResponse } from "./wire.js";
 
 /** Cap on new categories accepted per run — the spec sets no cap; this exists to bound runaway
  * escape-hatch consultation. After the cap, further "none" proposals are treated as rejected

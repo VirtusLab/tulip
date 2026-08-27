@@ -6,13 +6,15 @@ import { batchChanges } from "./batch.js";
 import { buildBatchClassifyPrompt, buildInitialClassifyPrompt } from "./prompt.js";
 import {
   type CategoryAssignment,
-  CLASSIFY_BATCH_SCHEMA,
   type ClassifiableChange,
-  type ClassifyBatchResponse,
   IGNORE_CATEGORY,
   NONE_CATEGORY,
-  type RawChangeClassification,
 } from "./types.js";
+import {
+  CLASSIFY_BATCH_SCHEMA,
+  type ClassifyBatchResponse,
+  type RawChangeClassification,
+} from "./wire.js";
 
 /**
  * A change's classification, resolved from the classifier's raw reply. A "none" reply (the

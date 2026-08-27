@@ -3,7 +3,8 @@ import type { Category } from "../categories/types.js";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
 import { type AfterBatchHook, classifyInBatches, resolveRawClassification } from "./classify.js";
-import type { ClassifiableChange, RawChangeClassification } from "./types.js";
+import type { ClassifiableChange } from "./types.js";
+import type { RawChangeClassification } from "./wire.js";
 
 const CATEGORIES: Category[] = [{ name: "Retry logic", description: "Adds backoff retries." }];
 
