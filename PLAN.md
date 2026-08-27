@@ -19,7 +19,7 @@
 - [x] 2.1 Parse PR URL into owner/repo/number
 - [x] 2.2 Fetch PR metadata (title, description, file list, diff) via `gh`; http fallback when `gh` unavailable
 - [x] 2.3 Temporary git checkout containing base & head revisions
-- [ ] 2.4 Diff parser: produce the change model (file + line ranges, additions/removals/deletions, base/head side addressing)
+- [x] 2.4 Diff parser: produce the change model (file + line ranges, additions/removals/deletions, base/head side addressing)
 - [ ] 2.5 Unit tests against fixture PRs/diffs
 
 ## Epic 3: Claude CLI integration layer
