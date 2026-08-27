@@ -1,6 +1,7 @@
 import { generateCategories } from "../categories/generate.js";
 import { groupChangesByCategory } from "../classification/group.js";
 import { classifyChanges } from "../classification/orchestrate.js";
+import { prepareClassifiableChanges } from "../classification/prepare.js";
 import { ClaudeBinaryMissingError } from "../claude/errors.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
@@ -70,6 +71,14 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     const diff = parseDiff(metadata.diff);
     warnOnFileListMismatch(metadata, diff, logger);
+
+    if (prepareClassifiableChanges(diff).length === 0) {
+      // Binary-only/mode-only PR: nothing for phases 1-3 to work with. Exit cleanly rather than
+      // sending an empty change list into classification, which would blame claude for an empty
+      // reply to a task that was never meaningful.
+      logger.info("nothing to review: this PR has no classifiable changes");
+      return;
+    }
 
     logger.debug("creating checkout...");
     checkout = await runPhase("creating checkout", () =>

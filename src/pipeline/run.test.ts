@@ -27,6 +27,12 @@ const ADDED_FILE_DIFF = [
 
 const CHANGE_ID = "src/new.ts:head:1-3";
 
+const BINARY_ONLY_DIFF = [
+  "diff --git a/image.png b/image.png",
+  "index 1111111..2222222 100644",
+  "Binary files a/image.png and b/image.png differ",
+].join("\n");
+
 const RENAMED_WITH_CHANGES_DIFF = [
   "diff --git a/old/name.ts b/new/name.ts",
   "similarity index 80%",
@@ -184,6 +190,24 @@ describe("run", () => {
     const checkout = await deps.createCheckout.mock.results[0]?.value;
     expect(checkout.cleanup).toHaveBeenCalledTimes(1);
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it("exits cleanly with no LLM calls when the PR has no classifiable changes", async () => {
+    const deps = baseDeps();
+    deps.fetchPrMetadata = vi.fn(async () =>
+      metadata({ diff: BINARY_ONLY_DIFF, files: ["image.png"] }),
+    );
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBeUndefined();
+    expect(deps.createCheckout).not.toHaveBeenCalled();
+    expect(deps.generateCategories).not.toHaveBeenCalled();
+    expect(deps.classifyChanges).not.toHaveBeenCalled();
+    expect(deps.explainCategories).not.toHaveBeenCalled();
+    expect(deps.renderExplanations).not.toHaveBeenCalled();
+    const lines = infoLines(deps);
+    expect(lines.some((line) => line.includes("nothing to review"))).toBe(true);
   });
 
   it("passes a renamed-file path map to rendering, built from the parsed diff", async () => {
