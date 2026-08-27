@@ -90,6 +90,42 @@ describe("fetchPrMetadata", () => {
     });
   });
 
+  it("paginates the file list when a page is exactly full", async () => {
+    const runGh = vi.fn(async () => {
+      throw new Error("gh: command not found");
+    });
+    const page1 = Array.from({ length: 100 }, (_, i) => ({ filename: `file-${i}.ts` }));
+    const page2 = [{ filename: "file-100.ts" }];
+    const fetchUrl = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const href = url.toString();
+      const headers = new Headers(init?.headers);
+      if (headers.get("Accept") === "application/vnd.github.v3.diff") {
+        return new Response(GH_DIFF);
+      }
+      const page = new URL(href).searchParams.get("page");
+      if (page === "1") return jsonResponse(page1);
+      if (page === "2") return jsonResponse(page2);
+      if (href.endsWith("/pulls/42")) {
+        return jsonResponse({
+          title: "t",
+          body: null,
+          base: { ref: "main", sha: "base-sha" },
+          head: { ref: "feature", sha: "head-sha" },
+        });
+      }
+      throw new Error(`unexpected url: ${href}`);
+    });
+
+    const result = await fetchPrMetadata(PR, {
+      runGh,
+      fetchUrl: fetchUrl as unknown as typeof fetch,
+    });
+
+    expect(result.files).toHaveLength(101);
+    expect(result.files[0]).toBe("file-0.ts");
+    expect(result.files[100]).toBe("file-100.ts");
+  });
+
   it("sends an Authorization header when a token is provided", async () => {
     const runGh = vi.fn(async () => {
       throw new Error("gh: command not found");

@@ -83,8 +83,10 @@ async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> 
   };
 }
 
-const MAX_FILE_PAGES = 10;
 const FILES_PER_PAGE = 100;
+/** GitHub's documented cap on the number of files a PR can report; a safety net against a
+ * pagination bug causing an unbounded loop, not an expected limit — see fetchAllFiles(). */
+const MAX_FILES_SAFETY_NET = 3000;
 
 async function fetchViaHttp(
   pr: PrRef,
@@ -122,7 +124,7 @@ async function fetchAllFiles(
 ): Promise<string[]> {
   const headers = { Accept: "application/vnd.github+json", ...authHeaders };
   const files: string[] = [];
-  for (let page = 1; page <= MAX_FILE_PAGES; page++) {
+  for (let page = 1; ; page++) {
     const batch = await getJson<{ filename: string }[]>(
       fetchUrl,
       `${prApiUrl}/files?per_page=${FILES_PER_PAGE}&page=${page}`,
@@ -131,6 +133,11 @@ async function fetchAllFiles(
     files.push(...batch.map((file) => file.filename));
     if (batch.length < FILES_PER_PAGE) {
       break;
+    }
+    if (files.length > MAX_FILES_SAFETY_NET) {
+      throw new Error(
+        `PR file list exceeded ${MAX_FILES_SAFETY_NET} files while paginating ${prApiUrl}/files — aborting instead of truncating silently.`,
+      );
     }
   }
   return files;
