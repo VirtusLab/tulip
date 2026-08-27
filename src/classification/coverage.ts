@@ -1,12 +1,16 @@
+import type { Category } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
 import { type ClassificationState, resolveNoneClassifications } from "./escape-hatch.js";
 import { buildCoverageRepairPrompt } from "./prompt.js";
 import {
+  type CategoryAssignment,
   CLASSIFY_BATCH_SCHEMA,
   type ClassifiableChange,
   type ClassifyBatchResponse,
+  IGNORE_CATEGORY,
+  NONE_CATEGORY,
 } from "./types.js";
 
 /** Coverage repair attempts before giving up (see spec: "ask the classifying agent to classify
@@ -30,17 +34,23 @@ export class IncompleteCoverageError extends Error {
   }
 }
 
-/** Ids of every non-ignored change from `changes` not covered by >=1 category assignment. */
+/**
+ * Ids of every non-ignored change from `changes` not covered by >= 1 assignment naming a
+ * category `categories` actually has (normalized: trimmed, case-insensitive) — an assignment
+ * naming a category the classifier invented or misspelled doesn't count as coverage, since it
+ * would otherwise silently vanish later in groupChangesByCategory's exact-name matching.
+ */
 export function findUncoveredChangeIds(
   changes: ClassifiableChange[],
   resolved: Map<string, ResolvedChange>,
+  categories: Category[],
 ): string[] {
   return changes
-    .filter((change) => isUncovered(resolved.get(change.id)))
+    .filter((change) => isUncovered(resolved.get(change.id), categories))
     .map((change) => change.id);
 }
 
-function isUncovered(entry: ResolvedChange | undefined): boolean {
+function isUncovered(entry: ResolvedChange | undefined, categories: Category[]): boolean {
   if (!entry) {
     return true;
   }
@@ -48,11 +58,30 @@ function isUncovered(entry: ResolvedChange | undefined): boolean {
     return false;
   }
   if (entry.kind === "categorized") {
-    return entry.assignments.length === 0;
+    return !hasKnownAssignment(entry.assignments, categories);
   }
   // kind "none": the escape hatch's suggestion is still unresolved, but any real assignments the
   // reply gave alongside it (see classify.ts's resolveRawClassification) already cover the change.
-  return entry.existingAssignments.length === 0;
+  return !hasKnownAssignment(entry.existingAssignments, categories);
+}
+
+function hasKnownAssignment(assignments: CategoryAssignment[], categories: Category[]): boolean {
+  return assignments.some((assignment) => isKnownCategoryName(assignment.category, categories));
+}
+
+function isKnownCategoryName(name: string, categories: Category[]): boolean {
+  const normalized = normalizeCategoryName(name);
+  if (
+    normalized === normalizeCategoryName(IGNORE_CATEGORY) ||
+    normalized === normalizeCategoryName(NONE_CATEGORY)
+  ) {
+    return true;
+  }
+  return categories.some((category) => normalizeCategoryName(category.name) === normalized);
+}
+
+function normalizeCategoryName(name: string): string {
+  return name.trim().toLowerCase();
 }
 
 /**
@@ -71,7 +100,7 @@ export async function verifyAndRepairCoverage(
   let current = resolved;
 
   for (let attempt = 0; attempt < MAX_COVERAGE_REPAIR_ATTEMPTS; attempt++) {
-    const missing = lookUp(findUncoveredChangeIds(changes, current), changesById);
+    const missing = lookUp(findUncoveredChangeIds(changes, current, state.categories), changesById);
     if (missing.length === 0) {
       return current;
     }
@@ -93,7 +122,10 @@ export async function verifyAndRepairCoverage(
     current = await resolveNoneClassifications(next, changesById, state, deps);
   }
 
-  const stillMissing = lookUp(findUncoveredChangeIds(changes, current), changesById);
+  const stillMissing = lookUp(
+    findUncoveredChangeIds(changes, current, state.categories),
+    changesById,
+  );
   if (stillMissing.length > 0) {
     throw new IncompleteCoverageError(stillMissing);
   }
