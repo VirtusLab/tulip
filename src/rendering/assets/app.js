@@ -123,7 +123,9 @@
         }
       });
       window.mermaid.initialize({ startOnLoad: false, theme: mermaidTheme() });
-      window.mermaid.run({ nodes: nodes });
+      // suppressErrors: an invalid diagram renders mermaid's own error placeholder instead of
+      // rejecting — without it, an invalid diagram left an unhandled promise rejection.
+      window.mermaid.run({ nodes: nodes, suppressErrors: true }).catch(() => {});
     }
 
     render();
