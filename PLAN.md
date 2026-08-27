@@ -58,4 +58,4 @@
 - [x] 8.1 Pipeline orchestration: wire phases 1–3 + rendering, progress logging throughout
 - [x] 8.2 Error handling: missing `claude`, fetch failures, malformed LLM output
 - [x] 8.3 E2E run against a real public PR; iterate on prompts/output quality
-- [ ] 8.4 README: install, prerequisites, usage
+- [x] 8.4 README: install, prerequisites, usage
