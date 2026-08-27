@@ -27,6 +27,21 @@ const ADDED_FILE_DIFF = [
 
 const CHANGE_ID = "src/new.ts:head:1-3";
 
+const RENAMED_WITH_CHANGES_DIFF = [
+  "diff --git a/old/name.ts b/new/name.ts",
+  "similarity index 80%",
+  "rename from old/name.ts",
+  "rename to new/name.ts",
+  "index 1111111..2222222 100644",
+  "--- a/old/name.ts",
+  "+++ b/new/name.ts",
+  "@@ -1,3 +1,3 @@",
+  " unchanged",
+  "-old line",
+  "+new line",
+  " tail",
+].join("\n");
+
 function metadata(overrides: Partial<PrMetadata> = {}): PrMetadata {
   return {
     title: "Add hello()",
@@ -169,6 +184,22 @@ describe("run", () => {
     const checkout = await deps.createCheckout.mock.results[0]?.value;
     expect(checkout.cleanup).toHaveBeenCalledTimes(1);
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it("passes a renamed-file path map to rendering, built from the parsed diff", async () => {
+    const deps = baseDeps();
+    deps.fetchPrMetadata = vi.fn(async () =>
+      metadata({ diff: RENAMED_WITH_CHANGES_DIFF, files: ["new/name.ts"] }),
+    );
+
+    await run(options(), deps);
+
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        renamedFrom: new Map([["new/name.ts", "old/name.ts"]]),
+      }),
+      expect.anything(),
+    );
   });
 
   it("logs the generated category names and phase progress", async () => {

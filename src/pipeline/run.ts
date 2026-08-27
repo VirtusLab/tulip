@@ -130,12 +130,13 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     logger.info(`generated explanations for ${explanations.length} categories`);
 
     logger.info("preparing output page...");
+    const renamedFrom = buildRenamedFromMap(diff);
     // Safe: this phase only runs once "creating checkout" (above) has already succeeded, so
     // `checkout` is always assigned by this point — TypeScript just can't see that across the
     // try/finally.
     const { indexPath } = await runPhase("rendering", () =>
       doRenderExplanations(
-        { prTitle: metadata.title, prDescription: metadata.body, prUrl, explanations },
+        { prTitle: metadata.title, prDescription: metadata.body, prUrl, explanations, renamedFrom },
         { checkout: checkout as PrCheckout, logger },
       ),
     );
@@ -177,6 +178,16 @@ function describeFailure(error: unknown): string {
 
 function causeMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Maps each renamed file's head-side path to its base-side path, for rendering's base-content
+ * lookups (see src/rendering/file-diffs.ts's `renamedFrom`). */
+function buildRenamedFromMap(diff: ParsedDiff): Map<string, string> {
+  return new Map(
+    diff.files.flatMap((file) =>
+      file.previousPath ? [[file.path, file.previousPath] as const] : [],
+    ),
+  );
 }
 
 /**

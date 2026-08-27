@@ -19,18 +19,25 @@ export interface FileDiffData {
  * with every path referenced by a `{{snippet}}` marker across all categories, so a file
  * touched by several markers is only fetched and diffed once. A path present in neither
  * revision is simply omitted from the result.
+ *
+ * `renamedFrom` maps a referenced (head-side) path to the base-side path it was renamed from
+ * (see `FileDiff.previousPath` in src/diff/parse-diff.ts) — without it, a renamed-with-changes
+ * file's base content would be looked up under its *new* path, which doesn't exist at the base
+ * revision.
  */
 export async function loadFileDiffs(
   paths: Iterable<string>,
   checkout: Pick<PrCheckout, "getFileAtBase" | "getFileAtHead">,
+  renamedFrom: Map<string, string> = new Map(),
 ): Promise<Map<string, FileDiffData>> {
   const result = new Map<string, FileDiffData>();
   const uniquePaths = [...new Set(paths)];
 
   await Promise.all(
     uniquePaths.map(async (path) => {
+      const basePath = renamedFrom.get(path) ?? path;
       const [base, head] = await Promise.all([
-        checkout.getFileAtBase(path),
+        checkout.getFileAtBase(basePath),
         checkout.getFileAtHead(path),
       ]);
       if (base === undefined && head === undefined) {

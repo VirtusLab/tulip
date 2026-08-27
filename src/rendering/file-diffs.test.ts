@@ -60,4 +60,27 @@ describe("loadFileDiffs", () => {
     const result = await loadFileDiffs(["small.ts"], checkout);
     expect(result.get("small.ts")?.embeddable).toBe(true);
   });
+
+  it("fetches base content from the renamed-from path, keyed by the referenced (new) path", async () => {
+    const checkout = stubCheckout({
+      "old/name.ts": { base: "old\n" },
+      "new/name.ts": { head: "new\n" },
+    });
+    const renamedFrom = new Map([["new/name.ts", "old/name.ts"]]);
+
+    const result = await loadFileDiffs(["new/name.ts"], checkout, renamedFrom);
+
+    expect(checkout.getFileAtBase).toHaveBeenCalledWith("old/name.ts");
+    expect(checkout.getFileAtHead).toHaveBeenCalledWith("new/name.ts");
+    expect(result.get("new/name.ts")?.rows).toEqual([
+      {
+        baseLine: 1,
+        baseText: "old",
+        baseType: "remove",
+        headLine: 1,
+        headText: "new",
+        headType: "add",
+      },
+    ]);
+  });
 });

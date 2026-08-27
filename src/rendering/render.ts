@@ -13,6 +13,10 @@ export interface RenderInput {
   prDescription: string;
   prUrl: string;
   explanations: CategoryExplanation[];
+  /** Maps a renamed file's head-side path to its base-side path (see src/diff/change.ts's
+   * `FileDiff.previousPath`) — lets snippet base content be fetched from the right revision path
+   * for a renamed-with-changes file. Defaults to no renames. */
+  renamedFrom?: Map<string, string>;
 }
 
 export interface RenderDeps extends AssembleDeps {
@@ -36,7 +40,7 @@ export async function renderExplanations(
   const referencedPaths = input.explanations.flatMap((explanation) =>
     parseSnippetRefs(explanation.markdown).map((match) => match.ref.path),
   );
-  const fileDiffs = await loadFileDiffs(referencedPaths, deps.checkout);
+  const fileDiffs = await loadFileDiffs(referencedPaths, deps.checkout, input.renamedFrom);
 
   const page = renderPage({
     prTitle: input.prTitle,
