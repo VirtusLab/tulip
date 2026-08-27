@@ -19,6 +19,9 @@ export interface RunOptions {
 /** Thrown for any invalid invocation; the message is shown to the user alongside usage info. */
 export class CliUsageError extends Error {}
 
+/** Thrown when `--help`/`-h` is given: not an error, just a request to print usage and exit 0. */
+export class HelpRequestedError extends Error {}
+
 /** Multi-line usage text shown on `--help` or invalid invocation. */
 export function usage(): string {
   return [
@@ -32,7 +35,8 @@ export function usage(): string {
     "Options:",
     `  --diff-threshold <n>  Max diff size (lines) fed verbatim to the LLM; larger changes are`,
     `                        passed as file+line-range references (default: ${DEFAULT_DIFF_THRESHOLD})`,
-    "  --verbose              Show debug-level progress logging",
+    "  --verbose             Show debug-level progress logging",
+    "  -h, --help            Show this help and exit",
   ].join("\n");
 }
 
@@ -41,7 +45,7 @@ export function usage(): string {
  * Throws {@link CliUsageError} with a user-facing message on any invalid input.
  */
 export function parseCliArgs(argv: string[]): RunOptions {
-  let values: { "diff-threshold"?: string; verbose?: boolean };
+  let values: { "diff-threshold"?: string; verbose?: boolean; help?: boolean };
   let positionals: string[];
   try {
     ({ values, positionals } = parseArgs({
@@ -49,11 +53,16 @@ export function parseCliArgs(argv: string[]): RunOptions {
       options: {
         "diff-threshold": { type: "string" },
         verbose: { type: "boolean" },
+        help: { type: "boolean", short: "h" },
       },
       allowPositionals: true,
     }));
   } catch (error) {
     throw new CliUsageError(error instanceof Error ? error.message : String(error));
+  }
+
+  if (values.help) {
+    throw new HelpRequestedError();
   }
 
   if (positionals.length === 0) {

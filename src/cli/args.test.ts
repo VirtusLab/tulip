@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { CliUsageError, DEFAULT_DIFF_THRESHOLD, parseCliArgs } from "./args.js";
+import {
+  CliUsageError,
+  DEFAULT_DIFF_THRESHOLD,
+  HelpRequestedError,
+  parseCliArgs,
+  usage,
+} from "./args.js";
 
 const VALID_URL = "https://github.com/owner/repo/pull/123";
 const VALID_PR = { owner: "owner", repo: "repo", number: 123 };
@@ -59,5 +65,20 @@ describe("parseCliArgs", () => {
 
   it("throws for an unknown flag", () => {
     expect(() => parseCliArgs([VALID_URL, "--unknown-flag"])).toThrow(CliUsageError);
+  });
+
+  it("throws HelpRequestedError (not CliUsageError) for --help, even with no PR URL", () => {
+    expect(() => parseCliArgs(["--help"])).toThrow(HelpRequestedError);
+  });
+
+  it("throws HelpRequestedError for -h", () => {
+    expect(() => parseCliArgs([VALID_URL, "-h"])).toThrow(HelpRequestedError);
+  });
+
+  it("aligns the --verbose and --diff-threshold usage columns", () => {
+    const lines = usage().split("\n");
+    const verboseLine = lines.find((line) => line.includes("--verbose"));
+    const thresholdLine = lines.find((line) => line.includes("--diff-threshold"));
+    expect(verboseLine?.indexOf("Show")).toBe(thresholdLine?.indexOf("Max"));
   });
 });
