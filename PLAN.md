@@ -38,7 +38,7 @@
 - [x] 5.1 Prompt + JSON schema: change → (category+, code type) mapping (haiku), incl. "ignore" and "none + suggested category"; ignored changes excluded from all later phases and rendering
 - [x] 5.2 Escape hatch flow: consult phase-1 session on suggested category; accept (continue with updated list) or reject (re-ask)
 - [x] 5.3 Coverage verification: all non-ignored lines covered; re-ask classifier for missing changes
-- [ ] 5.4 Tests: classification flow, escape hatch, coverage repair
+- [x] 5.4 Tests: classification flow, escape hatch, coverage repair
 
 ## Epic 6: Phase 3 — category explanations
 - [ ] 6.1 Snippet-reference markup: file + side (base/head) + line range + unfold flag; parser for it

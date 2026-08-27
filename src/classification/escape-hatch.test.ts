@@ -183,6 +183,47 @@ describe("resolveNoneClassifications", () => {
     expect(state.acceptedNewCategories).toBe(MAX_ACCEPTED_NEW_CATEGORIES);
   });
 
+  it("stops consulting mid-round once the cap is reached, even with more 'none' changes pending", async () => {
+    const resolved = new Map<string, ResolvedChange>([
+      ["c1", { kind: "none", suggestedCategory: { name: "One", description: "First extra." } }],
+      ["c2", { kind: "none", suggestedCategory: { name: "Two", description: "Second extra." } }],
+    ]);
+    let consultCalls = 0;
+    const runClaudeProcess = vi.fn(async (args: string[], _input: string) => {
+      if (!args.includes("--resume") || args[args.indexOf("--resume") + 1] === "phase1-session") {
+        consultCalls++;
+        return envelope(
+          { accept: true, category: { name: "One", description: "First extra." } },
+          "phase1-session",
+        );
+      }
+      return envelope(
+        {
+          classifications: [
+            { changeId: "c1", assignments: [{ category: "One", codeType: "production" }] },
+            { changeId: "c2", assignments: [{ category: "Retry logic", codeType: "production" }] },
+          ],
+        },
+        "classifier-session-2",
+      );
+    });
+
+    const state = baseState({ acceptedNewCategories: MAX_ACCEPTED_NEW_CATEGORIES - 1 });
+    await resolveNoneClassifications(
+      resolved,
+      new Map([
+        ["c1", change("c1")],
+        ["c2", change("c2")],
+      ]),
+      state,
+      { runClaudeProcess },
+    );
+
+    // Only c1 gets consulted (bringing acceptedNewCategories to the cap); c2 is auto-rejected.
+    expect(consultCalls).toBe(1);
+    expect(state.acceptedNewCategories).toBe(MAX_ACCEPTED_NEW_CATEGORIES);
+  });
+
   it("throws after repeated 'none' replies exceed the round cap", async () => {
     const resolved = new Map<string, ResolvedChange>([
       ["c1", { kind: "none", suggestedCategory: { name: "Extra", description: "One more." } }],

@@ -1,0 +1,121 @@
+import { describe, expect, it, vi } from "vitest";
+import type { Category } from "../categories/types.js";
+import type { ClaudeProcessResult } from "../claude/exec.js";
+import type { Change, ParsedDiff } from "../diff/change.js";
+import { classifyChanges } from "./orchestrate.js";
+
+function fileWithChange(id: string): ParsedDiff["files"][number] {
+  const change: Change = {
+    id,
+    path: `src/${id}.ts`,
+    side: "head",
+    range: { start: 1, end: 1 },
+    lines: ["+line"],
+  };
+  return { path: change.path, status: "modified", binary: false, changes: [change] };
+}
+
+function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessResult {
+  return {
+    stdout: JSON.stringify({
+      result: "done",
+      session_id: sessionId,
+      structured_output: structuredOutput,
+    }),
+    stderr: "",
+  };
+}
+
+const CATEGORIES: Category[] = [{ name: "A", description: "first" }];
+
+describe("classifyChanges", () => {
+  it("runs classification, escape hatch and coverage repair end to end", async () => {
+    // c1: classified directly. c2: "none" -> accepted as new category "B", re-classified.
+    // c3: "ignore". c4: missing from every reply until the coverage-repair round.
+    const diff: ParsedDiff = {
+      files: [
+        fileWithChange("c1"),
+        fileWithChange("c2"),
+        fileWithChange("c3"),
+        fileWithChange("c4"),
+      ],
+    };
+
+    let classifierResumeCount = 0;
+    const runClaudeProcess = vi.fn(async (args: string[], input: string) => {
+      if (args.includes("--model")) {
+        return envelope(
+          {
+            classifications: [
+              { changeId: "c1", assignments: [{ category: "A", codeType: "production" }] },
+              {
+                changeId: "c2",
+                assignments: [
+                  {
+                    category: "none",
+                    codeType: "production",
+                    suggestedCategory: { name: "B", description: "proposed" },
+                  },
+                ],
+              },
+              { changeId: "c3", assignments: [{ category: "ignore", codeType: "production" }] },
+              // c4 intentionally omitted, to trigger coverage repair.
+            ],
+          },
+          "classifier-1",
+        );
+      }
+
+      const resumeId = args[args.indexOf("--resume") + 1];
+      if (resumeId === "phase1-0") {
+        // consultOnCategory, resuming the phase-1 session.
+        expect(input).toContain("B");
+        return envelope(
+          { accept: true, category: { name: "B", description: "refined" } },
+          "phase1-1",
+        );
+      }
+
+      classifierResumeCount++;
+      if (classifierResumeCount === 1) {
+        // Escape-hatch retry, for c2 only.
+        expect(input).toContain("c2");
+        return envelope(
+          {
+            classifications: [
+              { changeId: "c2", assignments: [{ category: "B", codeType: "test" }] },
+            ],
+          },
+          "classifier-2",
+        );
+      }
+      // Coverage repair, for c4 only.
+      expect(input).toContain("c4");
+      return envelope(
+        {
+          classifications: [
+            { changeId: "c4", assignments: [{ category: "A", codeType: "production" }] },
+          ],
+        },
+        "classifier-3",
+      );
+    });
+
+    const result = await classifyChanges(
+      { diff, categories: CATEGORIES, phase1SessionId: "phase1-0" },
+      { runClaudeProcess },
+    );
+
+    expect(result.categories).toEqual([
+      { name: "A", description: "first" },
+      { name: "B", description: "refined" },
+    ]);
+    expect(result.assignments.get("c1")).toEqual([{ category: "A", codeType: "production" }]);
+    expect(result.assignments.get("c2")).toEqual([{ category: "B", codeType: "test" }]);
+    expect(result.assignments.get("c4")).toEqual([{ category: "A", codeType: "production" }]);
+    expect(result.assignments.has("c3")).toBe(false);
+    expect(result.ignoredChangeIds).toEqual(new Set(["c3"]));
+    expect([...result.changesById.keys()].sort()).toEqual(["c1", "c2", "c3", "c4"]);
+    expect(runClaudeProcess).toHaveBeenCalledTimes(4);
+  });
+});
