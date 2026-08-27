@@ -23,7 +23,7 @@
 - [x] 2.5 Unit tests against fixture PRs/diffs
 
 ## Epic 3: Claude CLI integration layer
-- [ ] 3.1 Wrapper for `claude -p` headless runs: model selection, structured output via JSON schema, result parsing
+- [x] 3.1 Wrapper for `claude -p` headless runs: model selection, structured output via JSON schema, result parsing
 - [ ] 3.2 Session management: create, resume
 - [ ] 3.3 Concurrency limiter (max 3 parallel sessions)
 - [ ] 3.4 Shared prompt preamble (short, simple language, no jargon)
