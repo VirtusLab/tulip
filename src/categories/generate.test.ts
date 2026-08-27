@@ -24,6 +24,31 @@ function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudePro
 }
 
 describe("generateCategories", () => {
+  it("requests a schema shaped as { categories: [{ name, description }] }", async () => {
+    const runClaudeProcess = vi.fn(async () =>
+      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+    );
+
+    await generateCategories(INPUT, { runClaudeProcess });
+
+    const args = runClaudeProcess.mock.calls[0]?.[0] as string[];
+    const schema = JSON.parse(args[args.indexOf("--json-schema") + 1] ?? "{}");
+    expect(schema).toEqual({
+      type: "object",
+      required: ["categories"],
+      properties: {
+        categories: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["name", "description"],
+            properties: { name: { type: "string" }, description: { type: "string" } },
+          },
+        },
+      },
+    });
+  });
+
   it("sends a prompt containing the title, description, files, and category guidance", async () => {
     const runClaudeProcess = vi.fn(async () =>
       envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),

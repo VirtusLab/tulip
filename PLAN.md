@@ -32,7 +32,7 @@
 ## Epic 4: Phase 1 — category generation
 - [x] 4.1 Prompt + JSON schema: PR title/description/file list → ordered category list (sonnet)
 - [x] 4.2 Keep session handle for later consultation (escape hatch in phase 2)
-- [ ] 4.3 Tests for prompt construction & response handling
+- [x] 4.3 Tests for prompt construction & response handling
 
 ## Epic 5: Phase 2 — change classification
 - [ ] 5.1 Prompt + JSON schema: change → (category+, code type) mapping (haiku), incl. "ignore" and "none + suggested category"; ignored changes excluded from all later phases and rendering

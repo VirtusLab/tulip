@@ -24,6 +24,27 @@ function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudePro
 }
 
 describe("consultOnCategory", () => {
+  it("requests a schema shaped as { accept, category? }", async () => {
+    const runClaudeProcess = vi.fn(async () => envelope({ accept: false }));
+
+    await consultOnCategory(INPUT, { runClaudeProcess });
+
+    const args = runClaudeProcess.mock.calls[0]?.[0] as string[];
+    const schema = JSON.parse(args[args.indexOf("--json-schema") + 1] ?? "{}");
+    expect(schema).toEqual({
+      type: "object",
+      required: ["accept"],
+      properties: {
+        accept: { type: "boolean" },
+        category: {
+          type: "object",
+          required: ["name", "description"],
+          properties: { name: { type: "string" }, description: { type: "string" } },
+        },
+      },
+    });
+  });
+
   it("resumes the phase-1 session with the proposed name and change context", async () => {
     const runClaudeProcess = vi.fn(async () => envelope({ accept: false }));
 
