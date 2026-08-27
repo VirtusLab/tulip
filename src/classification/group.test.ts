@@ -44,6 +44,20 @@ describe("groupChangesByCategory", () => {
     expect(grouped[1]).toEqual({ category: result.categories[1], production: [c1], test: [c2] });
   });
 
+  it("matches category names case-insensitively and ignoring surrounding whitespace", () => {
+    const c1 = change("c1");
+    const result: ClassifyChangesResult = {
+      categories: [{ name: "Retry logic", description: "" }],
+      assignments: new Map([["c1", [{ category: " retry LOGIC ", codeType: "production" }]]]),
+      ignoredChangeIds: new Set(),
+      changesById: new Map([["c1", c1]]),
+    };
+
+    const grouped = groupChangesByCategory(result);
+
+    expect(grouped[0]?.production).toEqual([c1]);
+  });
+
   it("lists a multi-category change under every category it was assigned to", () => {
     const c1 = change("c1");
     const result: ClassifyChangesResult = {

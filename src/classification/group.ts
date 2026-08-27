@@ -1,4 +1,5 @@
 import type { Category } from "../categories/types.js";
+import { categoryNamesMatch } from "./category-name.js";
 import type { ClassifyChangesResult } from "./orchestrate.js";
 import type { ClassifiableChange } from "./types.js";
 
@@ -12,7 +13,10 @@ export interface CategoryChangeSet {
 /**
  * Groups a classification result's changes by category, in the result's presentation order.
  * A change assigned to multiple categories appears once in each. Ignored changes never appear
- * (they're not in `result.assignments` to begin with).
+ * (they're not in `result.assignments` to begin with). Matches assignment category names to
+ * `result.categories` the same way coverage verification does (./coverage.ts, ./category-name.js)
+ * — normalized, not exact-string — so a change coverage already counted as covered can't still
+ * silently fail to land under any category here.
  */
 export function groupChangesByCategory(result: ClassifyChangesResult): CategoryChangeSet[] {
   return result.categories.map((category) => {
@@ -25,7 +29,7 @@ export function groupChangesByCategory(result: ClassifyChangesResult): CategoryC
         continue;
       }
       for (const assignment of assignments) {
-        if (assignment.category !== category.name) {
+        if (!categoryNamesMatch(assignment.category, category.name)) {
           continue;
         }
         (assignment.codeType === "production" ? production : test).push(change);

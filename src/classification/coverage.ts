@@ -1,6 +1,7 @@
 import type { Category } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
+import { categoryNamesMatch } from "./category-name.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
 import { type ClassificationState, resolveNoneClassifications } from "./escape-hatch.js";
 import { buildCoverageRepairPrompt } from "./prompt.js";
@@ -69,18 +70,10 @@ function hasKnownAssignment(assignments: CategoryAssignment[], categories: Categ
 }
 
 function isKnownCategoryName(name: string, categories: Category[]): boolean {
-  const normalized = normalizeCategoryName(name);
-  if (
-    normalized === normalizeCategoryName(IGNORE_CATEGORY) ||
-    normalized === normalizeCategoryName(NONE_CATEGORY)
-  ) {
+  if (categoryNamesMatch(name, IGNORE_CATEGORY) || categoryNamesMatch(name, NONE_CATEGORY)) {
     return true;
   }
-  return categories.some((category) => normalizeCategoryName(category.name) === normalized);
-}
-
-function normalizeCategoryName(name: string): string {
-  return name.trim().toLowerCase();
+  return categories.some((category) => categoryNamesMatch(category.name, name));
 }
 
 /**
