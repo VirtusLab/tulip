@@ -23,6 +23,7 @@
         // ignore — theme just won't persist across reloads
       }
     }
+    document.dispatchEvent(new CustomEvent("tulip:theme-change", { detail: { theme: theme } }));
   }
 
   function setupThemeToggle() {
@@ -86,8 +87,52 @@
     });
   }
 
+  function loadMermaidSources() {
+    var el = document.getElementById("tulip-mermaid-sources");
+    if (!el) {
+      return [];
+    }
+    try {
+      return JSON.parse(el.textContent || "[]");
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  function mermaidTheme() {
+    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "default";
+  }
+
+  // Mermaid replaces each `.mermaid` element's content with rendered SVG in place, so a
+  // theme change (which needs a full re-render to pick up mermaid's own theme colors) first
+  // restores each element's original source from the page-embedded JSON before re-running.
+  function setupMermaid() {
+    if (!window.mermaid) {
+      return;
+    }
+    var sources = loadMermaidSources();
+
+    function render() {
+      var nodes = document.querySelectorAll("pre.mermaid");
+      nodes.forEach((node) => {
+        var index = Number(node.getAttribute("data-mermaid-index"));
+        var source = sources[index];
+        if (source !== undefined) {
+          node.removeAttribute("data-processed");
+          node.textContent = source;
+        }
+      });
+      window.mermaid.initialize({ startOnLoad: false, theme: mermaidTheme() });
+      window.mermaid.run({ nodes: nodes });
+    }
+
+    render();
+    document.addEventListener("tulip:theme-change", render);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     setupThemeToggle();
     setupToc();
+    setupMermaid();
   });
 })();

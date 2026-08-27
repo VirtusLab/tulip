@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderProseMarkdown } from "./markdown.js";
+import { renderCategoryMarkdown, renderProseMarkdown } from "./markdown.js";
 
 describe("renderProseMarkdown", () => {
   it("renders standard markdown constructs", () => {
@@ -27,5 +27,35 @@ describe("renderProseMarkdown", () => {
     const html = renderProseMarkdown("```\n<script>alert(1)</script>\n```\n");
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("renderCategoryMarkdown", () => {
+  it("renders prose normally and turns a mermaid fence into a diagram placeholder", () => {
+    const sources: string[] = [];
+    const html = renderCategoryMarkdown(
+      "Some **prose**.\n\n```mermaid\ngraph TD\nA --> B\n```\n\nMore prose.",
+      sources,
+    );
+    expect(html).toContain("<strong>prose</strong>");
+    expect(html).toContain("More prose.");
+    expect(html).toContain('<pre class="mermaid" data-mermaid-index="0">');
+    expect(html).not.toContain("```mermaid");
+    expect(sources).toEqual(["graph TD\nA --> B"]);
+  });
+
+  it("assigns sequential indices across multiple calls sharing the same array", () => {
+    const sources: string[] = [];
+    renderCategoryMarkdown("```mermaid\nA\n```\n", sources);
+    const second = renderCategoryMarkdown("```mermaid\nB\n```\n", sources);
+    expect(second).toContain('data-mermaid-index="1"');
+    expect(sources).toEqual(["A", "B"]);
+  });
+
+  it("leaves markdown with no mermaid fences unaffected", () => {
+    const sources: string[] = [];
+    const html = renderCategoryMarkdown("Just *text*.", sources);
+    expect(html).toBe("<p>Just <em>text</em>.</p>\n");
+    expect(sources).toEqual([]);
   });
 });

@@ -1,7 +1,7 @@
 import type { CategoryExplanation } from "../explanations/types.js";
-import { escapeHtml } from "./escape.js";
+import { escapeHtml, escapeInlineScript } from "./escape.js";
 import { categoryId, subsectionId } from "./ids.js";
-import { renderProseMarkdown } from "./markdown.js";
+import { renderCategoryMarkdown } from "./markdown.js";
 import { type CategorySubsection, splitCategoryMarkdown } from "./sections.js";
 import { buildToc, renderTocHtml } from "./toc.js";
 
@@ -25,9 +25,19 @@ export function renderPage(input: PageInput): string {
     subsectionsPerCategory,
   );
 
+  // Shared across the whole page (in document order) so each mermaid placeholder's
+  // data-mermaid-index matches its source's position in window.__TULIP_MERMAID__ — see
+  // ./assets/app.js.
+  const mermaidSources: string[] = [];
+  const description = renderCategoryMarkdown(input.prDescription, mermaidSources);
   const sections = input.explanations
     .map((explanation, index) =>
-      renderCategorySection(explanation, index, subsectionsPerCategory[index] ?? []),
+      renderCategorySection(
+        explanation,
+        index,
+        subsectionsPerCategory[index] ?? [],
+        mermaidSources,
+      ),
     )
     .join("\n");
 
@@ -46,10 +56,11 @@ ${renderTocHtml(toc)}
 <header id="pr-header">
 <h1>${escapeHtml(input.prTitle)}</h1>
 <p class="pr-link"><a href="${escapeHtml(input.prUrl)}">${escapeHtml(input.prUrl)}</a></p>
-<div class="pr-description">${renderProseMarkdown(input.prDescription)}</div>
+<div class="pr-description">${description}</div>
 </header>
 ${sections}
 </main>
+<script type="application/json" id="tulip-mermaid-sources">${escapeInlineScript(JSON.stringify(mermaidSources))}</script>
 <script src="assets/vendor/mermaid.min.js"></script>
 <script src="assets/app.js" defer></script>
 </body>
@@ -61,21 +72,28 @@ function renderCategorySection(
   explanation: CategoryExplanation,
   index: number,
   subsections: CategorySubsection[],
+  mermaidSources: string[],
 ): string {
   const { category } = explanation;
   const heading = `<h2>${escapeHtml(category.name)}</h2><p class="category-description">${escapeHtml(category.description)}</p>`;
 
   const body =
     subsections.length > 0
-      ? subsections.map((subsection) => renderSubsection(subsection, index)).join("\n")
-      : renderProseMarkdown(splitCategoryMarkdown(explanation.markdown).intro);
+      ? subsections
+          .map((subsection) => renderSubsection(subsection, index, mermaidSources))
+          .join("\n")
+      : renderCategoryMarkdown(splitCategoryMarkdown(explanation.markdown).intro, mermaidSources);
 
   return `<section id="${categoryId(index)}" class="category">\n${heading}\n${body}\n</section>`;
 }
 
-function renderSubsection(subsection: CategorySubsection, categoryIndex: number): string {
+function renderSubsection(
+  subsection: CategorySubsection,
+  categoryIndex: number,
+  mermaidSources: string[],
+): string {
   return `<div id="${subsectionId(categoryIndex, subsection.kind)}" class="subsection subsection-${subsection.kind}">
 <h3>${escapeHtml(subsection.heading)}</h3>
-${renderProseMarkdown(subsection.markdown)}
+${renderCategoryMarkdown(subsection.markdown, mermaidSources)}
 </div>`;
 }

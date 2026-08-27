@@ -100,6 +100,26 @@ describe("renderPage", () => {
     ]);
   });
 
+  it("turns mermaid fences into diagram placeholders and embeds their sources", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      explanations: [
+        explanation({
+          markdown: "## Production code\n\n```mermaid\ngraph TD\nA --> B\n```\n",
+        }),
+      ],
+    });
+    const root = parse(html);
+    const pre = root.querySelector("pre.mermaid");
+    expect(pre?.getAttribute("data-mermaid-index")).toBe("0");
+    const sourcesScript = root.querySelector("#tulip-mermaid-sources");
+    expect(sourcesScript).not.toBeNull();
+    const sources = JSON.parse(sourcesScript?.text ?? "[]");
+    expect(sources).toEqual(["graph TD\nA --> B"]);
+  });
+
   it("carries theme-toggle and asset hooks with no network references", () => {
     const html = renderPage({
       prTitle: "t",
