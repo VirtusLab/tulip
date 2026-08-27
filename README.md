@@ -7,8 +7,8 @@ and code snippets — as a single self-contained HTML page.
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) LTS (>= 24) and [pnpm](https://pnpm.io/)
-- A logged-in [`claude`](https://claude.com/product/claude-code) CLI on `PATH`
-  (Tulip drives it in headless mode — `claude -p` — to analyze the PR)
+- A logged-in [`claude`](https://claude.com/product/claude-code) CLI on `PATH` —
+  Tulip drives it to analyze the PR
 - Optionally, the [`gh`](https://cli.github.com/) CLI, logged in — used to fetch
   PR data when available; Tulip falls back to the GitHub REST API otherwise
   (set `GITHUB_TOKEN` to raise the unauthenticated rate limit)
@@ -33,12 +33,7 @@ Example:
 tulip https://github.com/owner/repo/pull/123
 ```
 
-Options:
-
-- `--diff-threshold <n>` — max diff size (lines) fed verbatim to the
-  explaining LLM; larger changes are passed as file + line-range references
-  instead (default: 400)
-- `--verbose` — show debug-level progress logging
+Flags: `--diff-threshold <n>`, `--verbose`. Run `tulip --help` for details.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open
 it in a browser.
@@ -46,9 +41,9 @@ it in a browser.
 ## Development
 
 ```sh
-pnpm build       # compile TypeScript + copy rendering assets
-pnpm test        # run the test suite (vitest)
-pnpm lint        # check formatting/lint rules (biome)
+pnpm build        # compile TypeScript + copy rendering assets
+pnpm test         # run the test suite (vitest)
+pnpm lint         # check formatting/lint rules (biome)
 pnpm lint:fix     # auto-fix formatting/lint issues
 pnpm dev <PR URL> # run the CLI from source, no build step (tsx)
 ```
