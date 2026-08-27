@@ -5,7 +5,14 @@ export function categoryId(categoryIndex: number): string {
   return `category-${categoryIndex}`;
 }
 
-/** DOM id for one category's Production/Test subsection. */
-export function subsectionId(categoryIndex: number, kind: SubsectionKind): string {
-  return `${categoryId(categoryIndex)}-${kind}`;
+/** DOM id for one category's subsection. `subsectionIndex` is its position among that
+ * category's subsections (see src/rendering/sections.ts) — included so two subsections of the
+ * same kind (e.g. a markdown with two "## Production code" headings) still get distinct ids,
+ * rather than colliding on `${categoryId}-${kind}`. */
+export function subsectionId(
+  categoryIndex: number,
+  kind: SubsectionKind,
+  subsectionIndex: number,
+): string {
+  return `${categoryId(categoryIndex)}-${kind}-${subsectionIndex}`;
 }

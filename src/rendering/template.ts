@@ -104,7 +104,7 @@ function renderCategorySection(
   // the renderer actually emits every part of the markdown).
   const introHtml = sections.intro.trim() ? renderCategoryMarkdown(sections.intro, ctx) : "";
   const subsectionsHtml = sections.subsections
-    .map((subsection) => renderSubsection(subsection, index, ctx))
+    .map((subsection, subsectionIndex) => renderSubsection(subsection, index, subsectionIndex, ctx))
     .join("\n");
   const body = [introHtml, subsectionsHtml].filter((part) => part !== "").join("\n");
 
@@ -114,9 +114,10 @@ function renderCategorySection(
 function renderSubsection(
   subsection: CategorySubsection,
   categoryIndex: number,
+  subsectionIndex: number,
   ctx: MarkdownRenderContext,
 ): string {
-  return `<div id="${subsectionId(categoryIndex, subsection.kind)}" class="subsection subsection-${subsection.kind}">
+  return `<div id="${subsectionId(categoryIndex, subsection.kind, subsectionIndex)}" class="subsection subsection-${subsection.kind}">
 <h3>${escapeHtml(subsection.heading)}</h3>
 ${renderCategoryMarkdown(subsection.markdown, ctx)}
 </div>`;

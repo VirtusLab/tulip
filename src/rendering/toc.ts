@@ -24,8 +24,8 @@ export function buildToc(
   return categories.map((category, index) => ({
     id: categoryId(index),
     label: category.name,
-    children: (subsectionsPerCategory[index] ?? []).map((subsection) => ({
-      id: subsectionId(index, subsection.kind),
+    children: (subsectionsPerCategory[index] ?? []).map((subsection, subsectionIndex) => ({
+      id: subsectionId(index, subsection.kind, subsectionIndex),
       label: SUBSECTION_LABEL[subsection.kind],
     })),
   }));

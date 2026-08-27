@@ -60,12 +60,43 @@ describe("renderPage", () => {
       explanations: [explanation()],
     });
     const root = parse(html);
-    const production = root.querySelector("#category-0-production");
-    const test = root.querySelector("#category-0-test");
+    const production = root.querySelector("#category-0-production-0");
+    const test = root.querySelector("#category-0-test-1");
     expect(production?.querySelector("h3")?.text).toBe("Production code");
     expect(production?.text).toContain("Does the thing.");
     expect(test?.querySelector("h3")?.text).toBe("Test code");
     expect(test?.text).toContain("Tests the thing.");
+  });
+
+  it("gives duplicate same-kind subsections distinct ids instead of colliding", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [
+        explanation({
+          markdown:
+            "## Production code\n\nFirst part.\n\n## Test code\n\nT\n\n## Production code\n\nSecond part.\n",
+        }),
+      ],
+    });
+    const root = parse(html);
+    const productionSections = root.querySelectorAll('[id^="category-0-production"]');
+    expect(productionSections).toHaveLength(2);
+    expect(productionSections[0]?.id).toBe("category-0-production-0");
+    expect(productionSections[1]?.id).toBe("category-0-production-2");
+    expect(root.querySelector("#category-0-production-0")?.text).toContain("First part.");
+    expect(root.querySelector("#category-0-production-2")?.text).toContain("Second part.");
+
+    const toc = root.querySelector("#toc");
+    const hrefs = toc?.querySelectorAll("a").map((a) => a.getAttribute("href")) ?? [];
+    expect(hrefs).toEqual([
+      "#category-0",
+      "#category-0-production-0",
+      "#category-0-test-1",
+      "#category-0-production-2",
+    ]);
   });
 
   it("does not force subsections when the markdown has none", () => {
@@ -77,8 +108,8 @@ describe("renderPage", () => {
       explanations: [explanation({ markdown: "Just some prose, no headings." })],
     });
     const root = parse(html);
-    expect(root.querySelector("#category-0-production")).toBeNull();
-    expect(root.querySelector("#category-0-test")).toBeNull();
+    expect(root.querySelector("#category-0-production-0")).toBeNull();
+    expect(root.querySelector("#category-0-test-1")).toBeNull();
     expect(root.querySelector("#category-0")?.text).toContain("Just some prose, no headings.");
   });
 
@@ -110,8 +141,8 @@ describe("renderPage", () => {
     expect(category?.querySelector("pre.mermaid")).not.toBeNull();
     expect(category?.querySelector(".snippet")).not.toBeNull();
     // ...and the subsections still render too.
-    expect(root.querySelector("#category-0-production")?.text).toContain("Prod body.");
-    expect(root.querySelector("#category-0-test")?.text).toContain("Test body.");
+    expect(root.querySelector("#category-0-production-0")?.text).toContain("Prod body.");
+    expect(root.querySelector("#category-0-test-1")?.text).toContain("Test body.");
   });
 
   it("includes a TOC entry per category and per present subsection", () => {
@@ -134,8 +165,8 @@ describe("renderPage", () => {
     const links = toc?.querySelectorAll("a").map((a) => a.getAttribute("href")) ?? [];
     expect(links).toEqual([
       "#category-0",
-      "#category-0-production",
-      "#category-0-test",
+      "#category-0-production-0",
+      "#category-0-test-1",
       "#category-1",
     ]);
   });
