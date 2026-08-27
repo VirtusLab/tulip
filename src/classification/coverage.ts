@@ -1,6 +1,7 @@
 import type { Category } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
+import { config } from "../config.js";
 import { categoryNamesMatch } from "./category-name.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
 import { type ClassificationState, resolveNoneClassifications } from "./escape-hatch.js";
@@ -15,7 +16,7 @@ import { CLASSIFY_BATCH_SCHEMA, type ClassifyBatchResponse } from "./wire.js";
 
 /** Coverage repair attempts before giving up (see spec: "ask the classifying agent to classify
  * the missing changes"; the spec sets no cap, this bounds it to avoid an unbounded retry loop). */
-export const MAX_COVERAGE_REPAIR_ATTEMPTS = 3;
+const MAX_COVERAGE_REPAIR_ATTEMPTS = config.limits.maxCoverageRepairAttempts;
 
 /** Thrown when changes remain uncovered by any category after every repair attempt. */
 export class IncompleteCoverageError extends Error {

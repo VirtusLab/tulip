@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Category } from "../categories/types.js";
-import { buildExcerpt, MAX_EXCERPT_CHARS } from "../classification/excerpt.js";
+import { buildExcerpt } from "../classification/excerpt.js";
 import type { ClassifiableChange } from "../classification/types.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import { config } from "../config.js";
 import { explainCategory } from "./explain.js";
 import type { ExplainCategoryInput } from "./types.js";
+
+const MAX_EXCERPT_CHARS = config.limits.maxExcerptChars;
 
 const CATEGORY: Category = { name: "Retry logic", description: "Adds backoff retries." };
 

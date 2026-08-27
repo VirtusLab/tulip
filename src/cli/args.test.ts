@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  CliUsageError,
-  DEFAULT_DIFF_THRESHOLD,
-  HelpRequestedError,
-  parseCliArgs,
-  usage,
-} from "./args.js";
+import { config } from "../config.js";
+import { CliUsageError, HelpRequestedError, parseCliArgs, usage } from "./args.js";
 
 const VALID_URL = "https://github.com/owner/repo/pull/123";
 const VALID_PR = { owner: "owner", repo: "repo", number: 123 };
+const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;
 
 describe("parseCliArgs", () => {
   it("parses a valid PR URL with defaults for diff threshold and verbosity", () => {

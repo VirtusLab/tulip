@@ -1,5 +1,6 @@
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession, runSession } from "../claude/session.js";
+import { config } from "../config.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { verifySnippetCoverage } from "./coverage.js";
 import { buildReviewAmendPrompt, buildReviewPrompt } from "./prompt.js";
@@ -12,7 +13,7 @@ import {
 } from "./wire.js";
 
 /** Review rounds before giving up and keeping the latest version (spec: "up to 3 times"). */
-export const MAX_REVIEW_ROUNDS = 3;
+const MAX_REVIEW_ROUNDS = config.limits.maxReviewRounds;
 
 /** Same PR/category/changes context the explaining session got (see ./explain.ts), plus the
  * markdown to review and the session to resume for amendments — reused so the reviewer can be
@@ -48,7 +49,7 @@ export async function reviewAndAmend(
     logger.debug(`category "${input.category.name}": review round ${round}/${MAX_REVIEW_ROUNDS}`);
     const review = await runSession<ReviewResponse>(
       {
-        model: "sonnet",
+        model: config.models.review,
         schema: REVIEW_SCHEMA,
         prompt: buildReviewPrompt({
           prTitle: input.prTitle,

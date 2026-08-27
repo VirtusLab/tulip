@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { batchChanges, MAX_BATCH_EXCERPT_CHARS, MAX_BATCH_SIZE } from "./batch.js";
+import { config } from "../config.js";
+import { batchChanges } from "./batch.js";
 import type { ClassifiableChange } from "./types.js";
+
+const MAX_BATCH_SIZE = config.limits.maxBatchSize;
+const MAX_BATCH_EXCERPT_CHARS = config.limits.maxBatchExcerptChars;
 
 function change(id: string, excerpt = "+line"): ClassifiableChange {
   return {

@@ -1,5 +1,6 @@
 import type { RunnerDeps } from "../claude/runner.js";
 import { runSession } from "../claude/session.js";
+import { config } from "../config.js";
 import { buildExplainPrompt } from "./prompt.js";
 import type { ExplainCategoryInput } from "./types.js";
 import { EXPLANATION_SCHEMA, type ExplanationResponse } from "./wire.js";
@@ -21,7 +22,11 @@ export async function explainCategory(
   deps: RunnerDeps = {},
 ): Promise<ExplainCategoryResult> {
   const { result, sessionId } = await runSession<ExplanationResponse>(
-    { model: "opus", schema: EXPLANATION_SCHEMA, prompt: buildExplainPrompt(input) },
+    {
+      model: config.models.explanation,
+      schema: EXPLANATION_SCHEMA,
+      prompt: buildExplainPrompt(input),
+    },
     deps,
   );
   return { markdown: result.markdown, sessionId };

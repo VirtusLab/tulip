@@ -1,6 +1,7 @@
 import type { ClassifiableChange } from "../classification/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
+import { config } from "../config.js";
 import type { LineRange } from "../diff/change.js";
 import { parseSnippetRefs, type SnippetRef } from "./markup.js";
 import { buildCoverageAmendPrompt } from "./prompt.js";
@@ -8,8 +9,8 @@ import { EXPLANATION_SCHEMA, type ExplanationResponse } from "./wire.js";
 
 /** Amend attempts before giving up (spec sets no cap: "resume the explaining session and ask it
  * to amend"; this bounds it to avoid an unbounded retry loop — mirrors classification coverage's
- * MAX_COVERAGE_REPAIR_ATTEMPTS, see src/classification/coverage.ts). */
-export const MAX_SNIPPET_COVERAGE_ATTEMPTS = 3;
+ * maxCoverageRepairAttempts, see src/classification/coverage.ts). */
+const MAX_SNIPPET_COVERAGE_ATTEMPTS = config.limits.maxSnippetCoverageAttempts;
 
 /** Thrown when changes remain unreferenced by any snippet after every amend attempt. */
 export class SnippetCoverageError extends Error {

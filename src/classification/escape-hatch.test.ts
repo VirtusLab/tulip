@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import { config } from "../config.js";
 import type { ResolvedChange } from "./classify.js";
-import {
-  type ClassificationState,
-  MAX_ACCEPTED_NEW_CATEGORIES,
-  resolveNoneClassifications,
-} from "./escape-hatch.js";
+import { type ClassificationState, resolveNoneClassifications } from "./escape-hatch.js";
 import type { ClassifiableChange } from "./types.js";
+
+const MAX_ACCEPTED_NEW_CATEGORIES = config.limits.maxAcceptedNewCategories;
 
 function change(id: string): ClassifiableChange {
   return {

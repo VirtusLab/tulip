@@ -1,8 +1,9 @@
 import { parseArgs } from "node:util";
+import { config } from "../config.js";
 import { type PrRef, parsePrUrl } from "../github/pr-url.js";
 
 /** Default `--diff-threshold`: max diff lines fed verbatim to the explaining LLM. */
-export const DEFAULT_DIFF_THRESHOLD = 400;
+const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;
 
 /** Options collected from the command line, needed to run the pipeline. */
 export interface RunOptions {

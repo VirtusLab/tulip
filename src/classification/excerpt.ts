@@ -1,7 +1,8 @@
+import { config } from "../config.js";
 import type { Change } from "../diff/change.js";
 
 /** Diff excerpts longer than this are truncated with a marker, to keep batch prompts bounded. */
-export const MAX_EXCERPT_CHARS = 2000;
+const MAX_EXCERPT_CHARS = config.limits.maxExcerptChars;
 const TRUNCATION_MARKER = "\n… (excerpt truncated)";
 
 /**

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { config } from "../config.js";
 import { ClaudeBinaryMissingError, ClaudeProcessError, ClaudeTimeoutError } from "./errors.js";
 
 /** Raw stdout/stderr from one `claude` invocation. */
@@ -6,10 +7,6 @@ export interface ClaudeProcessResult {
   stdout: string;
   stderr: string;
 }
-
-/** Generous per-call ceiling for a single `claude -p` invocation — high enough that it should
- * only ever fire on a genuinely hung process, not a slow-but-working one. */
-export const DEFAULT_CLAUDE_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** Per-invocation options for a {@link ClaudeProcessRunner} call. */
 export interface ClaudeProcessOptions {
@@ -38,12 +35,12 @@ export type ClaudeProcessRunner = (
  * Builds a {@link ClaudeProcessRunner} that spawns `bin`. Defaults to `"claude"`; tests use
  * this to point at a different (or nonexistent) binary without touching the real `claude`.
  * Kills the child and rejects with {@link ClaudeTimeoutError} if it doesn't exit within
- * `timeoutMs` (default {@link DEFAULT_CLAUDE_TIMEOUT_MS}) — a hung `claude` process would
+ * `timeoutMs` (default {@link config}.timeouts.claudeProcessMs) — a hung `claude` process would
  * otherwise block the pipeline forever.
  */
 export function createClaudeProcessRunner(
   bin = "claude",
-  timeoutMs = DEFAULT_CLAUDE_TIMEOUT_MS,
+  timeoutMs = config.timeouts.claudeProcessMs,
 ): ClaudeProcessRunner {
   return (args, input, options) =>
     new Promise((resolve, reject) => {

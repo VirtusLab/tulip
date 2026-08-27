@@ -8,7 +8,7 @@ Remaining tasks, roughly by priority.
 - [ ] Reject protocol-relative (`//host`) URLs in prose links (inert under `file://`, still worth closing)
 
 ## Configuration
-- [ ] Central config module for models (per phase), timeouts, retry/cap counts, batch/excerpt/embed sizes — currently constants scattered across modules; optionally expose via CLI flags/env
+- [x] Central config module for models (per phase), timeouts, retry/cap counts, batch/excerpt/embed sizes — currently constants scattered across modules; optionally expose via CLI flags/env
 
 ## Features (deferred from spec)
 - [ ] Checkpointing & resumability of a partially-completed run (spec: "a later concern")

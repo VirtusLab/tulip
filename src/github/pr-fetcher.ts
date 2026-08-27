@@ -1,3 +1,4 @@
+import { config } from "../config.js";
 import { runCommand } from "./exec.js";
 import type { PrRef } from "./pr-url.js";
 
@@ -26,10 +27,6 @@ export interface PrFetcherDeps {
 }
 
 const GH_VIEW_FIELDS = "title,body,files,baseRefName,baseRefOid,headRefName,headRefOid";
-
-/** Ceiling for a single GitHub REST API request (the HTTP fallback) — a hung request would
- * otherwise block the pipeline forever. */
-const FETCH_TIMEOUT_MS = 60 * 1000;
 
 /**
  * Fetches a PR's title, description, changed files and unified diff.
@@ -88,9 +85,6 @@ async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> 
 }
 
 const FILES_PER_PAGE = 100;
-/** GitHub's documented cap on the number of files a PR can report; a safety net against a
- * pagination bug causing an unbounded loop, not an expected limit — see fetchAllFiles(). */
-const MAX_FILES_SAFETY_NET = 3000;
 
 async function fetchViaHttp(
   pr: PrRef,
@@ -138,9 +132,11 @@ async function fetchAllFiles(
     if (batch.length < FILES_PER_PAGE) {
       break;
     }
-    if (files.length > MAX_FILES_SAFETY_NET) {
+    // GitHub's documented cap on the number of files a PR can report; this guards against a
+    // pagination bug causing an unbounded loop, not an expected limit.
+    if (files.length > config.limits.maxPrFilesSafetyNet) {
       throw new Error(
-        `PR file list exceeded ${MAX_FILES_SAFETY_NET} files while paginating ${prApiUrl}/files — aborting instead of truncating silently.`,
+        `PR file list exceeded ${config.limits.maxPrFilesSafetyNet} files while paginating ${prApiUrl}/files — aborting instead of truncating silently.`,
       );
     }
   }
@@ -154,10 +150,15 @@ async function getText(
 ): Promise<string> {
   let response: Response;
   try {
-    response = await fetchUrl(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    response = await fetchUrl(url, {
+      headers,
+      signal: AbortSignal.timeout(config.timeouts.githubFetchMs),
+    });
   } catch (error) {
     if (error instanceof Error && error.name === "TimeoutError") {
-      throw new Error(`GitHub API request timed out after ${FETCH_TIMEOUT_MS}ms: ${url}`);
+      throw new Error(
+        `GitHub API request timed out after ${config.timeouts.githubFetchMs}ms: ${url}`,
+      );
     }
     throw error;
   }

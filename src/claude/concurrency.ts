@@ -1,3 +1,5 @@
+import { config } from "../config.js";
+
 /** Runs work under a concurrency cap, queuing excess calls FIFO. */
 export interface ConcurrencyLimiter {
   run<T>(fn: () => Promise<T>): Promise<T>;
@@ -36,10 +38,7 @@ export function createConcurrencyLimiter(limit: number): ConcurrencyLimiter {
   return { run };
 }
 
-/** Max `claude` processes running at once, global to the tool (per spec). */
-export const MAX_CONCURRENT_CLAUDE_PROCESSES = 3;
-
 /** Shared by every `claude` invocation the tool spawns — see runner.ts's `execute`. */
 export const claudeConcurrencyLimiter: ConcurrencyLimiter = createConcurrencyLimiter(
-  MAX_CONCURRENT_CLAUDE_PROCESSES,
+  config.limits.maxConcurrentClaudeProcesses,
 );

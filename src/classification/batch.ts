@@ -1,10 +1,11 @@
+import { config } from "../config.js";
 import type { ClassifiableChange } from "./types.js";
 
 /** Max changes per classification call. Bounded further by {@link MAX_BATCH_EXCERPT_CHARS}. */
-export const MAX_BATCH_SIZE = 20;
+const MAX_BATCH_SIZE = config.limits.maxBatchSize;
 
 /** Max total excerpt size per classification call, to keep prompts bounded regardless of count. */
-export const MAX_BATCH_EXCERPT_CHARS = 20_000;
+const MAX_BATCH_EXCERPT_CHARS = config.limits.maxBatchExcerptChars;
 
 /**
  * Groups changes into batches for the classifier: at most {@link MAX_BATCH_SIZE} changes, and at

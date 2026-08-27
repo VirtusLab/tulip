@@ -1,10 +1,11 @@
+import { config } from "../config.js";
 import type { PrCheckout } from "../github/checkout.js";
 import { type AlignedRow, buildAlignedDiff } from "./line-diff.js";
 
 /** Files whose base or head content exceeds this size (per side) aren't embedded for
  * client-side context expansion — ruling: prevents multi-MB pages. The `{{snippet}}` marker's
  * own range still renders (see ./snippets.ts); only "expand more context" is disabled. */
-const EMBED_SIZE_CAP_BYTES = 200 * 1024;
+const EMBED_SIZE_CAP_BYTES = config.limits.embedSizeCapBytes;
 
 /** One referenced file's side-by-side diff, ready to render. */
 export interface FileDiffData {

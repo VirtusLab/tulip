@@ -2,6 +2,7 @@ import { ClaudeOutputError } from "../claude/errors.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import type { JsonSchema } from "../claude/schema.js";
 import { runSession } from "../claude/session.js";
+import { config } from "../config.js";
 import type { FileStatus } from "../diff/change.js";
 import { CATEGORY_SCHEMA, type Category } from "./types.js";
 
@@ -71,7 +72,11 @@ export async function generateCategories(
   deps: RunnerDeps = {},
 ): Promise<GenerateCategoriesResult> {
   const { result, sessionId } = await runSession<{ categories: Category[] }>(
-    { model: "sonnet", schema: GENERATE_CATEGORIES_SCHEMA, prompt: buildPrompt(input) },
+    {
+      model: config.models.categoryGeneration,
+      schema: GENERATE_CATEGORIES_SCHEMA,
+      prompt: buildPrompt(input),
+    },
     deps,
   );
 

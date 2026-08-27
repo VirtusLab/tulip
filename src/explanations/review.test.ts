@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { Category } from "../categories/types.js";
 import type { ClassifiableChange } from "../classification/types.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { serializeSnippetRef } from "./markup.js";
-import { MAX_REVIEW_ROUNDS, type ReviewLoopInput, reviewAndAmend } from "./review.js";
+import { type ReviewLoopInput, reviewAndAmend } from "./review.js";
+
+const MAX_REVIEW_ROUNDS = config.limits.maxReviewRounds;
 
 const CATEGORY: Category = { name: "Retry logic", description: "Adds backoff retries." };
 

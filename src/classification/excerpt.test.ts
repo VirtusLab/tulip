@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { config } from "../config.js";
 import type { Change } from "../diff/change.js";
-import { buildExcerpt, isExcerptTruncated, MAX_EXCERPT_CHARS } from "./excerpt.js";
+import { buildExcerpt, isExcerptTruncated } from "./excerpt.js";
+
+const MAX_EXCERPT_CHARS = config.limits.maxExcerptChars;
 
 function makeChange(lines: string[]): Change {
   return {

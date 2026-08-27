@@ -2,6 +2,7 @@ import type { Category } from "../categories/types.js";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession, runSession } from "../claude/session.js";
+import { config } from "../config.js";
 import { batchChanges } from "./batch.js";
 import { buildBatchClassifyPrompt, buildInitialClassifyPrompt } from "./prompt.js";
 import {
@@ -73,7 +74,7 @@ export async function classifyInBatches(
 
   const firstResponse = await runSession<ClassifyBatchResponse>(
     {
-      model: "haiku",
+      model: config.models.classification,
       schema: CLASSIFY_BATCH_SCHEMA,
       prompt: buildInitialClassifyPrompt(categories, firstBatch),
     },
