@@ -18,7 +18,7 @@ and code snippets — as a single self-contained HTML page.
 ```sh
 pnpm install
 pnpm build
-pnpm link --global
+pnpm add -g .
 ```
 
 ## Usage
