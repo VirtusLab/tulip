@@ -38,6 +38,45 @@ describe("renderProseMarkdown", () => {
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;");
   });
+
+  it("keeps a normal http(s) link and image working", () => {
+    const html = renderProseMarkdown(
+      "[docs](https://example.com/page) and ![alt text](https://example.com/pic.png)",
+    );
+    expect(html).toContain('<a href="https://example.com/page">docs</a>');
+    expect(html).toContain('<img src="https://example.com/pic.png" alt="alt text">');
+  });
+
+  it("keeps a relative/fragment link working", () => {
+    const html = renderProseMarkdown("[section](#category-0) and [file](./readme.md)");
+    expect(html).toContain('<a href="#category-0">section</a>');
+    expect(html).toContain('<a href="./readme.md">file</a>');
+  });
+
+  it("neutralizes a javascript: link — drops the href, keeps the text", () => {
+    const html = renderProseMarkdown("[click me](javascript:alert(1))");
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("<a ");
+    expect(html).toContain("click me");
+  });
+
+  it("neutralizes a javascript: image — omits the <img> entirely", () => {
+    const html = renderProseMarkdown("![x](javascript:alert(1))");
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("<img");
+  });
+
+  it("neutralizes a javascript: autolink", () => {
+    const html = renderProseMarkdown("<javascript:alert(1)>");
+    expect(html).not.toContain("javascript:alert(1)</a>");
+    expect(html).not.toContain('href="javascript:');
+  });
+
+  it("neutralizes a data: image", () => {
+    const html = renderProseMarkdown("![x](data:text/html;base64,abc123)");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("data:text/html");
+  });
 });
 
 describe("renderCategoryMarkdown", () => {
