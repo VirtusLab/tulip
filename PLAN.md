@@ -31,7 +31,7 @@
 
 ## Epic 4: Phase 1 — category generation
 - [x] 4.1 Prompt + JSON schema: PR title/description/file list → ordered category list (sonnet)
-- [ ] 4.2 Keep session handle for later consultation (escape hatch in phase 2)
+- [x] 4.2 Keep session handle for later consultation (escape hatch in phase 2)
 - [ ] 4.3 Tests for prompt construction & response handling
 
 ## Epic 5: Phase 2 — change classification
