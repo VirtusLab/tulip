@@ -37,6 +37,10 @@ export interface ClaudeRunResult<T> {
 export interface RunnerDeps {
   /** Defaults to spawning the real `claude` binary on PATH. */
   runClaudeProcess?: ClaudeProcessRunner;
+  /** Working directory for every spawned `claude` process — RULING: the pipeline always sets
+   * this to the PR checkout dir (see src/pipeline/run.ts), so a session can read the actual
+   * repo files instead of inheriting the caller's cwd. */
+  cwd?: string;
 }
 
 const RETRY_PREFIX = "Your previous reply did not parse as JSON matching the required schema";
@@ -53,7 +57,7 @@ export async function invokeClaude<T = unknown>(
 ): Promise<ClaudeRunResult<T>> {
   const runProcess = deps.runClaudeProcess ?? runClaudeProcess;
 
-  const first = await execute(invocation, runProcess);
+  const first = await execute(invocation, runProcess, deps.cwd);
   const firstAttempt = extractStructuredOutput<T>(first, invocation.schema);
   if (firstAttempt.ok) {
     return { result: firstAttempt.value, sessionId: first.session_id, envelope: first };
@@ -64,7 +68,7 @@ export async function invokeClaude<T = unknown>(
     schema: invocation.schema,
     prompt: `${RETRY_PREFIX}: ${firstAttempt.error}. Reply again with ONLY valid JSON matching the schema.`,
   };
-  const second = await execute(retry, runProcess);
+  const second = await execute(retry, runProcess, deps.cwd);
   const secondAttempt = extractStructuredOutput<T>(second, invocation.schema);
   if (secondAttempt.ok) {
     return { result: secondAttempt.value, sessionId: second.session_id, envelope: second };
@@ -83,9 +87,10 @@ export async function invokeClaude<T = unknown>(
 async function execute(
   invocation: ClaudeInvocation,
   runProcess: ClaudeProcessRunner,
+  cwd: string | undefined,
 ): Promise<ClaudeEnvelope> {
   const { stdout } = await claudeConcurrencyLimiter.run(() =>
-    runProcess(buildArgs(invocation), invocation.prompt),
+    runProcess(buildArgs(invocation), invocation.prompt, cwd === undefined ? {} : { cwd }),
   );
   return parseEnvelope(stdout);
 }

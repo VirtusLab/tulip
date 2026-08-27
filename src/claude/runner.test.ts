@@ -58,7 +58,32 @@ describe("invokeClaude", () => {
         "sonnet",
       ],
       "do the thing",
+      {},
     );
+  });
+
+  it("passes cwd through to the process runner when given", async () => {
+    const runClaudeProcess = vi.fn(
+      async (_args: string[], _input: string, _options?: { cwd?: string }) =>
+        processResult(envelope()),
+    );
+
+    await invokeClaude(BASE_INVOCATION, { runClaudeProcess, cwd: "/repo/checkout" });
+
+    expect(runClaudeProcess).toHaveBeenCalledWith(expect.any(Array), "do the thing", {
+      cwd: "/repo/checkout",
+    });
+  });
+
+  it("omits cwd from the options passed to the process runner when not given", async () => {
+    const runClaudeProcess = vi.fn(
+      async (_args: string[], _input: string, _options?: { cwd?: string }) =>
+        processResult(envelope()),
+    );
+
+    await invokeClaude(BASE_INVOCATION, { runClaudeProcess });
+
+    expect(runClaudeProcess).toHaveBeenCalledWith(expect.any(Array), "do the thing", {});
   });
 
   it("passes --resume instead of --model when resuming a session, prompt still via stdin", async () => {

@@ -128,16 +128,22 @@ describe("run", () => {
     await run(options(), deps);
 
     expect(order).toEqual(["fetch", "checkout", "phase1", "phase2", "phase3", "render"]);
-    expect(deps.generateCategories).toHaveBeenCalledWith({
-      title: "Add hello()",
-      description: "Adds a greeting helper.",
-      files: [{ path: "src/new.ts", status: "added" }],
-    });
-    expect(deps.classifyChanges).toHaveBeenCalledWith({
-      diff: expect.anything(),
-      categories: [{ name: "Greeting", description: "Adds hello()." }],
-      phase1SessionId: "s1",
-    });
+    expect(deps.generateCategories).toHaveBeenCalledWith(
+      {
+        title: "Add hello()",
+        description: "Adds a greeting helper.",
+        files: [{ path: "src/new.ts", status: "added" }],
+      },
+      { cwd: "/tmp/tulip-checkout" },
+    );
+    expect(deps.classifyChanges).toHaveBeenCalledWith(
+      {
+        diff: expect.anything(),
+        categories: [{ name: "Greeting", description: "Adds hello()." }],
+        phase1SessionId: "s1",
+      },
+      { cwd: "/tmp/tulip-checkout" },
+    );
     expect(deps.explainCategories).toHaveBeenCalledWith(
       expect.objectContaining({
         prTitle: "Add hello()",
@@ -149,7 +155,7 @@ describe("run", () => {
           }),
         ],
       }),
-      expect.objectContaining({ logger: deps.logger }),
+      expect.objectContaining({ logger: deps.logger, cwd: "/tmp/tulip-checkout" }),
     );
     expect(deps.renderExplanations).toHaveBeenCalledWith(
       expect.objectContaining({

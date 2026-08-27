@@ -91,9 +91,9 @@ ${formatChanges(input.production, input.diffThreshold)}
 Test code changes in this category:
 ${formatChanges(input.test, input.diffThreshold)}
 
-First research the changes above — read through them and understand what they do. Then analyze
-how they work; jotting down scratch notes for yourself is fine, but only your final answer
-matters.
+First research the changes above — the PR checkout is your working directory, so you can read the
+actual files there. Read through them and understand what they do. Then analyze how they work;
+jotting down scratch notes for yourself is fine, but only your final answer matters.
 
 Then write the explanation as markdown, interleaving prose with Mermaid diagrams (fenced with
 \`\`\`mermaid) and snippet references. Use diagrams generously, including before/after

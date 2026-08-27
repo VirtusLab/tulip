@@ -1,3 +1,5 @@
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { ClaudeBinaryMissingError, ClaudeProcessError } from "./errors.js";
 import { createClaudeProcessRunner } from "./exec.js";
@@ -27,6 +29,17 @@ describe("createClaudeProcessRunner", () => {
       stdout: "hello",
       stderr: "",
     });
+  });
+
+  it("spawns the child with the given cwd", async () => {
+    const run = createClaudeProcessRunner(process.execPath);
+    const dir = realpathSync(tmpdir());
+
+    const result = await run(["-e", "process.stdout.write(process.cwd())"], "unused input", {
+      cwd: dir,
+    });
+
+    expect(result.stdout).toBe(dir);
   });
 
   it("delivers `input` to the child's stdin rather than argv", async () => {

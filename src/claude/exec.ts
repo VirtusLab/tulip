@@ -7,6 +7,13 @@ export interface ClaudeProcessResult {
   stderr: string;
 }
 
+/** Per-invocation options for a {@link ClaudeProcessRunner} call. */
+export interface ClaudeProcessOptions {
+  /** Working directory for the spawned process — RULING: always the PR checkout dir, so
+   * `claude` reads the actual repo files instead of inheriting the caller's cwd. */
+  cwd?: string;
+}
+
 /**
  * Runs the `claude` binary with the given args, writing `input` to its stdin (then closing it).
  * Mockable in tests (see `RunnerDeps` in ./runner.ts). Throws {@link ClaudeBinaryMissingError} if
@@ -17,16 +24,20 @@ export interface ClaudeProcessResult {
  * ~128KB `MAX_ARG_STRLEN`); `claude`'s documented headless pattern for bulk input is piping it
  * through stdin (capped at 10MB), so callers never need to pass the prompt as an argv token.
  */
-export type ClaudeProcessRunner = (args: string[], input: string) => Promise<ClaudeProcessResult>;
+export type ClaudeProcessRunner = (
+  args: string[],
+  input: string,
+  options?: ClaudeProcessOptions,
+) => Promise<ClaudeProcessResult>;
 
 /**
  * Builds a {@link ClaudeProcessRunner} that spawns `bin`. Defaults to `"claude"`; tests use
  * this to point at a different (or nonexistent) binary without touching the real `claude`.
  */
 export function createClaudeProcessRunner(bin = "claude"): ClaudeProcessRunner {
-  return (args, input) =>
+  return (args, input, options) =>
     new Promise((resolve, reject) => {
-      const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"], cwd: options?.cwd });
       let stdout = "";
       let stderr = "";
       let settled = false;

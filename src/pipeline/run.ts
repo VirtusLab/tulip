@@ -75,14 +75,22 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     checkout = await runPhase("creating checkout", () =>
       doCreateCheckout(options.pr, { base: metadata.base, head: metadata.head }),
     );
+    // Every claude session below runs with the checkout dir as its cwd (RULING), so it reads
+    // the actual repo files instead of inheriting this process's cwd. Captured into its own
+    // const (rather than reading `checkout.dir` in the closures below) because TypeScript can't
+    // narrow a mutated outer `let` across a closure boundary.
+    const checkoutDir = checkout.dir;
 
     logger.info("phase 1: generating categories...");
     const phase1 = await runPhase("phase 1 (generating categories)", () =>
-      doGenerateCategories({
-        title: metadata.title,
-        description: metadata.body,
-        files: diff.files.map((file) => ({ path: file.path, status: file.status })),
-      }),
+      doGenerateCategories(
+        {
+          title: metadata.title,
+          description: metadata.body,
+          files: diff.files.map((file) => ({ path: file.path, status: file.status })),
+        },
+        { cwd: checkoutDir },
+      ),
     );
     logger.info(
       `generated ${phase1.categories.length} categories: ` +
@@ -91,11 +99,14 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.info("phase 2: classifying changes...");
     const classification = await runPhase("phase 2 (classifying changes)", () =>
-      doClassifyChanges({
-        diff,
-        categories: phase1.categories,
-        phase1SessionId: phase1.sessionId,
-      }),
+      doClassifyChanges(
+        {
+          diff,
+          categories: phase1.categories,
+          phase1SessionId: phase1.sessionId,
+        },
+        { cwd: checkoutDir },
+      ),
     );
     logger.debug(
       `classification done: ${classification.assignments.size} change(s) categorized, ` +
@@ -113,7 +124,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           diffThreshold: options.diffThreshold,
           categorySets,
         },
-        { logger },
+        { logger, cwd: checkoutDir },
       ),
     );
     logger.info(`generated explanations for ${explanations.length} categories`);
