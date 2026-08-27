@@ -13,7 +13,7 @@
 ## Epic 1: Project scaffolding
 - [x] 1.1 Init TypeScript project: pnpm, tsconfig, vitest, lint/format
 - [x] 1.2 CLI entry point: parse `tulip <PR URL>` invocation, validate args; flags for configurable options (diff-vs-reference threshold)
-- [ ] 1.3 Logging utility (phase/progress reporting, reasonable verbosity)
+- [x] 1.3 Logging utility (phase/progress reporting, reasonable verbosity)
 
 ## Epic 2: PR fetching & change model
 - [ ] 2.1 Parse PR URL into owner/repo/number

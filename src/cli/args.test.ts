@@ -4,10 +4,11 @@ import { CliUsageError, DEFAULT_DIFF_THRESHOLD, parseCliArgs } from "./args.js";
 const VALID_URL = "https://github.com/owner/repo/pull/123";
 
 describe("parseCliArgs", () => {
-  it("parses a valid PR URL with the default diff threshold", () => {
+  it("parses a valid PR URL with defaults for diff threshold and verbosity", () => {
     expect(parseCliArgs([VALID_URL])).toEqual({
       prUrl: VALID_URL,
       diffThreshold: DEFAULT_DIFF_THRESHOLD,
+      verbose: false,
     });
   });
 
@@ -15,7 +16,12 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs([VALID_URL, "--diff-threshold", "800"])).toEqual({
       prUrl: VALID_URL,
       diffThreshold: 800,
+      verbose: false,
     });
+  });
+
+  it("accepts --verbose", () => {
+    expect(parseCliArgs([VALID_URL, "--verbose"]).verbose).toBe(true);
   });
 
   it("accepts a trailing slash in the PR URL", () => {

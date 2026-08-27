@@ -22,6 +22,7 @@ export function usage(): string {
     "Options:",
     `  --diff-threshold <n>  Max diff size (lines) fed verbatim to the LLM; larger changes are`,
     `                        passed as file+line-range references (default: ${DEFAULT_DIFF_THRESHOLD})`,
+    "  --verbose              Show debug-level progress logging",
   ].join("\n");
 }
 
@@ -30,13 +31,14 @@ export function usage(): string {
  * Throws {@link CliUsageError} with a user-facing message on any invalid input.
  */
 export function parseCliArgs(argv: string[]): RunOptions {
-  let values: { "diff-threshold"?: string };
+  let values: { "diff-threshold"?: string; verbose?: boolean };
   let positionals: string[];
   try {
     ({ values, positionals } = parseArgs({
       args: argv,
       options: {
         "diff-threshold": { type: "string" },
+        verbose: { type: "boolean" },
       },
       allowPositionals: true,
     }));
@@ -60,7 +62,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
 
   const diffThreshold = parseDiffThreshold(values["diff-threshold"]);
 
-  return { prUrl, diffThreshold };
+  return { prUrl, diffThreshold, verbose: values.verbose ?? false };
 }
 
 function parseDiffThreshold(raw: string | undefined): number {
