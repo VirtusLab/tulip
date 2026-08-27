@@ -76,12 +76,44 @@ function parseFileBlock(lines: string[]): FileDiff {
   return fileDiff;
 }
 
+const DIFF_HEADER_PREFIX = "diff --git a/";
+const B_SEPARATOR = " b/";
+
+/**
+ * Splits a `diff --git a/<aPath> b/<bPath>` header. Only used as a fallback when neither the
+ * `---`/`+++` lines nor `rename from`/`rename to` are present (e.g. a mode-only change).
+ *
+ * Non-renamed files use the *same* path on both sides, so a path that itself contains " b/"
+ * (e.g. "x b/y.txt") can't be split correctly by just finding *a* " b/" — we instead search for
+ * the split point where the text before and after it are equal. Renamed files (where a/b
+ * genuinely differ) are resolved via `rename from`/`rename to` instead, so a wrong split here is
+ * harmless for them.
+ */
 function parseDiffGitHeader(header: string): { aPath: string; bPath: string } {
-  const match = /^diff --git a\/(.+) b\/(.+)$/.exec(header);
-  if (!match?.[1] || !match[2]) {
+  if (!header.startsWith(DIFF_HEADER_PREFIX)) {
     throw new Error(`Unrecognized diff header: ${header}`);
   }
-  return { aPath: match[1], bPath: match[2] };
+  const rest = header.slice(DIFF_HEADER_PREFIX.length); // "<aPath> b/<bPath>"
+
+  let searchFrom = 0;
+  for (
+    let idx = rest.indexOf(B_SEPARATOR);
+    idx !== -1;
+    idx = rest.indexOf(B_SEPARATOR, searchFrom)
+  ) {
+    const candidateA = rest.slice(0, idx);
+    const candidateB = rest.slice(idx + B_SEPARATOR.length);
+    if (candidateA === candidateB) {
+      return { aPath: candidateA, bPath: candidateB };
+    }
+    searchFrom = idx + 1;
+  }
+
+  const naive = /^(.+) b\/(.+)$/.exec(rest);
+  if (!naive?.[1] || !naive[2]) {
+    throw new Error(`Unrecognized diff header: ${header}`);
+  }
+  return { aPath: naive[1], bPath: naive[2] };
 }
 
 /** Extracts the path from a `--- a/path` / `+++ b/path` line; undefined for `/dev/null`. */

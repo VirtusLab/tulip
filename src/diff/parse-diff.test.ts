@@ -202,6 +202,17 @@ describe("parseDiff", () => {
     });
   });
 
+  it("resolves a mode-only diff's path even when it contains ' b/'", () => {
+    // No ---/+++ or rename lines here, so the header split is the only source of the path.
+    const diff = ["diff --git a/x b/y.txt b/x b/y.txt", "old mode 100644", "new mode 100755"].join(
+      "\n",
+    );
+
+    expect(parseDiff(diff)).toEqual({
+      files: [{ path: "x b/y.txt", status: "modified", binary: false, changes: [] }],
+    });
+  });
+
   it("parses multiple files in one diff, preserving order", () => {
     const diff = [
       "diff --git a/a.ts b/a.ts",
