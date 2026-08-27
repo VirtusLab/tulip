@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { ClaudeBinaryMissingError, ClaudeProcessError } from "./errors.js";
+import { ClaudeBinaryMissingError, ClaudeProcessError, ClaudeTimeoutError } from "./errors.js";
 import { createClaudeProcessRunner } from "./exec.js";
 
 // These spawn real (non-`claude`) processes to exercise the actual error-classification and
@@ -29,6 +29,15 @@ describe("createClaudeProcessRunner", () => {
       stdout: "hello",
       stderr: "",
     });
+  });
+
+  it("kills the child and rejects with ClaudeTimeoutError when it doesn't exit within the timeout", async () => {
+    const run = createClaudeProcessRunner(process.execPath, 50);
+    // Never exits on its own — proves the runner kills it rather than waiting forever.
+    const result = run(["-e", "setInterval(() => {}, 1000)"], "unused input");
+
+    await expect(result).rejects.toThrow(ClaudeTimeoutError);
+    await expect(result).rejects.toThrow(/50ms/);
   });
 
   it("spawns the child with the given cwd", async () => {

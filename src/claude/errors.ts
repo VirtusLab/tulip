@@ -33,3 +33,12 @@ export class ClaudeOutputError extends Error {
     this.name = "ClaudeOutputError";
   }
 }
+
+/** Thrown when a `claude` invocation doesn't exit within its timeout (see ./exec.ts); the
+ * process is killed before this is thrown. */
+export class ClaudeTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`claude timed out after ${timeoutMs}ms without exiting`);
+    this.name = "ClaudeTimeoutError";
+  }
+}

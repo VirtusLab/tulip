@@ -153,6 +153,44 @@ describe("fetchPrMetadata", () => {
     expect(fetchUrl).toHaveBeenCalled();
   });
 
+  it("passes an abort signal to every HTTP fallback request", async () => {
+    const runGh = vi.fn(async () => {
+      throw new Error("gh: command not found");
+    });
+    const fetchUrl = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      const href = url.toString();
+      const headers = new Headers(init?.headers);
+      if (headers.get("Accept") === "application/vnd.github.v3.diff") return new Response(GH_DIFF);
+      if (href.includes("/files")) return jsonResponse([]);
+      return jsonResponse({
+        title: "t",
+        body: null,
+        base: { ref: "main", sha: "base-sha" },
+        head: { ref: "feature", sha: "head-sha" },
+      });
+    });
+
+    await fetchPrMetadata(PR, { runGh, fetchUrl: fetchUrl as unknown as typeof fetch });
+
+    expect(fetchUrl).toHaveBeenCalled();
+  });
+
+  it("reports a clear timeout error when an HTTP fallback request times out", async () => {
+    const runGh = vi.fn(async () => {
+      throw new Error("gh: command not found");
+    });
+    const fetchUrl = vi.fn(async () => {
+      const error = new Error("The operation was aborted due to timeout");
+      error.name = "TimeoutError";
+      throw error;
+    });
+
+    await expect(
+      fetchPrMetadata(PR, { runGh, fetchUrl: fetchUrl as unknown as typeof fetch }),
+    ).rejects.toThrow(/timed out after \d+ms/);
+  });
+
   it("throws a combined error when both gh and HTTP fail", async () => {
     const runGh = vi.fn(async () => {
       throw new Error("gh failed");

@@ -27,6 +27,10 @@ export interface PrFetcherDeps {
 
 const GH_VIEW_FIELDS = "title,body,files,baseRefName,baseRefOid,headRefName,headRefOid";
 
+/** Ceiling for a single GitHub REST API request (the HTTP fallback) — a hung request would
+ * otherwise block the pipeline forever. */
+const FETCH_TIMEOUT_MS = 60 * 1000;
+
 /**
  * Fetches a PR's title, description, changed files and unified diff.
  *
@@ -148,7 +152,15 @@ async function getText(
   url: string,
   headers: Record<string, string>,
 ): Promise<string> {
-  const response = await fetchUrl(url, { headers });
+  let response: Response;
+  try {
+    response = await fetchUrl(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new Error(`GitHub API request timed out after ${FETCH_TIMEOUT_MS}ms: ${url}`);
+    }
+    throw error;
+  }
   if (!response.ok) {
     throw new Error(`GitHub API returned ${response.status} for ${url}`);
   }
