@@ -2,19 +2,19 @@ import { describe, expect, it } from "vitest";
 import { ClaudeBinaryMissingError, ClaudeProcessError } from "./errors.js";
 import { createClaudeProcessRunner } from "./exec.js";
 
-// These spawn real (non-`claude`) processes to exercise the actual error-classification paths —
-// no live `claude`/LLM calls are made anywhere in this file.
+// These spawn real (non-`claude`) processes to exercise the actual error-classification and
+// stdin-delivery paths — no live `claude`/LLM calls are made anywhere in this file.
 
 describe("createClaudeProcessRunner", () => {
   it("throws ClaudeBinaryMissingError when the binary isn't on PATH", async () => {
     const run = createClaudeProcessRunner("tulip-claude-binary-that-does-not-exist");
 
-    await expect(run(["-p", "hi"])).rejects.toThrow(ClaudeBinaryMissingError);
+    await expect(run(["-p"], "hi")).rejects.toThrow(ClaudeBinaryMissingError);
   });
 
   it("throws ClaudeProcessError with the exit code and stderr on a non-zero exit", async () => {
     const run = createClaudeProcessRunner(process.execPath);
-    const result = run(["-e", "process.stderr.write('boom'); process.exit(7)"]);
+    const result = run(["-e", "process.stderr.write('boom'); process.exit(7)"], "unused input");
 
     await expect(result).rejects.toThrow(ClaudeProcessError);
     await expect(result).rejects.toMatchObject({ exitCode: 7, stderr: "boom" });
@@ -23,8 +23,24 @@ describe("createClaudeProcessRunner", () => {
   it("resolves with stdout/stderr on success", async () => {
     const run = createClaudeProcessRunner(process.execPath);
 
-    await expect(run(["-e", "process.stdout.write('hello')"])).resolves.toEqual({
+    await expect(run(["-e", "process.stdout.write('hello')"], "unused input")).resolves.toEqual({
       stdout: "hello",
+      stderr: "",
+    });
+  });
+
+  it("delivers `input` to the child's stdin rather than argv", async () => {
+    const run = createClaudeProcessRunner(process.execPath);
+    // Echoes whatever it reads from stdin back out on stdout — proves the prompt actually
+    // reaches the process via stdin, not as a command-line argument.
+    const echoStdin =
+      "let data = ''; process.stdin.on('data', (c) => { data += c; }); " +
+      "process.stdin.on('end', () => { process.stdout.write(data); });";
+
+    const largePrompt = "x".repeat(200_000); // well past the ~128KB argv (E2BIG) limit this fix avoids
+
+    await expect(run(["-e", echoStdin], largePrompt)).resolves.toEqual({
+      stdout: largePrompt,
       stderr: "",
     });
   });

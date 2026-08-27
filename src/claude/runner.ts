@@ -75,19 +75,24 @@ export async function invokeClaude<T = unknown>(
   );
 }
 
-/** Spawns one `claude` process under the shared concurrency cap (see ./concurrency.ts). */
+/**
+ * Spawns one `claude` process under the shared concurrency cap (see ./concurrency.ts). The
+ * prompt itself is sent over stdin (see ./exec.ts's `ClaudeProcessRunner` doc comment) — argv
+ * carries only fixed flags, no variable-length content.
+ */
 async function execute(
   invocation: ClaudeInvocation,
   runProcess: ClaudeProcessRunner,
 ): Promise<ClaudeEnvelope> {
-  const { stdout } = await claudeConcurrencyLimiter.run(() => runProcess(buildArgs(invocation)));
+  const { stdout } = await claudeConcurrencyLimiter.run(() =>
+    runProcess(buildArgs(invocation), invocation.prompt),
+  );
   return parseEnvelope(stdout);
 }
 
 function buildArgs(invocation: ClaudeInvocation): string[] {
   const args = [
     "-p",
-    invocation.prompt,
     "--output-format",
     "json",
     "--json-schema",

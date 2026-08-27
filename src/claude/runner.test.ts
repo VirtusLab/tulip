@@ -40,35 +40,42 @@ describe("invokeClaude", () => {
     expect(runClaudeProcess).toHaveBeenCalledTimes(1);
   });
 
-  it("builds the CLI args: -p <prompt>, --model, --output-format json, --json-schema", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[]) => processResult(envelope()));
+  it("builds the CLI args (-p, --output-format json, --json-schema, --model) and sends the prompt via stdin, not argv", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      processResult(envelope()),
+    );
 
     await invokeClaude(BASE_INVOCATION, { runClaudeProcess });
 
-    expect(runClaudeProcess).toHaveBeenCalledWith([
-      "-p",
+    expect(runClaudeProcess).toHaveBeenCalledWith(
+      [
+        "-p",
+        "--output-format",
+        "json",
+        "--json-schema",
+        JSON.stringify(SCHEMA),
+        "--model",
+        "sonnet",
+      ],
       "do the thing",
-      "--output-format",
-      "json",
-      "--json-schema",
-      JSON.stringify(SCHEMA),
-      "--model",
-      "sonnet",
-    ]);
+    );
   });
 
-  it("passes --resume instead of --model when resuming a session", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[]) => processResult(envelope()));
+  it("passes --resume instead of --model when resuming a session, prompt still via stdin", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      processResult(envelope()),
+    );
 
     await invokeClaude(
       { resumeSessionId: "session-1", schema: SCHEMA, prompt: "follow up" },
       { runClaudeProcess },
     );
 
-    const args = runClaudeProcess.mock.calls[0]?.[0] as string[];
+    const [args, input] = runClaudeProcess.mock.calls[0] ?? [];
     expect(args).toContain("--resume");
-    expect(args[args.indexOf("--resume") + 1]).toBe("session-1");
+    expect((args as string[])[(args as string[]).indexOf("--resume") + 1]).toBe("session-1");
     expect(args).not.toContain("--model");
+    expect(input).toBe("follow up");
   });
 
   it("retries once, by resuming, when structured output fails schema validation", async () => {
@@ -84,9 +91,12 @@ describe("invokeClaude", () => {
     expect(result).toEqual({ ok: true });
     expect(sessionId).toBe("session-2");
     expect(runClaudeProcess).toHaveBeenCalledTimes(2);
-    const retryArgs = runClaudeProcess.mock.calls[1]?.[0] as string[];
+    const [retryArgs, retryInput] = runClaudeProcess.mock.calls[1] ?? [];
     expect(retryArgs).toContain("--resume");
-    expect(retryArgs[retryArgs.indexOf("--resume") + 1]).toBe("session-1");
+    expect((retryArgs as string[])[(retryArgs as string[]).indexOf("--resume") + 1]).toBe(
+      "session-1",
+    );
+    expect(retryInput).toMatch(/did not parse as JSON matching the required schema/);
   });
 
   it("retries once when structured_output is missing entirely", async () => {

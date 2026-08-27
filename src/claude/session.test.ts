@@ -22,18 +22,17 @@ function envelope(sessionId = "session-1"): ClaudeProcessResult {
 }
 
 describe("runSession", () => {
-  it("prepends the shared preamble to the prompt", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[]) => envelope());
+  it("prepends the shared preamble to the prompt, sent via stdin", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope());
 
     await runSession({ model: "sonnet", schema: SCHEMA, prompt: "say hi" }, { runClaudeProcess });
 
-    const args = runClaudeProcess.mock.calls[0]?.[0] as string[];
-    const prompt = args[args.indexOf("-p") + 1];
-    expect(prompt).toBe(`${PREAMBLE}\n\nsay hi`);
+    const input = runClaudeProcess.mock.calls[0]?.[1];
+    expect(input).toBe(`${PREAMBLE}\n\nsay hi`);
   });
 
   it("returns the structured result and session id", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[]) => envelope("abc"));
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope("abc"));
 
     const { result, sessionId } = await runSession(
       { model: "haiku", schema: SCHEMA, prompt: "say hi" },
@@ -46,17 +45,18 @@ describe("runSession", () => {
 });
 
 describe("resumeSession", () => {
-  it("sends the prompt as-is (no preamble) and resumes the given session id", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[]) => envelope("abc"));
+  it("sends the prompt as-is (no preamble) via stdin, and resumes the given session id", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope("abc"));
 
     await resumeSession(
       { sessionId: "abc", schema: SCHEMA, prompt: "follow up" },
       { runClaudeProcess },
     );
 
-    const args = runClaudeProcess.mock.calls[0]?.[0] as string[];
-    expect(args[args.indexOf("-p") + 1]).toBe("follow up");
-    expect(args[args.indexOf("--resume") + 1]).toBe("abc");
+    const [args, input] = runClaudeProcess.mock.calls[0] ?? [];
+    expect(input).toBe("follow up");
+    expect(args).toContain("--resume");
+    expect((args as string[])[(args as string[]).indexOf("--resume") + 1]).toBe("abc");
     expect(args).not.toContain("--model");
   });
 });
