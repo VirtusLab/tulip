@@ -1,0 +1,245 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #5a5a5a;
+  --border: #dcdcdc;
+  --link: #0a5cc7;
+  --code-bg: #f5f5f5;
+  --add-bg: #e6ffed;
+  --add-fg: #22863a;
+  --remove-bg: #ffeef0;
+  --remove-fg: #b31d28;
+  --toc-bg: #fafafa;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1c1c1e;
+    --fg: #e6e6e6;
+    --muted: #a0a0a0;
+    --border: #3a3a3c;
+    --link: #6cb0ff;
+    --code-bg: #262628;
+    --add-bg: #10331d;
+    --add-fg: #56d364;
+    --remove-bg: #3a1418;
+    --remove-fg: #ff7b83;
+    --toc-bg: #232325;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #1c1c1e;
+  --fg: #e6e6e6;
+  --muted: #a0a0a0;
+  --border: #3a3a3c;
+  --link: #6cb0ff;
+  --code-bg: #262628;
+  --add-bg: #10331d;
+  --add-fg: #56d364;
+  --remove-bg: #3a1418;
+  --remove-fg: #ff7b83;
+  --toc-bg: #232325;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  line-height: 1.55;
+}
+
+main {
+  max-width: 78ch;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 6rem;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+}
+
+a {
+  color: var(--link);
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+#pr-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.pr-link a {
+  word-break: break-all;
+}
+
+.category {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.category-description {
+  color: var(--muted);
+}
+
+.subsection {
+  margin-top: 1rem;
+}
+
+#theme-toggle {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 20;
+  background: var(--toc-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  width: 2.25rem;
+  height: 2.25rem;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.toc {
+  position: fixed;
+  top: 3.5rem;
+  right: 0.75rem;
+  width: 15rem;
+  max-height: calc(100vh - 4.5rem);
+  overflow-y: auto;
+  background: var(--toc-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  z-index: 10;
+}
+
+.toc ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+
+.toc .toc-children {
+  padding-left: 1rem;
+}
+
+.toc a {
+  display: block;
+  padding: 0.15rem 0;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.toc a.active {
+  color: var(--link);
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .toc {
+    position: static;
+    width: auto;
+    max-height: none;
+    margin: 1rem 1.25rem 0;
+  }
+
+  main {
+    padding-top: 1rem;
+  }
+}
+
+/* Snippet diff blocks (see ./snippets.ts) */
+.snippet {
+  margin: 1rem 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.snippet summary {
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  background: var(--code-bg);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.snippet-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.snippet-table td {
+  vertical-align: top;
+  padding: 0 0.5rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: none;
+}
+
+.snippet-line-no {
+  width: 3.5rem;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+  padding-right: 0.5rem;
+}
+
+.snippet-cell-base.type-remove,
+.snippet-line-no.side-base.type-remove {
+  background: var(--remove-bg);
+}
+
+.snippet-cell-base.type-remove {
+  color: var(--remove-fg);
+}
+
+.snippet-cell-head.type-add,
+.snippet-line-no.side-head.type-add {
+  background: var(--add-bg);
+}
+
+.snippet-cell-head.type-add {
+  color: var(--add-fg);
+}
+
+.snippet-expand {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: var(--code-bg);
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.25rem;
+  cursor: pointer;
+}
