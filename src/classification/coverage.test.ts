@@ -40,6 +40,7 @@ function baseState(): ClassificationState {
     phase1SessionId: "phase1-session",
     classifierSessionId: "classifier-session",
     acceptedNewCategories: 0,
+    consultedChangeIds: new Set(),
   };
 }
 

@@ -36,6 +36,7 @@ function baseState(overrides: Partial<ClassificationState> = {}): Classification
     phase1SessionId: "phase1-session",
     classifierSessionId: "classifier-session",
     acceptedNewCategories: 0,
+    consultedChangeIds: new Set(),
     ...overrides,
   };
 }
@@ -250,6 +251,102 @@ describe("resolveNoneClassifications", () => {
     // Only c1 gets consulted (bringing acceptedNewCategories to the cap); c2 is auto-rejected.
     expect(consultCalls).toBe(1);
     expect(state.acceptedNewCategories).toBe(MAX_ACCEPTED_NEW_CATEGORIES);
+  });
+
+  it("does not re-consult a change already consulted in an earlier call, even if it's still 'none'", async () => {
+    const suggestedCategory = { name: "Extra", description: "One more." };
+    let consultCalls = 0;
+    const runClaudeProcess = vi.fn(async (args: string[], _input: string) => {
+      if (!args.includes("--resume") || args[args.indexOf("--resume") + 1] === "phase1-session") {
+        consultCalls++;
+        return envelope({ accept: false }, "phase1-session-2");
+      }
+      return envelope(
+        {
+          classifications: [
+            {
+              changeId: "c1",
+              assignments: [{ category: "none", codeType: "production", suggestedCategory }],
+            },
+          ],
+        },
+        "classifier-session-2",
+      );
+    });
+
+    const state = baseState();
+    const changesById = new Map([["c1", change("c1")]]);
+    const resolved = new Map<string, ResolvedChange>([
+      ["c1", { kind: "none", suggestedCategory, existingAssignments: [] }],
+    ]);
+
+    const afterFirstCall = await resolveNoneClassifications(resolved, changesById, state, {
+      runClaudeProcess,
+    });
+    expect(afterFirstCall.get("c1")).toMatchObject({ kind: "none" });
+    expect(consultCalls).toBe(1);
+    expect(runClaudeProcess).toHaveBeenCalledTimes(2); // 1 consult + 1 classifier-resume
+
+    // A later batch's afterBatch hook is called with the whole accumulated map, in which c1 is
+    // still "none" — without tracking, this would consult phase 1 on it a second time.
+    const afterSecondCall = await resolveNoneClassifications(afterFirstCall, changesById, state, {
+      runClaudeProcess,
+    });
+
+    expect(consultCalls).toBe(1);
+    expect(runClaudeProcess).toHaveBeenCalledTimes(2); // no new calls at all — c1 already consulted
+    expect(afterSecondCall).toBe(afterFirstCall);
+  });
+
+  it("treats an accepted category matching an existing name as accepting the existing category, without appending a duplicate", async () => {
+    const resolved = new Map<string, ResolvedChange>([
+      [
+        "c1",
+        {
+          kind: "none",
+          suggestedCategory: { name: "Retry Logic", description: "Dup." },
+          existingAssignments: [],
+        },
+      ],
+    ]);
+    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+      if (input.includes("Retry Logic")) {
+        // Accepted, refined to a name that only differs in case/whitespace from the existing
+        // category — categoryNamesMatch treats these as the same category.
+        return envelope(
+          {
+            accept: true,
+            category: { name: " retry logic ", description: "Adds backoff retries (refined)." },
+          },
+          "phase1-session-2",
+        );
+      }
+      return envelope(
+        {
+          classifications: [
+            { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "production" }] },
+          ],
+        },
+        "classifier-session-2",
+      );
+    });
+
+    const state = baseState();
+    const result = await resolveNoneClassifications(
+      resolved,
+      new Map([["c1", change("c1")]]),
+      state,
+      { runClaudeProcess },
+    );
+
+    expect(state.categories).toEqual([
+      { name: "Retry logic", description: "Adds backoff retries." },
+    ]);
+    expect(state.acceptedNewCategories).toBe(0);
+    expect(result.get("c1")).toEqual({
+      kind: "categorized",
+      assignments: [{ category: "Retry logic", codeType: "production" }],
+    });
   });
 
   it("does not retry when the classifier still replies 'none' — leaves it for coverage repair", async () => {

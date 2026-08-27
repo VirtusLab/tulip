@@ -50,6 +50,7 @@ export async function classifyChanges(
     phase1SessionId: input.phase1SessionId,
     classifierSessionId: "",
     acceptedNewCategories: 0,
+    consultedChangeIds: new Set(),
   };
 
   const afterBatch: AfterBatchHook = async (resolved, classifierSessionId, categories) => {
