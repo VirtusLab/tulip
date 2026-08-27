@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GenerateCategoriesResult } from "../categories/generate.js";
+import { IncompleteCoverageError } from "../classification/coverage.js";
 import type { ClassifyChangesResult } from "../classification/orchestrate.js";
-import { ClaudeBinaryMissingError } from "../claude/errors.js";
+import { ClaudeBinaryMissingError, ClaudeOutputError } from "../claude/errors.js";
+import { SnippetCoverageError } from "../explanations/coverage.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import type { PrCheckout } from "../github/checkout.js";
 import type { PrMetadata } from "../github/pr-fetcher.js";
@@ -229,6 +231,89 @@ describe("run", () => {
     expect(process.exitCode).toBe(1);
     const lines = infoLines(deps);
     expect(lines.some((line) => line === new ClaudeBinaryMissingError().message)).toBe(true);
+  });
+
+  it("reports a ClaudeOutputError from phase 1, naming the phase, and cleans up the checkout", async () => {
+    const deps = baseDeps();
+    deps.generateCategories = vi.fn(async () => {
+      throw new ClaudeOutputError("claude returned an empty category list");
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
+    const checkout = await deps.createCheckout.mock.results[0]?.value;
+    expect(checkout.cleanup).toHaveBeenCalledTimes(1);
+    const lines = infoLines(deps);
+    expect(
+      lines.some(
+        (line) =>
+          line.includes("phase 1 (generating categories) failed") &&
+          line.includes("claude returned an empty category list"),
+      ),
+    ).toBe(true);
+  });
+
+  it("reports an IncompleteCoverageError from phase 2, naming the phase and the uncovered changes", async () => {
+    const deps = baseDeps();
+    const uncovered = [
+      {
+        id: CHANGE_ID,
+        path: "src/new.ts",
+        status: "added" as const,
+        side: "head" as const,
+        range: { start: 1, end: 3 },
+        excerpt: "+export function hello() {",
+      },
+    ];
+    deps.classifyChanges = vi.fn(async () => {
+      throw new IncompleteCoverageError(uncovered);
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.explainCategories).not.toHaveBeenCalled();
+    const checkout = await deps.createCheckout.mock.results[0]?.value;
+    expect(checkout.cleanup).toHaveBeenCalledTimes(1);
+    const lines = infoLines(deps);
+    expect(
+      lines.some(
+        (line) =>
+          line.includes("phase 2 (classifying changes) failed") && line.includes("src/new.ts"),
+      ),
+    ).toBe(true);
+  });
+
+  it("reports a SnippetCoverageError from phase 3, naming the phase and the uncovered changes", async () => {
+    const deps = baseDeps();
+    const missing = [
+      {
+        id: CHANGE_ID,
+        path: "src/new.ts",
+        status: "added" as const,
+        side: "head" as const,
+        range: { start: 1, end: 3 },
+        excerpt: "+export function hello() {",
+      },
+    ];
+    deps.explainCategories = vi.fn(async () => {
+      throw new SnippetCoverageError(missing);
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.renderExplanations).not.toHaveBeenCalled();
+    const checkout = await deps.createCheckout.mock.results[0]?.value;
+    expect(checkout.cleanup).toHaveBeenCalledTimes(1);
+    const lines = infoLines(deps);
+    expect(
+      lines.some(
+        (line) =>
+          line.includes("phase 3 (generating explanations) failed") && line.includes("src/new.ts"),
+      ),
+    ).toBe(true);
   });
 
   it("on a mid-pipeline failure, names the failing phase, cleans up the checkout, and skips later phases", async () => {
