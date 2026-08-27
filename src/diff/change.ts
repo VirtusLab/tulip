@@ -19,6 +19,8 @@ export interface Change {
   path: string;
   side: DiffSide;
   range: LineRange;
+  /** Raw diff lines for this range, one per line, each still carrying its leading `+`/`-` marker. */
+  lines: string[];
 }
 
 /** How a file was touched by the PR, per the diff's file header. */

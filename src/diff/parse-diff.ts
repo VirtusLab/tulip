@@ -151,6 +151,12 @@ function parseHunks(lines: string[], path: string): Change[] {
 }
 
 /** Walks one hunk's body lines, grouping consecutive `-`/`+` lines into ranges. */
+/** A run of consecutive same-side diff lines being accumulated into one {@link Change}. */
+interface PendingRun {
+  range: LineRange;
+  lines: string[];
+}
+
 function parseHunkBody(
   lines: string[],
   baseStart: number,
@@ -160,18 +166,18 @@ function parseHunkBody(
   const changes: Change[] = [];
   let baseLine = baseStart;
   let headLine = headStart;
-  let removed: LineRange | undefined;
-  let added: LineRange | undefined;
+  let removed: PendingRun | undefined;
+  let added: PendingRun | undefined;
 
   const flushRemoved = () => {
     if (removed) {
-      changes.push(makeChange(path, "base", removed));
+      changes.push(makeChange(path, "base", removed.range, removed.lines));
       removed = undefined;
     }
   };
   const flushAdded = () => {
     if (added) {
-      changes.push(makeChange(path, "head", added));
+      changes.push(makeChange(path, "head", added.range, added.lines));
       added = undefined;
     }
   };
@@ -186,12 +192,14 @@ function parseHunkBody(
     } else if (marker === "-") {
       flushAdded();
       removed = removed
-        ? { start: removed.start, end: baseLine }
-        : { start: baseLine, end: baseLine };
+        ? { range: { start: removed.range.start, end: baseLine }, lines: [...removed.lines, line] }
+        : { range: { start: baseLine, end: baseLine }, lines: [line] };
       baseLine++;
     } else if (marker === "+") {
       flushRemoved();
-      added = added ? { start: added.start, end: headLine } : { start: headLine, end: headLine };
+      added = added
+        ? { range: { start: added.range.start, end: headLine }, lines: [...added.lines, line] }
+        : { range: { start: headLine, end: headLine }, lines: [line] };
       headLine++;
     }
     // Other lines (e.g. "\ No newline at end of file", or the trailing blank split artifact) are ignored.
@@ -201,6 +209,6 @@ function parseHunkBody(
   return changes;
 }
 
-function makeChange(path: string, side: DiffSide, range: LineRange): Change {
-  return { id: `${path}:${side}:${range.start}-${range.end}`, path, side, range };
+function makeChange(path: string, side: DiffSide, range: LineRange, lines: string[]): Change {
+  return { id: `${path}:${side}:${range.start}-${range.end}`, path, side, range, lines };
 }

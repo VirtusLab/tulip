@@ -35,7 +35,7 @@
 - [x] 4.3 Tests for prompt construction & response handling
 
 ## Epic 5: Phase 2 — change classification
-- [ ] 5.1 Prompt + JSON schema: change → (category+, code type) mapping (haiku), incl. "ignore" and "none + suggested category"; ignored changes excluded from all later phases and rendering
+- [x] 5.1 Prompt + JSON schema: change → (category+, code type) mapping (haiku), incl. "ignore" and "none + suggested category"; ignored changes excluded from all later phases and rendering
 - [ ] 5.2 Escape hatch flow: consult phase-1 session on suggested category; accept (continue with updated list) or reject (re-ask)
 - [ ] 5.3 Coverage verification: all non-ignored lines covered; re-ask classifier for missing changes
 - [ ] 5.4 Tests: classification flow, escape hatch, coverage repair
