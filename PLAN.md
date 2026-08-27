@@ -27,7 +27,7 @@
 - [x] 3.2 Session management: create, resume
 - [x] 3.3 Concurrency limiter (max 3 parallel sessions)
 - [x] 3.4 Shared prompt preamble (short, simple language, no jargon)
-- [ ] 3.5 Tests with a mocked `claude` binary
+- [x] 3.5 Tests with a mocked `claude` binary
 
 ## Epic 4: Phase 1 — category generation
 - [ ] 4.1 Prompt + JSON schema: PR title/description/file list → ordered category list (sonnet)
