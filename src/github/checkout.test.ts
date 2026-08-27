@@ -51,15 +51,19 @@ describe("createCheckout", () => {
     await expect(checkout.getFileAtBase("missing.ts")).resolves.toBeUndefined();
   });
 
-  it("cleanup removes the checkout directory", async () => {
+  it("cleanup removes exactly the checkout directory", async () => {
     const runGit = vi.fn(async () => "");
+    const rm = vi.fn(async () => {});
+    const dir = "/tmp/tulip-abc123";
     const checkout = await createCheckout(PR, REVISIONS, {
       runGit,
-      mkdtemp: async () => "/tmp/tulip-abc123-real",
+      mkdtemp: async () => dir,
+      rm,
     });
 
-    // Just verify cleanup resolves without throwing on a directory that doesn't exist
-    // (rm is called with force: true).
-    await expect(checkout.cleanup()).resolves.toBeUndefined();
+    await checkout.cleanup();
+
+    expect(rm).toHaveBeenCalledTimes(1);
+    expect(rm).toHaveBeenCalledWith(dir);
   });
 });

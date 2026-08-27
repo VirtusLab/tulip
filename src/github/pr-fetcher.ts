@@ -1,8 +1,5 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { runCommand } from "./exec.js";
 import type { PrRef } from "./pr-url.js";
-
-const execFileAsync = promisify(execFile);
 
 /** Metadata needed to analyze a PR: what it's about, which files it touches, and its diff. */
 export interface PrMetadata {
@@ -56,8 +53,7 @@ export async function fetchPrMetadata(pr: PrRef, deps: PrFetcherDeps = {}): Prom
 }
 
 async function defaultRunGh(args: string[]): Promise<string> {
-  const { stdout } = await execFileAsync("gh", args, { maxBuffer: 64 * 1024 * 1024 });
-  return stdout;
+  return runCommand("gh", args);
 }
 
 async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> {

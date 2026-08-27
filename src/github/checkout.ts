@@ -1,14 +1,14 @@
-import { execFile } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
+import { runCommand } from "./exec.js";
 import type { PrRef } from "./pr-url.js";
-
-const execFileAsync = promisify(execFile);
 
 /** Runs a `git` subcommand in `cwd` and returns its stdout. Mockable in tests. */
 export type GitRunner = (args: string[], cwd: string) => Promise<string>;
+
+/** Removes a directory recursively. Mockable in tests. */
+export type DirRemover = (dir: string) => Promise<void>;
 
 /** A shallow local clone giving access to file contents at both the PR's base and head revisions. */
 export interface PrCheckout {
@@ -27,6 +27,8 @@ export interface CreateCheckoutOptions {
   runGit?: GitRunner;
   /** Defaults to a fresh directory under the OS temp dir. */
   mkdtemp?: () => Promise<string>;
+  /** Defaults to `fs.rm(dir, { recursive: true, force: true })`. */
+  rm?: DirRemover;
 }
 
 /**
@@ -40,6 +42,7 @@ export async function createCheckout(
   options: CreateCheckoutOptions = {},
 ): Promise<PrCheckout> {
   const runGit = options.runGit ?? defaultRunGit;
+  const removeDir = options.rm ?? defaultRm;
   const dir = await (options.mkdtemp ?? defaultMkdtemp)();
 
   const remoteUrl = `https://github.com/${pr.owner}/${pr.repo}.git`;
@@ -60,13 +63,16 @@ export async function createCheckout(
     dir,
     getFileAtBase: (path) => getFileAt(revisions.base.sha, path),
     getFileAtHead: (path) => getFileAt(revisions.head.sha, path),
-    cleanup: () => rm(dir, { recursive: true, force: true }),
+    cleanup: () => removeDir(dir),
   };
 }
 
 async function defaultRunGit(args: string[], cwd: string): Promise<string> {
-  const { stdout } = await execFileAsync("git", args, { cwd, maxBuffer: 64 * 1024 * 1024 });
-  return stdout;
+  return runCommand("git", args, { cwd });
+}
+
+async function defaultRm(dir: string): Promise<void> {
+  await rm(dir, { recursive: true, force: true });
 }
 
 async function defaultMkdtemp(): Promise<string> {
