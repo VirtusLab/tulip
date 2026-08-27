@@ -16,63 +16,91 @@ import {
 
 /**
  * A change's classification, resolved from the classifier's raw reply. A "none" reply (the
- * classifier couldn't fit the change into any existing category) is left unresolved here — the
- * escape hatch (see ./escape-hatch.ts) turns it into either "ignored" or "categorized".
+ * classifier proposed a new category, or slipped one in alongside real assignments) is left
+ * partly unresolved here — `existingAssignments` keeps any real assignments the reply already
+ * gave the change, and the escape hatch (see ./escape-hatch.ts) resolves the suggestion itself.
  */
 export type ResolvedChange =
   | { kind: "ignored" }
   | { kind: "categorized"; assignments: CategoryAssignment[] }
-  | { kind: "none"; suggestedCategory: Category };
+  | { kind: "none"; suggestedCategory: Category; existingAssignments: CategoryAssignment[] };
 
-/** Result of running the classifier over every batch, before the escape hatch / coverage steps. */
+/** Result of running the classifier over every batch (escape hatch already resolved per-batch;
+ * see {@link AfterBatchHook}), before the final coverage-verification step. */
 export interface BatchClassifyResult {
-  /** Latest classifier session id — resume from here for escape-hatch / coverage follow-ups. */
+  /** Latest classifier session id — resume from here for coverage-repair follow-ups. */
   sessionId: string;
-  /** changeId -> resolved classification. changeIds the reply didn't mention are simply absent. */
+  /** changeId -> resolved classification. changeIds no reply ever mentioned are simply absent. */
   resolved: Map<string, ResolvedChange>;
+  /** Category list as of the last batch — may have grown via escape-hatch acceptances. */
+  categories: Category[];
 }
 
 /**
+ * Called after each batch's reply is resolved, before the next batch's prompt is built. The
+ * classifier (see ./orchestrate.ts) wires this to the escape hatch (./escape-hatch.ts), so an
+ * accepted new category is already part of `categories` by the time the *next* batch is asked —
+ * satisfying "continue classifying remaining batches with the updated list" (spec 5.2).
+ */
+export type AfterBatchHook = (
+  resolved: Map<string, ResolvedChange>,
+  classifierSessionId: string,
+  categories: Category[],
+) => Promise<{
+  resolved: Map<string, ResolvedChange>;
+  classifierSessionId: string;
+  categories: Category[];
+}>;
+
+/**
  * Runs the haiku classifier over every batch of `changes`: the first batch via a fresh session
- * (given the full category list and task explanation), later batches resuming that session so
- * it keeps the category list and prior context. Returns each mentioned change's classification,
- * resolved from the raw reply (see {@link resolveRawClassification}).
+ * (given the full category list and task explanation), later batches resuming that session and
+ * restating the (possibly updated) category list. Calls `afterBatch` after each batch to resolve
+ * that batch's "none" replies before moving on. Returns every mentioned change's classification.
  */
 export async function classifyInBatches(
   categories: Category[],
   changes: ClassifiableChange[],
+  afterBatch: AfterBatchHook,
   deps: RunnerDeps = {},
 ): Promise<BatchClassifyResult> {
-  const batches = batchChanges(changes);
-  if (batches.length === 0) {
+  const [firstBatch, ...restBatches] = batchChanges(changes);
+  if (!firstBatch) {
     throw new ClaudeOutputError("classifyInBatches was called with no changes to classify");
   }
 
-  const resolved = new Map<string, ResolvedChange>();
-  let sessionId: string | undefined;
+  const firstResponse = await runSession<ClassifyBatchResponse>(
+    {
+      model: "haiku",
+      schema: CLASSIFY_BATCH_SCHEMA,
+      prompt: buildInitialClassifyPrompt(categories, firstBatch),
+    },
+    deps,
+  );
+  let resolved = new Map<string, ResolvedChange>();
+  applyRawClassifications(firstResponse.result.classifications, resolved);
+  let after = await afterBatch(resolved, firstResponse.sessionId, categories);
+  resolved = after.resolved;
+  let sessionId = after.classifierSessionId;
+  let currentCategories = after.categories;
 
-  for (const [index, batch] of batches.entries()) {
-    const prompt =
-      index === 0 ? buildInitialClassifyPrompt(categories, batch) : buildBatchClassifyPrompt(batch);
-    const response =
-      sessionId === undefined
-        ? await runSession<ClassifyBatchResponse>(
-            { model: "haiku", schema: CLASSIFY_BATCH_SCHEMA, prompt },
-            deps,
-          )
-        : await resumeSession<ClassifyBatchResponse>(
-            { sessionId, schema: CLASSIFY_BATCH_SCHEMA, prompt },
-            deps,
-          );
-    sessionId = response.sessionId;
+  for (const batch of restBatches) {
+    const response = await resumeSession<ClassifyBatchResponse>(
+      {
+        sessionId,
+        schema: CLASSIFY_BATCH_SCHEMA,
+        prompt: buildBatchClassifyPrompt(currentCategories, batch),
+      },
+      deps,
+    );
     applyRawClassifications(response.result.classifications, resolved);
+    after = await afterBatch(resolved, response.sessionId, currentCategories);
+    resolved = after.resolved;
+    sessionId = after.classifierSessionId;
+    currentCategories = after.categories;
   }
 
-  if (sessionId === undefined) {
-    // Unreachable: batches.length > 0 was checked above, so the loop ran at least once.
-    throw new ClaudeOutputError("classifyInBatches produced no session id");
-  }
-  return { sessionId, resolved };
+  return { sessionId, resolved, categories: currentCategories };
 }
 
 /** Resolves each raw entry and stores it, keyed by changeId (last write wins on duplicates). */
@@ -87,13 +115,19 @@ function applyRawClassifications(
 
 /**
  * Turns one change's raw assignments into a {@link ResolvedChange}: "ignore" (if present) wins
- * over everything else; otherwise a "none" assignment (which must carry a suggestedCategory)
- * takes over; otherwise every assignment becomes a category/codeType pair as-is.
+ * over everything else. Otherwise, any real (non-"none") assignments are kept as-is — even
+ * alongside a "none" entry, so a model that doesn't follow the "none is exclusive" prompt
+ * instruction doesn't silently lose a valid classification. A "none" assignment (which must
+ * carry a suggestedCategory) is surfaced for the escape hatch to resolve separately.
  */
 export function resolveRawClassification(entry: RawChangeClassification): ResolvedChange {
   if (entry.assignments.some((assignment) => assignment.category === IGNORE_CATEGORY)) {
     return { kind: "ignored" };
   }
+
+  const real = entry.assignments
+    .filter((assignment) => assignment.category !== NONE_CATEGORY)
+    .map((assignment) => ({ category: assignment.category, codeType: assignment.codeType }));
 
   const none = entry.assignments.find((assignment) => assignment.category === NONE_CATEGORY);
   if (none) {
@@ -102,14 +136,8 @@ export function resolveRawClassification(entry: RawChangeClassification): Resolv
         `claude classified change "${entry.changeId}" as "none" without a suggestedCategory`,
       );
     }
-    return { kind: "none", suggestedCategory: none.suggestedCategory };
+    return { kind: "none", suggestedCategory: none.suggestedCategory, existingAssignments: real };
   }
 
-  return {
-    kind: "categorized",
-    assignments: entry.assignments.map((assignment) => ({
-      category: assignment.category,
-      codeType: assignment.codeType,
-    })),
-  };
+  return { kind: "categorized", assignments: real };
 }

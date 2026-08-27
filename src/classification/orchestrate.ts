@@ -1,7 +1,7 @@
 import type { Category } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import type { ParsedDiff } from "../diff/change.js";
-import { classifyInBatches, type ResolvedChange } from "./classify.js";
+import { type AfterBatchHook, classifyInBatches, type ResolvedChange } from "./classify.js";
 import { verifyAndRepairCoverage } from "./coverage.js";
 import { type ClassificationState, resolveNoneClassifications } from "./escape-hatch.js";
 import { prepareClassifiableChanges } from "./prepare.js";
@@ -30,11 +30,13 @@ export interface ClassifyChangesResult {
 }
 
 /**
- * Runs phase 2 end to end: classifies every change in `diff` (in batches, via haiku), resolves
- * any "none" replies through the phase-1 escape hatch (see ./escape-hatch.ts), then verifies
- * every non-ignored change ended up covered by >= 1 category, repairing gaps by re-asking the
- * classifier (see ./coverage.ts). Throws {@link IncompleteCoverageError} (from ./coverage.js) if
- * coverage still isn't complete after every repair attempt.
+ * Runs phase 2 end to end: classifies every change in `diff` in batches (via haiku), resolving
+ * each batch's "none" replies through the phase-1 escape hatch (see ./escape-hatch.ts) *before*
+ * the next batch is asked — so a category accepted while resolving batch N is already part of
+ * the list batch N+1 sees (spec 5.2: "continue classifying remaining batches with the updated
+ * list"). Finally verifies every non-ignored change ended up covered by >= 1 category, repairing
+ * gaps by re-asking the classifier (see ./coverage.ts). Throws {@link IncompleteCoverageError}
+ * (from ./coverage.js) if coverage still isn't complete after every repair attempt.
  */
 export async function classifyChanges(
   input: ClassifyChangesInput,
@@ -43,24 +45,29 @@ export async function classifyChanges(
   const changes = prepareClassifiableChanges(input.diff);
   const changesById = new Map(changes.map((change) => [change.id, change]));
 
-  const batchResult = await classifyInBatches(input.categories, changes, deps);
-
   const state: ClassificationState = {
     categories: input.categories,
     phase1SessionId: input.phase1SessionId,
-    classifierSessionId: batchResult.sessionId,
+    classifierSessionId: "",
     acceptedNewCategories: 0,
   };
-  const afterEscapeHatch = await resolveNoneClassifications(
-    batchResult.resolved,
-    changesById,
-    state,
-    deps,
-  );
+
+  const afterBatch: AfterBatchHook = async (resolved, classifierSessionId, categories) => {
+    state.classifierSessionId = classifierSessionId;
+    state.categories = categories;
+    const nextResolved = await resolveNoneClassifications(resolved, changesById, state, deps);
+    return {
+      resolved: nextResolved,
+      classifierSessionId: state.classifierSessionId,
+      categories: state.categories,
+    };
+  };
+
+  const batchResult = await classifyInBatches(input.categories, changes, afterBatch, deps);
   const resolved = await verifyAndRepairCoverage(
     changes,
     changesById,
-    afterEscapeHatch,
+    batchResult.resolved,
     state,
     deps,
   );
@@ -84,8 +91,11 @@ function splitAssignments(resolved: Map<string, ResolvedChange>): {
       ignoredChangeIds.add(changeId);
     } else if (entry.kind === "categorized") {
       assignments.set(changeId, entry.assignments);
+    } else {
+      // kind "none": coverage verification (./coverage.ts) guarantees existingAssignments is
+      // non-empty here — otherwise it would have repaired or hard-failed before this point.
+      assignments.set(changeId, entry.existingAssignments);
     }
-    // kind "none" cannot remain here: resolveNoneClassifications only returns once none are left.
   }
 
   return { assignments, ignoredChangeIds };

@@ -1,6 +1,5 @@
 import { consultOnCategory } from "../categories/consult.js";
 import type { Category } from "../categories/types.js";
-import { ClaudeOutputError } from "../claude/errors.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
@@ -12,15 +11,11 @@ import {
 } from "./types.js";
 
 /** Cap on new categories accepted per run — the spec sets no cap; this exists to bound runaway
- * escape-hatch loops. After the cap, further "none" proposals are treated as rejected without
- * consulting phase 1 at all. */
+ * escape-hatch consultation. After the cap, further "none" proposals are treated as rejected
+ * without consulting phase 1 at all. */
 export const MAX_ACCEPTED_NEW_CATEGORIES = 5;
 
-/** Cap on escape-hatch resolution rounds (a round: consult + one classifier resume), to guarantee
- * termination if the classifier keeps replying "none" despite being told not to. */
-const MAX_ESCAPE_HATCH_ROUNDS = 5;
-
-/** Mutable state threaded through escape-hatch resolution and (later) coverage repair. */
+/** Mutable state threaded through escape-hatch resolution and coverage repair. */
 export interface ClassificationState {
   /** Current (possibly extended) category list, in presentation order. */
   categories: Category[];
@@ -32,10 +27,13 @@ export interface ClassificationState {
 }
 
 /**
- * Resolves every "none" entry in `resolved`: consults the phase-1 session on each proposed new
- * category (see src/categories/consult.ts), then resumes the classifier telling it what was
- * decided and asking it to reclassify just those changes. Repeats until no "none" entries
- * remain, up to {@link MAX_ESCAPE_HATCH_ROUNDS} rounds. Mutates and returns `state`.
+ * Resolves every "none" entry currently in `resolved`, in a single pass: consults the phase-1
+ * session on each proposed new category (see src/categories/consult.ts), then resumes the
+ * classifier once, telling it what was decided about each and asking it to reclassify just those
+ * changes. Does not retry — a change that comes back "none" again (or isn't mentioned in the
+ * reply) is left as-is; the caller (coverage verification, see ./coverage.ts, which already
+ * re-asks missing/uncovered changes up to its own attempt cap) is the backstop for that. Mutates
+ * and returns `state`.
  */
 export async function resolveNoneClassifications(
   resolved: Map<string, ResolvedChange>,
@@ -43,39 +41,29 @@ export async function resolveNoneClassifications(
   state: ClassificationState,
   deps: RunnerDeps = {},
 ): Promise<Map<string, ResolvedChange>> {
-  let current = resolved;
-
-  for (let round = 0; ; round++) {
-    const noneChangeIds = [...current.entries()]
-      .filter(([, value]) => value.kind === "none")
-      .map(([changeId]) => changeId);
-    if (noneChangeIds.length === 0) {
-      return current;
-    }
-    if (round >= MAX_ESCAPE_HATCH_ROUNDS) {
-      throw new ClaudeOutputError(
-        `classifier still replied "none" for ${noneChangeIds.length} change(s) after ` +
-          `${MAX_ESCAPE_HATCH_ROUNDS} escape-hatch rounds: ${noneChangeIds.join(", ")}`,
-      );
-    }
-
-    const outcomes = await consultOnEach(noneChangeIds, current, changesById, state, deps);
-    const response = await resumeSession<ClassifyBatchResponse>(
-      {
-        sessionId: state.classifierSessionId,
-        schema: CLASSIFY_BATCH_SCHEMA,
-        prompt: buildEscapeHatchResumePrompt(state.categories, outcomes),
-      },
-      deps,
-    );
-    state.classifierSessionId = response.sessionId;
-
-    const next = new Map(current);
-    for (const raw of response.result.classifications) {
-      next.set(raw.changeId, resolveRawClassification(raw));
-    }
-    current = next;
+  const noneChangeIds = [...resolved.entries()]
+    .filter(([, value]) => value.kind === "none")
+    .map(([changeId]) => changeId);
+  if (noneChangeIds.length === 0) {
+    return resolved;
   }
+
+  const outcomes = await consultOnEach(noneChangeIds, resolved, changesById, state, deps);
+  const response = await resumeSession<ClassifyBatchResponse>(
+    {
+      sessionId: state.classifierSessionId,
+      schema: CLASSIFY_BATCH_SCHEMA,
+      prompt: buildEscapeHatchResumePrompt(state.categories, outcomes),
+    },
+    deps,
+  );
+  state.classifierSessionId = response.sessionId;
+
+  const next = new Map(resolved);
+  for (const raw of response.result.classifications) {
+    next.set(raw.changeId, resolveRawClassification(raw));
+  }
+  return next;
 }
 
 /**
@@ -95,7 +83,7 @@ async function consultOnEach(
   for (const changeId of changeIds) {
     const entry = resolved.get(changeId);
     const change = changesById.get(changeId);
-    if (!change || entry?.kind !== "none") {
+    if (!change || !entry || entry.kind !== "none") {
       continue; // Not expected: changeId came from filtering `resolved` for kind "none" above.
     }
 

@@ -41,10 +41,18 @@ export function findUncoveredChangeIds(
 }
 
 function isUncovered(entry: ResolvedChange | undefined): boolean {
-  if (!entry || entry.kind === "none") {
-    return true; // "none" shouldn't reach here post-escape-hatch, but treat it as uncovered too.
+  if (!entry) {
+    return true;
   }
-  return entry.kind === "categorized" && entry.assignments.length === 0;
+  if (entry.kind === "ignored") {
+    return false;
+  }
+  if (entry.kind === "categorized") {
+    return entry.assignments.length === 0;
+  }
+  // kind "none": the escape hatch's suggestion is still unresolved, but any real assignments the
+  // reply gave alongside it (see classify.ts's resolveRawClassification) already cover the change.
+  return entry.existingAssignments.length === 0;
 }
 
 /**

@@ -22,7 +22,8 @@ const SPECIAL_CATEGORIES_EXPLANATION = `Two special categories are also availabl
   wouldn't review. When you use "ignore", make it the change's only assignment.
 - "none": use this if the change genuinely doesn't fit any category above. You MUST
   also include a "suggestedCategory" with a name and description for a new category
-  that would fit it. Only use "none" as a last resort.`;
+  that would fit it. When you use "none", make it the change's only assignment too.
+  Only use "none" as a last resort.`;
 
 const OUTPUT_INSTRUCTIONS = `For each change, reply with its id and a list of assignments. Each
 assignment has a category (one of the names above, or "ignore"/"none") and a codeType
@@ -50,10 +51,17 @@ Here is the first batch of changes to classify:
 ${formatChanges(batch)}`;
 }
 
-/** A later batch, within the same classification session — categories are already known. */
-export function buildBatchClassifyPrompt(batch: ClassifiableChange[]): string {
-  return `Here is the next batch of changes to classify, using the same categories
-as before:
+/**
+ * A later batch, within the same classification session. Restates the current category list
+ * (rather than relying on the model to recall it) so that a category accepted via the escape
+ * hatch after an earlier batch (see ./escape-hatch.ts) is explicitly available for this one.
+ */
+export function buildBatchClassifyPrompt(
+  categories: Category[],
+  batch: ClassifiableChange[],
+): string {
+  return `Here is the next batch of changes to classify. The categories to use are:
+${formatCategoryList(categories)}
 
 ${formatChanges(batch)}`;
 }

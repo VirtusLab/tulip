@@ -118,4 +118,74 @@ describe("classifyChanges", () => {
     expect([...result.changesById.keys()].sort()).toEqual(["c1", "c2", "c3", "c4"]);
     expect(runClaudeProcess).toHaveBeenCalledTimes(4);
   });
+
+  it("threads a category accepted while resolving batch 1 into batch 2's prompt", async () => {
+    // 20 changes in batch 1 (one proposes "none" -> accepted as "B"), 5 more in batch 2.
+    const batch1Ids = Array.from({ length: 20 }, (_, i) => `b1-${i}`);
+    const batch2Ids = Array.from({ length: 5 }, (_, i) => `b2-${i}`);
+    const diff: ParsedDiff = {
+      files: [...batch1Ids, ...batch2Ids].map((id) => fileWithChange(id)),
+    };
+
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+      call++;
+      if (call === 1) {
+        // Batch 1 (fresh session): b1-0 comes back "none", suggesting category "B".
+        const classifications = batch1Ids.map((id) =>
+          id === "b1-0"
+            ? {
+                changeId: id,
+                assignments: [
+                  {
+                    category: "none",
+                    codeType: "production",
+                    suggestedCategory: { name: "B", description: "proposed" },
+                  },
+                ],
+              }
+            : { changeId: id, assignments: [{ category: "A", codeType: "production" }] },
+        );
+        return envelope({ classifications }, "classifier-1");
+      }
+      if (call === 2) {
+        // consultOnCategory, resuming the phase-1 session — accept, refining the description.
+        return envelope(
+          { accept: true, category: { name: "B", description: "refined" } },
+          "phase1-1",
+        );
+      }
+      if (call === 3) {
+        // Escape-hatch reclassify, for b1-0 only, before batch 2 is ever asked.
+        return envelope(
+          {
+            classifications: [
+              { changeId: "b1-0", assignments: [{ category: "B", codeType: "production" }] },
+            ],
+          },
+          "classifier-2",
+        );
+      }
+      // Batch 2's prompt: must already list "B", accepted while resolving batch 1.
+      expect(input).toContain("B");
+      expect(input).toContain("refined");
+      const classifications = batch2Ids.map((id) => ({
+        changeId: id,
+        assignments: [{ category: "A", codeType: "production" }],
+      }));
+      return envelope({ classifications }, "classifier-3");
+    });
+
+    const result = await classifyChanges(
+      { diff, categories: CATEGORIES, phase1SessionId: "phase1-0" },
+      { runClaudeProcess },
+    );
+
+    expect(runClaudeProcess).toHaveBeenCalledTimes(4);
+    expect(result.categories).toEqual([
+      { name: "A", description: "first" },
+      { name: "B", description: "refined" },
+    ]);
+    expect(result.assignments.get("b1-0")).toEqual([{ category: "B", codeType: "production" }]);
+  });
 });

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
 import type { ResolvedChange } from "./classify.js";
 import {
@@ -69,6 +68,7 @@ describe("resolveNoneClassifications", () => {
         {
           kind: "none",
           suggestedCategory: { name: "Metrics", description: "Adds counters." },
+          existingAssignments: [],
         },
       ],
     ]);
@@ -119,7 +119,14 @@ describe("resolveNoneClassifications", () => {
 
   it("rejects a new category and asks the classifier to pick from the existing list, no 'none' allowed", async () => {
     const resolved = new Map<string, ResolvedChange>([
-      ["c1", { kind: "none", suggestedCategory: { name: "Misc", description: "Doesn't fit." } }],
+      [
+        "c1",
+        {
+          kind: "none",
+          suggestedCategory: { name: "Misc", description: "Doesn't fit." },
+          existingAssignments: [],
+        },
+      ],
     ]);
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
@@ -159,7 +166,14 @@ describe("resolveNoneClassifications", () => {
 
   it("rejects further 'none' proposals without consulting once the new-category cap is hit", async () => {
     const resolved = new Map<string, ResolvedChange>([
-      ["c1", { kind: "none", suggestedCategory: { name: "Extra", description: "One more." } }],
+      [
+        "c1",
+        {
+          kind: "none",
+          suggestedCategory: { name: "Extra", description: "One more." },
+          existingAssignments: [],
+        },
+      ],
     ]);
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope(
@@ -183,10 +197,24 @@ describe("resolveNoneClassifications", () => {
     expect(state.acceptedNewCategories).toBe(MAX_ACCEPTED_NEW_CATEGORIES);
   });
 
-  it("stops consulting mid-round once the cap is reached, even with more 'none' changes pending", async () => {
+  it("stops consulting mid-pass once the cap is reached, even with more 'none' changes pending", async () => {
     const resolved = new Map<string, ResolvedChange>([
-      ["c1", { kind: "none", suggestedCategory: { name: "One", description: "First extra." } }],
-      ["c2", { kind: "none", suggestedCategory: { name: "Two", description: "Second extra." } }],
+      [
+        "c1",
+        {
+          kind: "none",
+          suggestedCategory: { name: "One", description: "First extra." },
+          existingAssignments: [],
+        },
+      ],
+      [
+        "c2",
+        {
+          kind: "none",
+          suggestedCategory: { name: "Two", description: "Second extra." },
+          existingAssignments: [],
+        },
+      ],
     ]);
     let consultCalls = 0;
     const runClaudeProcess = vi.fn(async (args: string[], _input: string) => {
@@ -224,9 +252,16 @@ describe("resolveNoneClassifications", () => {
     expect(state.acceptedNewCategories).toBe(MAX_ACCEPTED_NEW_CATEGORIES);
   });
 
-  it("throws after repeated 'none' replies exceed the round cap", async () => {
+  it("does not retry when the classifier still replies 'none' — leaves it for coverage repair", async () => {
     const resolved = new Map<string, ResolvedChange>([
-      ["c1", { kind: "none", suggestedCategory: { name: "Extra", description: "One more." } }],
+      [
+        "c1",
+        {
+          kind: "none",
+          suggestedCategory: { name: "Extra", description: "One more." },
+          existingAssignments: [],
+        },
+      ],
     ]);
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope(
@@ -244,17 +279,19 @@ describe("resolveNoneClassifications", () => {
             },
           ],
         },
-        "s",
+        "classifier-session-2",
       ),
     );
 
-    await expect(
-      resolveNoneClassifications(
-        resolved,
-        new Map([["c1", change("c1")]]),
-        baseState({ acceptedNewCategories: MAX_ACCEPTED_NEW_CATEGORIES }),
-        { runClaudeProcess },
-      ),
-    ).rejects.toThrow(ClaudeOutputError);
+    const result = await resolveNoneClassifications(
+      resolved,
+      new Map([["c1", change("c1")]]),
+      baseState({ acceptedNewCategories: MAX_ACCEPTED_NEW_CATEGORIES }),
+      { runClaudeProcess },
+    );
+
+    // Single pass: one classifier resume, no internal retry loop.
+    expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+    expect(result.get("c1")).toMatchObject({ kind: "none" });
   });
 });

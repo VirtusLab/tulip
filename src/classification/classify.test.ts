@@ -2,10 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import type { Category } from "../categories/types.js";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
-import { classifyInBatches, resolveRawClassification } from "./classify.js";
+import { type AfterBatchHook, classifyInBatches, resolveRawClassification } from "./classify.js";
 import type { ClassifiableChange, RawChangeClassification } from "./types.js";
 
 const CATEGORIES: Category[] = [{ name: "Retry logic", description: "Adds backoff retries." }];
+
+/** A no-op afterBatch hook, for tests that don't exercise the escape hatch. */
+const passThrough: AfterBatchHook = async (resolved, classifierSessionId, categories) => ({
+  resolved,
+  classifierSessionId,
+  categories,
+});
 
 function change(id: string, excerpt = "+line"): ClassifiableChange {
   return {
@@ -30,7 +37,7 @@ function envelope(classifications: unknown, sessionId = "session-1"): ClaudeProc
 }
 
 describe("classifyInBatches", () => {
-  it("sends the category list and special-category explanation only in the first batch", async () => {
+  it("sends the category list and special-category explanation in the first batch", async () => {
     const changes = [change("c1")];
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope([
@@ -38,7 +45,7 @@ describe("classifyInBatches", () => {
       ]),
     );
 
-    await classifyInBatches(CATEGORIES, changes, { runClaudeProcess });
+    await classifyInBatches(CATEGORIES, changes, passThrough, { runClaudeProcess });
 
     const [args, prompt] = runClaudeProcess.mock.calls[0] ?? [];
     expect(prompt).toContain("Retry logic");
@@ -48,7 +55,7 @@ describe("classifyInBatches", () => {
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("haiku");
   });
 
-  it("resumes the same session for later batches instead of re-sending the category list", async () => {
+  it("resumes the same session for later batches, restating the current category list", async () => {
     // Force two batches by exceeding MAX_BATCH_SIZE (20).
     const changes = Array.from({ length: 25 }, (_, i) => change(`c${i}`));
     let call = 0;
@@ -64,7 +71,7 @@ describe("classifyInBatches", () => {
       );
     });
 
-    await classifyInBatches(CATEGORIES, changes, { runClaudeProcess });
+    await classifyInBatches(CATEGORIES, changes, passThrough, { runClaudeProcess });
 
     expect(runClaudeProcess).toHaveBeenCalledTimes(2);
     const [firstArgs] = runClaudeProcess.mock.calls[0] ?? [];
@@ -72,7 +79,39 @@ describe("classifyInBatches", () => {
     expect(firstArgs as string[]).toContain("--model");
     expect(secondArgs as string[]).not.toContain("--model");
     expect(secondArgs).toContain("--resume");
-    expect(secondPrompt).not.toContain("Retry logic:");
+    expect(secondPrompt).toContain("Retry logic");
+  });
+
+  it("threads the afterBatch hook's updated categories/session into the next batch's prompt", async () => {
+    const changes = Array.from({ length: 21 }, (_, i) => change(`c${i}`));
+    const extraCategory: Category = { name: "New area", description: "Escape-hatch addition." };
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+      call++;
+      const batch = call === 1 ? changes.slice(0, 20) : changes.slice(20);
+      return envelope(
+        batch.map((c) => ({
+          changeId: c.id,
+          assignments: [{ category: "Retry logic", codeType: "production" }],
+        })),
+        `raw-session-${call}`,
+      );
+    });
+
+    const afterBatch: AfterBatchHook = async (resolved) => ({
+      resolved,
+      classifierSessionId: "hook-session",
+      categories: [...CATEGORIES, extraCategory],
+    });
+
+    await classifyInBatches(CATEGORIES, changes, afterBatch, { runClaudeProcess });
+
+    const [secondArgs, secondPrompt] = runClaudeProcess.mock.calls[1] ?? [];
+    expect((secondArgs as string[])[(secondArgs as string[]).indexOf("--resume") + 1]).toBe(
+      "hook-session",
+    );
+    expect(secondPrompt).toContain("New area");
+    expect(secondPrompt).toContain("Escape-hatch addition.");
   });
 
   it("parses assignments, keyed by changeId", async () => {
@@ -83,7 +122,9 @@ describe("classifyInBatches", () => {
       ]),
     );
 
-    const { resolved } = await classifyInBatches(CATEGORIES, changes, { runClaudeProcess });
+    const { resolved } = await classifyInBatches(CATEGORIES, changes, passThrough, {
+      runClaudeProcess,
+    });
 
     expect(resolved.get("c1")).toEqual({
       kind: "categorized",
@@ -105,7 +146,9 @@ describe("classifyInBatches", () => {
       ]),
     );
 
-    const { resolved } = await classifyInBatches(CATEGORIES, changes, { runClaudeProcess });
+    const { resolved } = await classifyInBatches(CATEGORIES, changes, passThrough, {
+      runClaudeProcess,
+    });
 
     expect(resolved.get("c1")).toEqual({
       kind: "categorized",
@@ -125,7 +168,9 @@ describe("classifyInBatches", () => {
       ]),
     );
 
-    const { resolved } = await classifyInBatches(CATEGORIES, changes, { runClaudeProcess });
+    const { resolved } = await classifyInBatches(CATEGORIES, changes, passThrough, {
+      runClaudeProcess,
+    });
 
     expect(resolved.get("c1")).toMatchObject({ assignments: [{ codeType: "production" }] });
     expect(resolved.get("c2")).toMatchObject({ assignments: [{ codeType: "test" }] });
@@ -142,14 +187,16 @@ describe("classifyInBatches", () => {
       ]),
     );
 
-    const { resolved } = await classifyInBatches(CATEGORIES, changes, { runClaudeProcess });
+    const { resolved } = await classifyInBatches(CATEGORIES, changes, passThrough, {
+      runClaudeProcess,
+    });
 
     expect(resolved.get("c1")).toEqual({ kind: "ignored" });
   });
 });
 
 describe("resolveRawClassification", () => {
-  it("resolves 'none' with a suggestedCategory to kind: none", () => {
+  it("resolves 'none' with a suggestedCategory to kind: none, with no existing assignments", () => {
     const entry: RawChangeClassification = {
       changeId: "c1",
       assignments: [
@@ -164,6 +211,27 @@ describe("resolveRawClassification", () => {
     expect(resolveRawClassification(entry)).toEqual({
       kind: "none",
       suggestedCategory: { name: "New area", description: "Doesn't fit elsewhere." },
+      existingAssignments: [],
+    });
+  });
+
+  it("keeps real assignments alongside a 'none' entry instead of discarding them", () => {
+    const entry: RawChangeClassification = {
+      changeId: "c1",
+      assignments: [
+        { category: "Retry logic", codeType: "production" },
+        {
+          category: "none",
+          codeType: "production",
+          suggestedCategory: { name: "New area", description: "Doesn't fit elsewhere." },
+        },
+      ],
+    };
+
+    expect(resolveRawClassification(entry)).toEqual({
+      kind: "none",
+      suggestedCategory: { name: "New area", description: "Doesn't fit elsewhere." },
+      existingAssignments: [{ category: "Retry logic", codeType: "production" }],
     });
   });
 
