@@ -1,4 +1,5 @@
 import type { CategoryChangeSet } from "../classification/group.js";
+import { createLogger } from "../logging/logger.js";
 import { verifySnippetCoverage } from "./coverage.js";
 import { explainCategory } from "./explain.js";
 import { type ReviewLoopDeps, reviewAndAmend } from "./review.js";
@@ -34,7 +35,10 @@ async function explainOneCategory(
   set: CategoryChangeSet,
   deps: ReviewLoopDeps,
 ): Promise<CategoryExplanation> {
+  const logger = deps.logger ?? createLogger();
   const changes = [...set.production, ...set.test];
+
+  logger.info(`explaining category "${set.category.name}"...`);
 
   const generated = await explainCategory(
     {
@@ -69,5 +73,6 @@ async function explainOneCategory(
     deps,
   );
 
+  logger.info(`finished explaining category "${set.category.name}"`);
   return { category: set.category, markdown };
 }

@@ -45,6 +45,7 @@ export async function reviewAndAmend(
   let explainSessionId = input.explainSessionId;
 
   for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
+    logger.debug(`category "${input.category.name}": review round ${round}/${MAX_REVIEW_ROUNDS}`);
     const review = await runSession<ReviewResponse>(
       {
         model: "sonnet",
