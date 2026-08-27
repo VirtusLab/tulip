@@ -30,7 +30,7 @@
 - [x] 3.5 Tests with a mocked `claude` binary
 
 ## Epic 4: Phase 1 — category generation
-- [ ] 4.1 Prompt + JSON schema: PR title/description/file list → ordered category list (sonnet)
+- [x] 4.1 Prompt + JSON schema: PR title/description/file list → ordered category list (sonnet)
 - [ ] 4.2 Keep session handle for later consultation (escape hatch in phase 2)
 - [ ] 4.3 Tests for prompt construction & response handling
 
