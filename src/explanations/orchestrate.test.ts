@@ -230,6 +230,43 @@ describe("explainCategories", () => {
     expect(explainError.message).toContain("2 of 2 categories failed");
   });
 
+  it("drops a category with no production and no test changes before phase 3, and logs it", async () => {
+    const categoryA: Category = { name: "A", description: "First category." };
+    const categoryEmpty: Category = { name: "Empty", description: "Nothing here." };
+    const input: ExplainCategoriesInput = {
+      prTitle: "Add retry logic",
+      prDescription: "Retries transient failures.",
+      diffThreshold: 100,
+      categorySets: [
+        categorySet(categoryA, [change("a1", "src/a.ts")], []),
+        categorySet(categoryEmpty, [], []),
+      ],
+    };
+    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+      if (promptText.includes("Reply with approved")) {
+        return envelope({ approved: true, issues: [] }, "review-session");
+      }
+      return envelope(
+        { markdown: `explanation\n\n${refFor(change("a1", "src/a.ts"))}` },
+        "explain-session",
+      );
+    });
+    const info = vi.fn();
+
+    const results = await explainCategories(input, {
+      runClaudeProcess,
+      logger: { info, debug: vi.fn() },
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.category).toBe(categoryA);
+    const lines = info.mock.calls.map((call) => String(call[0]));
+    expect(
+      lines.some((line) => line.includes("dropping 1 category") && line.includes("Empty")),
+    ).toBe(true);
+    expect(lines.some((line) => line.includes('explaining category "Empty"'))).toBe(false);
+  });
+
   it("only reports the failed category, not a category that succeeded", async () => {
     const categoryA: Category = { name: "A", description: "First category." };
     const categoryB: Category = { name: "B", description: "Second category." };

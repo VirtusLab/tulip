@@ -49,6 +49,21 @@ function causeMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Splits `categorySets` into ones with >= 1 change and ones with none in both production and
+ * test — the latter would otherwise still get a full (opus) explain/review/render cycle for
+ * nothing to say, ungrounded and wasted cost. */
+function partitionEmptyCategorySets(categorySets: CategoryChangeSet[]): {
+  kept: CategoryChangeSet[];
+  dropped: CategoryChangeSet[];
+} {
+  const kept: CategoryChangeSet[] = [];
+  const dropped: CategoryChangeSet[] = [];
+  for (const set of categorySets) {
+    (set.production.length === 0 && set.test.length === 0 ? dropped : kept).push(set);
+  }
+  return { kept, dropped };
+}
+
 /**
  * Phase 3 end to end: for every category, generates its explanation (task 6.2, opus), verifies
  * every change it was given is referenced by a snippet — amending if not (task 6.3), then runs
@@ -62,9 +77,16 @@ export async function explainCategories(
   input: ExplainCategoriesInput,
   deps: ReviewLoopDeps = {},
 ): Promise<CategoryExplanation[]> {
-  const settled = await Promise.allSettled(
-    input.categorySets.map((set) => explainOneCategory(input, set, deps)),
-  );
+  const logger = deps.logger ?? createLogger();
+  const { kept, dropped } = partitionEmptyCategorySets(input.categorySets);
+  if (dropped.length > 0) {
+    logger.info(
+      `dropping ${dropped.length} categor${dropped.length === 1 ? "y" : "ies"} with no changes: ` +
+        dropped.map((set) => set.category.name).join(", "),
+    );
+  }
+
+  const settled = await Promise.allSettled(kept.map((set) => explainOneCategory(input, set, deps)));
 
   const failures = settled
     .filter((result): result is PromiseRejectedResult => result.status === "rejected")
