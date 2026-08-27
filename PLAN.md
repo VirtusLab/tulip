@@ -50,7 +50,7 @@
 ## Epic 7: Rendering
 - [x] 7.1 Static HTML template: light/dark theme toggle, floating TOC, programmer font, narrow layout; bundled assets (no network)
 - [x] 7.2 Mermaid diagram rendering
-- [ ] 7.3 Snippet substitution: markup refs → side-by-side unfoldable diffs with expandable context (github-style), honoring the unfold-by-default flag
+- [x] 7.3 Snippet substitution: markup refs → side-by-side unfoldable diffs with expandable context (github-style), honoring the unfold-by-default flag
 - [ ] 7.4 Output assembly: temp directory with HTML page + open-in-browser instructions
 - [ ] 7.5 Tests: template rendering, snippet substitution
 

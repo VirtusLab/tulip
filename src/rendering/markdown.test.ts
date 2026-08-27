@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { renderCategoryMarkdown, renderProseMarkdown } from "./markdown.js";
+import { serializeSnippetRef } from "../explanations/markup.js";
+import type { FileDiffData } from "./file-diffs.js";
+import {
+  type MarkdownRenderContext,
+  renderCategoryMarkdown,
+  renderProseMarkdown,
+} from "./markdown.js";
+
+function context(fileDiffs: Map<string, FileDiffData> = new Map()): MarkdownRenderContext {
+  return { mermaidSources: [], fileDiffs };
+}
 
 describe("renderProseMarkdown", () => {
   it("renders standard markdown constructs", () => {
@@ -32,30 +42,62 @@ describe("renderProseMarkdown", () => {
 
 describe("renderCategoryMarkdown", () => {
   it("renders prose normally and turns a mermaid fence into a diagram placeholder", () => {
-    const sources: string[] = [];
+    const ctx = context();
     const html = renderCategoryMarkdown(
       "Some **prose**.\n\n```mermaid\ngraph TD\nA --> B\n```\n\nMore prose.",
-      sources,
+      ctx,
     );
     expect(html).toContain("<strong>prose</strong>");
     expect(html).toContain("More prose.");
     expect(html).toContain('<pre class="mermaid" data-mermaid-index="0">');
     expect(html).not.toContain("```mermaid");
-    expect(sources).toEqual(["graph TD\nA --> B"]);
+    expect(ctx.mermaidSources).toEqual(["graph TD\nA --> B"]);
   });
 
-  it("assigns sequential indices across multiple calls sharing the same array", () => {
-    const sources: string[] = [];
-    renderCategoryMarkdown("```mermaid\nA\n```\n", sources);
-    const second = renderCategoryMarkdown("```mermaid\nB\n```\n", sources);
+  it("assigns sequential mermaid indices across multiple calls sharing the same context", () => {
+    const ctx = context();
+    renderCategoryMarkdown("```mermaid\nA\n```\n", ctx);
+    const second = renderCategoryMarkdown("```mermaid\nB\n```\n", ctx);
     expect(second).toContain('data-mermaid-index="1"');
-    expect(sources).toEqual(["A", "B"]);
+    expect(ctx.mermaidSources).toEqual(["A", "B"]);
   });
 
-  it("leaves markdown with no mermaid fences unaffected", () => {
-    const sources: string[] = [];
-    const html = renderCategoryMarkdown("Just *text*.", sources);
+  it("leaves markdown with no mermaid fences or snippet refs unaffected", () => {
+    const ctx = context();
+    const html = renderCategoryMarkdown("Just *text*.", ctx);
     expect(html).toBe("<p>Just <em>text</em>.</p>\n");
-    expect(sources).toEqual([]);
+    expect(ctx.mermaidSources).toEqual([]);
+  });
+
+  it("turns a {{snippet}} marker into a diff block, not prose", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const fileDiffs = new Map<string, FileDiffData>([
+      [
+        "src/a.ts",
+        {
+          embeddable: true,
+          rows: [
+            {
+              baseLine: 1,
+              baseText: "x",
+              baseType: "context",
+              headLine: 1,
+              headText: "x",
+              headType: "context",
+            },
+          ],
+        },
+      ],
+    ]);
+    const html = renderCategoryMarkdown(`Intro.\n\n${ref}\n\nOutro.`, context(fileDiffs));
+    expect(html).toContain("Intro.");
+    expect(html).toContain("Outro.");
+    expect(html).toContain('class="snippet"');
+    expect(html).not.toContain("{{snippet");
   });
 });

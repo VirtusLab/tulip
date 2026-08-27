@@ -1,17 +1,20 @@
 import type { CategoryExplanation } from "../explanations/types.js";
 import { escapeHtml, escapeInlineScript } from "./escape.js";
+import type { FileDiffData } from "./file-diffs.js";
 import { categoryId, subsectionId } from "./ids.js";
-import { renderCategoryMarkdown } from "./markdown.js";
+import { type MarkdownRenderContext, renderCategoryMarkdown } from "./markdown.js";
 import { type CategorySubsection, splitCategoryMarkdown } from "./sections.js";
 import { buildToc, renderTocHtml } from "./toc.js";
 
-/** Everything the page template needs: PR context plus the reviewed explanations, in
- * presentation order (see src/explanations/orchestrate.ts, epic 6). */
+/** Everything the page template needs: PR context, the reviewed explanations in presentation
+ * order (see src/explanations/orchestrate.ts, epic 6), and diff data for every file referenced
+ * by a `{{snippet}}` marker anywhere in them (see ./file-diffs.ts). */
 export interface PageInput {
   prTitle: string;
   prDescription: string;
   prUrl: string;
   explanations: CategoryExplanation[];
+  fileDiffs: Map<string, FileDiffData>;
 }
 
 /** Renders the full, self-contained HTML page (assumes `assets/style.css`, `assets/app.js` and
@@ -25,19 +28,11 @@ export function renderPage(input: PageInput): string {
     subsectionsPerCategory,
   );
 
-  // Shared across the whole page (in document order) so each mermaid placeholder's
-  // data-mermaid-index matches its source's position in window.__TULIP_MERMAID__ — see
-  // ./assets/app.js.
-  const mermaidSources: string[] = [];
-  const description = renderCategoryMarkdown(input.prDescription, mermaidSources);
+  const ctx: MarkdownRenderContext = { mermaidSources: [], fileDiffs: input.fileDiffs };
+  const description = renderCategoryMarkdown(input.prDescription, ctx);
   const sections = input.explanations
     .map((explanation, index) =>
-      renderCategorySection(
-        explanation,
-        index,
-        subsectionsPerCategory[index] ?? [],
-        mermaidSources,
-      ),
+      renderCategorySection(explanation, index, subsectionsPerCategory[index] ?? [], ctx),
     )
     .join("\n");
 
@@ -60,7 +55,8 @@ ${renderTocHtml(toc)}
 </header>
 ${sections}
 </main>
-<script type="application/json" id="tulip-mermaid-sources">${escapeInlineScript(JSON.stringify(mermaidSources))}</script>
+<script type="application/json" id="tulip-mermaid-sources">${escapeInlineScript(JSON.stringify(ctx.mermaidSources))}</script>
+<script type="application/json" id="tulip-file-data">${escapeInlineScript(JSON.stringify(embeddableFileData(input.fileDiffs)))}</script>
 <script src="assets/vendor/mermaid.min.js"></script>
 <script src="assets/app.js" defer></script>
 </body>
@@ -68,21 +64,34 @@ ${sections}
 `;
 }
 
+/** Rows for every path under the embed-size cap, keyed by path — lets ./assets/app.js reveal
+ * more context around a snippet without another server round-trip. Paths over the cap are
+ * omitted entirely (see ./file-diffs.ts); their snippet blocks render without expand buttons. */
+function embeddableFileData(
+  fileDiffs: Map<string, FileDiffData>,
+): Record<string, FileDiffData["rows"]> {
+  const data: Record<string, FileDiffData["rows"]> = {};
+  for (const [path, diff] of fileDiffs) {
+    if (diff.embeddable) {
+      data[path] = diff.rows;
+    }
+  }
+  return data;
+}
+
 function renderCategorySection(
   explanation: CategoryExplanation,
   index: number,
   subsections: CategorySubsection[],
-  mermaidSources: string[],
+  ctx: MarkdownRenderContext,
 ): string {
   const { category } = explanation;
   const heading = `<h2>${escapeHtml(category.name)}</h2><p class="category-description">${escapeHtml(category.description)}</p>`;
 
   const body =
     subsections.length > 0
-      ? subsections
-          .map((subsection) => renderSubsection(subsection, index, mermaidSources))
-          .join("\n")
-      : renderCategoryMarkdown(splitCategoryMarkdown(explanation.markdown).intro, mermaidSources);
+      ? subsections.map((subsection) => renderSubsection(subsection, index, ctx)).join("\n")
+      : renderCategoryMarkdown(splitCategoryMarkdown(explanation.markdown).intro, ctx);
 
   return `<section id="${categoryId(index)}" class="category">\n${heading}\n${body}\n</section>`;
 }
@@ -90,10 +99,10 @@ function renderCategorySection(
 function renderSubsection(
   subsection: CategorySubsection,
   categoryIndex: number,
-  mermaidSources: string[],
+  ctx: MarkdownRenderContext,
 ): string {
   return `<div id="${subsectionId(categoryIndex, subsection.kind)}" class="subsection subsection-${subsection.kind}">
 <h3>${escapeHtml(subsection.heading)}</h3>
-${renderCategoryMarkdown(subsection.markdown, mermaidSources)}
+${renderCategoryMarkdown(subsection.markdown, ctx)}
 </div>`;
 }

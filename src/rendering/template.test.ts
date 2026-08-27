@@ -1,6 +1,9 @@
 import { parse } from "node-html-parser";
 import { describe, expect, it } from "vitest";
+import { serializeSnippetRef } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
+import type { FileDiffData } from "./file-diffs.js";
+import { buildAlignedDiff } from "./line-diff.js";
 import { renderPage } from "./template.js";
 
 function explanation(overrides: Partial<CategoryExplanation> = {}): CategoryExplanation {
@@ -17,6 +20,7 @@ describe("renderPage", () => {
       prTitle: "Add retry logic",
       prDescription: "Retries flaky requests.",
       prUrl: "https://github.com/acme/widgets/pull/7",
+      fileDiffs: new Map(),
       explanations: [],
     });
     const root = parse(html);
@@ -32,6 +36,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
       explanations: [
         explanation({ category: { name: "First", description: "" } }),
         explanation({ category: { name: "Second", description: "" } }),
@@ -51,6 +56,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
       explanations: [explanation()],
     });
     const root = parse(html);
@@ -67,6 +73,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
       explanations: [explanation({ markdown: "Just some prose, no headings." })],
     });
     const root = parse(html);
@@ -80,6 +87,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
       explanations: [
         explanation({ category: { name: "Auth", description: "" } }),
         explanation({
@@ -105,6 +113,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
       explanations: [
         explanation({
           markdown: "## Production code\n\n```mermaid\ngraph TD\nA --> B\n```\n",
@@ -120,11 +129,66 @@ describe("renderPage", () => {
     expect(sources).toEqual(["graph TD\nA --> B"]);
   });
 
+  it("substitutes a {{snippet}} marker with a side-by-side diff block", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.ts",
+      side: "head",
+      lines: { start: 2, end: 2 },
+      unfold: false,
+    });
+    const rows = buildAlignedDiff("a\nb\nc\n", "a\nB\nc\n");
+    const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
+
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [
+        explanation({
+          markdown: `## Production code\n\n${ref}\n`,
+        }),
+      ],
+    });
+
+    const root = parse(html);
+    expect(root.querySelector(".snippet")).not.toBeNull();
+    expect(html).not.toContain("{{snippet");
+    const fileDataScript = root.querySelector("#tulip-file-data");
+    const embedded = JSON.parse(fileDataScript?.text ?? "{}");
+    expect(embedded["src/a.ts"]).toEqual(rows);
+  });
+
+  it("omits embedded row data for a file over the embed-size cap", () => {
+    const ref = serializeSnippetRef({
+      path: "src/big.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const fileDiffs = new Map<string, FileDiffData>([["src/big.ts", { rows, embeddable: false }]]);
+
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+    });
+
+    const root = parse(html);
+    const embedded = JSON.parse(root.querySelector("#tulip-file-data")?.text ?? "{}");
+    expect(embedded["src/big.ts"]).toBeUndefined();
+    expect(root.querySelectorAll(".snippet-expand")).toHaveLength(0);
+  });
+
   it("carries theme-toggle and asset hooks with no network references", () => {
     const html = renderPage({
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
       explanations: [],
     });
     expect(html).toContain('id="theme-toggle"');

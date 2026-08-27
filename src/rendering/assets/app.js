@@ -130,9 +130,121 @@
     document.addEventListener("tulip:theme-change", render);
   }
 
+  var SNIPPET_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, (ch) => SNIPPET_ESCAPES[ch]);
+  }
+
+  function cellTypeClass(type) {
+    return type ? ` type-${type}` : "";
+  }
+
+  // Mirrors ./snippets.ts's server-side row rendering — used to insert newly-revealed context
+  // rows when expand-up/expand-down is clicked (see setupSnippetExpansion). Row text comes from
+  // the page-embedded file-content JSON, which is raw (unescaped) untrusted file content, so it
+  // must be escaped here exactly like the server-rendered rows are.
+  function renderSnippetRow(row) {
+    return (
+      "<tr>" +
+      '<td class="snippet-line-no side-base' +
+      cellTypeClass(row.baseType) +
+      '">' +
+      (row.baseLine == null ? "" : row.baseLine) +
+      "</td>" +
+      '<td class="snippet-cell-base' +
+      cellTypeClass(row.baseType) +
+      '"><code>' +
+      (row.baseText == null ? "" : escapeHtml(row.baseText)) +
+      "</code></td>" +
+      '<td class="snippet-line-no side-head' +
+      cellTypeClass(row.headType) +
+      '">' +
+      (row.headLine == null ? "" : row.headLine) +
+      "</td>" +
+      '<td class="snippet-cell-head' +
+      cellTypeClass(row.headType) +
+      '"><code>' +
+      (row.headText == null ? "" : escapeHtml(row.headText)) +
+      "</code></td>" +
+      "</tr>"
+    );
+  }
+
+  function loadFileData() {
+    var el = document.getElementById("tulip-file-data");
+    if (!el) {
+      return {};
+    }
+    try {
+      return JSON.parse(el.textContent || "{}");
+    } catch (_e) {
+      return {};
+    }
+  }
+
+  var CONTEXT_STEP = 20;
+
+  function expandUp(container, rows, currentStart) {
+    var newStart = Math.max(0, currentStart - CONTEXT_STEP);
+    var html = "";
+    for (let i = newStart; i < currentStart; i++) {
+      html += renderSnippetRow(rows[i]);
+    }
+    var tbody = container.querySelector(".snippet-table tbody");
+    if (tbody) {
+      tbody.insertAdjacentHTML("afterbegin", html);
+    }
+    container.setAttribute("data-start-index", String(newStart));
+    return newStart === 0;
+  }
+
+  function expandDown(container, rows, currentEnd) {
+    var newEnd = Math.min(rows.length - 1, currentEnd + CONTEXT_STEP);
+    var html = "";
+    for (let i = currentEnd + 1; i <= newEnd; i++) {
+      html += renderSnippetRow(rows[i]);
+    }
+    var tbody = container.querySelector(".snippet-table tbody");
+    if (tbody) {
+      tbody.insertAdjacentHTML("beforeend", html);
+    }
+    container.setAttribute("data-end-index", String(newEnd));
+    return newEnd === rows.length - 1;
+  }
+
+  // Github-style context expansion (task 7.3): each button reveals more surrounding lines from
+  // the page-embedded per-file row data (see ./file-diffs.ts) without a server round-trip.
+  // Buttons only exist for files under the embed-size cap — see ./snippets.ts.
+  function setupSnippetExpansion() {
+    var fileData = loadFileData();
+    document.querySelectorAll(".snippet-expand").forEach((button) => {
+      button.addEventListener("click", () => {
+        var container = button.closest(".snippet");
+        if (!container) {
+          return;
+        }
+        var path = container.getAttribute("data-path");
+        var rows = path ? fileData[path] : undefined;
+        if (!rows) {
+          return;
+        }
+        var dir = button.getAttribute("data-dir");
+        var reachedEnd =
+          dir === "up"
+            ? expandUp(container, rows, Number(container.getAttribute("data-start-index")))
+            : expandDown(container, rows, Number(container.getAttribute("data-end-index")));
+        if (reachedEnd) {
+          button.remove();
+        }
+      });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     setupThemeToggle();
     setupToc();
     setupMermaid();
+    setupSnippetExpansion();
   });
 })();
