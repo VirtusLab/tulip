@@ -57,3 +57,39 @@ as before:
 
 ${formatChanges(batch)}`;
 }
+
+/** One change's escape-hatch outcome, for {@link buildEscapeHatchResumePrompt}. */
+export interface EscapeHatchOutcome {
+  change: ClassifiableChange;
+  accepted: boolean;
+  category?: Category;
+}
+
+function formatEscapeHatchOutcome(outcome: EscapeHatchOutcome): string {
+  const verdict = outcome.accepted
+    ? `Your suggested new category was accepted, and refined to "${outcome.category?.name}". ` +
+      "You may use it now, or still pick a different existing category if it fits better."
+    : "Your suggested new category was NOT accepted. Pick from the current category list " +
+      'below instead — do not reply "none" for this change.';
+  return `${formatChange(outcome.change)}
+  outcome: ${verdict}`;
+}
+
+/**
+ * Resumes the classifier after one or more "none" proposals were resolved (see
+ * ./escape-hatch.ts): reiterates the (possibly extended) category list, tells the classifier
+ * what happened to each proposal, and asks it to reclassify just those changes.
+ */
+export function buildEscapeHatchResumePrompt(
+  categories: Category[],
+  outcomes: EscapeHatchOutcome[],
+): string {
+  return `The category list is now:
+${formatCategoryList(categories)}
+
+Here's what happened with the new categories you proposed:
+
+${outcomes.map(formatEscapeHatchOutcome).join("\n\n")}
+
+Reply with an updated classification for just these changes.`;
+}
