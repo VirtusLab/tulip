@@ -51,6 +51,23 @@ describe("createCheckout", () => {
     await expect(checkout.getFileAtBase("missing.ts")).resolves.toBeUndefined();
   });
 
+  it("removes the temp dir and rethrows if a git step fails before the checkout is usable", async () => {
+    const dir = "/tmp/tulip-abc123";
+    const failure = new Error("fatal: could not fetch head sha");
+    const runGit = vi.fn(async (args: string[]) => {
+      if (args[0] === "fetch" && args.at(-1) === "head-sha") throw failure;
+      return "";
+    });
+    const rm = vi.fn(async () => {});
+
+    await expect(
+      createCheckout(PR, REVISIONS, { runGit, mkdtemp: async () => dir, rm }),
+    ).rejects.toThrow(failure);
+
+    expect(rm).toHaveBeenCalledTimes(1);
+    expect(rm).toHaveBeenCalledWith(dir);
+  });
+
   it("cleanup removes exactly the checkout directory", async () => {
     const runGit = vi.fn(async () => "");
     const rm = vi.fn(async () => {});

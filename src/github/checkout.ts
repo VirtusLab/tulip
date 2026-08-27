@@ -46,10 +46,17 @@ export async function createCheckout(
   const dir = await (options.mkdtemp ?? defaultMkdtemp)();
 
   const remoteUrl = `https://github.com/${pr.owner}/${pr.repo}.git`;
-  await runGit(["init"], dir);
-  await runGit(["remote", "add", "origin", remoteUrl], dir);
-  await runGit(["fetch", "--depth", "1", "origin", revisions.base.sha], dir);
-  await runGit(["fetch", "--depth", "1", "origin", revisions.head.sha], dir);
+  try {
+    await runGit(["init"], dir);
+    await runGit(["remote", "add", "origin", remoteUrl], dir);
+    await runGit(["fetch", "--depth", "1", "origin", revisions.base.sha], dir);
+    await runGit(["fetch", "--depth", "1", "origin", revisions.head.sha], dir);
+  } catch (error) {
+    // None of the above succeeded enough to hand back a usable PrCheckout — the caller never
+    // gets a `checkout` to call `.cleanup()` on, so this is the only chance to remove `dir`.
+    await removeDir(dir);
+    throw error;
+  }
 
   async function getFileAt(sha: string, path: string): Promise<string | undefined> {
     try {
