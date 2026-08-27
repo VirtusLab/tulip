@@ -133,4 +133,32 @@ describe("reviewAndAmend", () => {
     expect(write).toHaveBeenCalledTimes(1);
     expect(write.mock.calls[0]?.[0]).toMatch(/warning.*Retry logic.*3 rounds/i);
   });
+
+  it("logs each review round at debug level when verbose", async () => {
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+      call++;
+      if (call === 1) {
+        return envelope({ approved: false, issues: [{ description: "too verbose" }] }, "review-1");
+      }
+      if (call === 2) {
+        return envelope({ markdown: `amended\n\n${REF}` }, "explain-session-2");
+      }
+      return envelope({ approved: true, issues: [] }, "review-2");
+    });
+    const write = vi.fn();
+    const logger = createLogger({ write, verbose: true });
+
+    await reviewAndAmend(baseInput(), { runClaudeProcess, logger });
+
+    const debugLines = write.mock.calls
+      .map((call) => String(call[0]))
+      .filter((line) => line.includes("[DEBUG]"));
+    expect(debugLines).toContainEqual(
+      expect.stringContaining('category "Retry logic": review round 1/3'),
+    );
+    expect(debugLines).toContainEqual(
+      expect.stringContaining('category "Retry logic": review round 2/3'),
+    );
+  });
 });

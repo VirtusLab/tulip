@@ -15,19 +15,65 @@ export interface ExplainCategoriesInput {
   categorySets: CategoryChangeSet[];
 }
 
+/** Thrown when one category's explanation generation fails; keeps the category name so a
+ * top-level failure message (see src/pipeline/run.ts) can name it, and the original error as
+ * `cause`. */
+export class CategoryExplanationError extends Error {
+  readonly categoryName: string;
+
+  constructor(categoryName: string, cause: unknown) {
+    super(`category "${categoryName}": ${causeMessage(cause)}`);
+    this.name = "CategoryExplanationError";
+    this.categoryName = categoryName;
+    this.cause = cause;
+  }
+}
+
+/** Thrown by {@link explainCategories} when one or more categories fail. Aggregates every
+ * {@link CategoryExplanationError} (via `Promise.allSettled`, not `Promise.all`) so a failure in
+ * one category never hides a concurrent failure in another. */
+export class ExplainCategoriesError extends Error {
+  readonly failures: CategoryExplanationError[];
+
+  constructor(failures: CategoryExplanationError[], total: number) {
+    super(
+      `${failures.length} of ${total} categor${total === 1 ? "y" : "ies"} failed to explain: ` +
+        failures.map((failure) => failure.message).join("; "),
+    );
+    this.name = "ExplainCategoriesError";
+    this.failures = failures;
+  }
+}
+
+function causeMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Phase 3 end to end: for every category, generates its explanation (task 6.2, opus), verifies
  * every change it was given is referenced by a snippet — amending if not (task 6.3), then runs
  * the clarity/conciseness/correctness review loop (task 6.4). Categories are explained
- * concurrently (`Promise.all`); the shared `claude` process limiter (see
+ * concurrently (`Promise.allSettled`); the shared `claude` process limiter (see
  * src/claude/concurrency.ts) caps actual parallelism at 3 regardless of category count, so this
- * doesn't need its own throttling.
+ * doesn't need its own throttling. Throws {@link ExplainCategoriesError} if any category fails —
+ * every failed category is reported, not just the first.
  */
 export async function explainCategories(
   input: ExplainCategoriesInput,
   deps: ReviewLoopDeps = {},
 ): Promise<CategoryExplanation[]> {
-  return Promise.all(input.categorySets.map((set) => explainOneCategory(input, set, deps)));
+  const settled = await Promise.allSettled(
+    input.categorySets.map((set) => explainOneCategory(input, set, deps)),
+  );
+
+  const failures = settled
+    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+    .map((result) => result.reason as CategoryExplanationError);
+  if (failures.length > 0) {
+    throw new ExplainCategoriesError(failures, settled.length);
+  }
+
+  return settled.map((result) => (result as PromiseFulfilledResult<CategoryExplanation>).value);
 }
 
 async function explainOneCategory(
@@ -40,39 +86,43 @@ async function explainOneCategory(
 
   logger.info(`explaining category "${set.category.name}"...`);
 
-  const generated = await explainCategory(
-    {
-      prTitle: input.prTitle,
-      prDescription: input.prDescription,
-      category: set.category,
-      production: set.production,
-      test: set.test,
-      diffThreshold: input.diffThreshold,
-    },
-    deps,
-  );
+  try {
+    const generated = await explainCategory(
+      {
+        prTitle: input.prTitle,
+        prDescription: input.prDescription,
+        category: set.category,
+        production: set.production,
+        test: set.test,
+        diffThreshold: input.diffThreshold,
+      },
+      deps,
+    );
 
-  const covered = await verifySnippetCoverage(
-    generated.markdown,
-    generated.sessionId,
-    changes,
-    deps,
-  );
+    const covered = await verifySnippetCoverage(
+      generated.markdown,
+      generated.sessionId,
+      changes,
+      deps,
+    );
 
-  const markdown = await reviewAndAmend(
-    {
-      prTitle: input.prTitle,
-      prDescription: input.prDescription,
-      category: set.category,
-      production: set.production,
-      test: set.test,
-      diffThreshold: input.diffThreshold,
-      markdown: covered.markdown,
-      explainSessionId: covered.sessionId,
-    },
-    deps,
-  );
+    const markdown = await reviewAndAmend(
+      {
+        prTitle: input.prTitle,
+        prDescription: input.prDescription,
+        category: set.category,
+        production: set.production,
+        test: set.test,
+        diffThreshold: input.diffThreshold,
+        markdown: covered.markdown,
+        explainSessionId: covered.sessionId,
+      },
+      deps,
+    );
 
-  logger.info(`finished explaining category "${set.category.name}"`);
-  return { category: set.category, markdown };
+    logger.info(`finished explaining category "${set.category.name}"`);
+    return { category: set.category, markdown };
+  } catch (error) {
+    throw new CategoryExplanationError(set.category.name, error);
+  }
 }
