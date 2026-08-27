@@ -1,10 +1,9 @@
-import type { Category } from "../categories/types.js";
-import type { ClassifiableChange } from "../classification/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession, runSession } from "../claude/session.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { verifySnippetCoverage } from "./coverage.js";
 import { buildReviewAmendPrompt, buildReviewPrompt } from "./prompt.js";
+import type { ExplainCategoryInput } from "./types.js";
 import {
   EXPLANATION_SCHEMA,
   type ExplanationResponse,
@@ -15,15 +14,13 @@ import {
 /** Review rounds before giving up and keeping the latest version (spec: "up to 3 times"). */
 export const MAX_REVIEW_ROUNDS = 3;
 
-export interface ReviewLoopInput {
-  prTitle: string;
-  prDescription: string;
-  category: Category;
+/** Same PR/category/changes context the explaining session got (see ./explain.ts), plus the
+ * markdown to review and the session to resume for amendments — reused so the reviewer can be
+ * given the exact same changes (task 6.4's fix: correctness/groundedness needs them). */
+export interface ReviewLoopInput extends ExplainCategoryInput {
   markdown: string;
   /** Explaining session id (see ./explain.ts) — resumed to amend when the reviewer raises issues. */
   explainSessionId: string;
-  /** Every change fed to the explaining session — re-checked (task 6.3) after each amendment. */
-  changes: ClassifiableChange[];
 }
 
 export interface ReviewLoopDeps extends RunnerDeps {
@@ -43,6 +40,7 @@ export async function reviewAndAmend(
   deps: ReviewLoopDeps = {},
 ): Promise<string> {
   const logger = deps.logger ?? createLogger();
+  const changes = [...input.production, ...input.test];
   let markdown = input.markdown;
   let explainSessionId = input.explainSessionId;
 
@@ -51,7 +49,15 @@ export async function reviewAndAmend(
       {
         model: "sonnet",
         schema: REVIEW_SCHEMA,
-        prompt: buildReviewPrompt(input.prTitle, input.prDescription, input.category, markdown),
+        prompt: buildReviewPrompt({
+          prTitle: input.prTitle,
+          prDescription: input.prDescription,
+          category: input.category,
+          production: input.production,
+          test: input.test,
+          diffThreshold: input.diffThreshold,
+          markdown,
+        }),
       },
       deps,
     );
@@ -80,7 +86,7 @@ export async function reviewAndAmend(
     const covered = await verifySnippetCoverage(
       amended.result.markdown,
       amended.sessionId,
-      input.changes,
+      changes,
       deps,
     );
     markdown = covered.markdown;

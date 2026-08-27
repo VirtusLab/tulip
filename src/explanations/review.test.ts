@@ -29,9 +29,11 @@ function baseInput(overrides: Partial<ReviewLoopInput> = {}): ReviewLoopInput {
     prTitle: "Add retry logic to the fetcher",
     prDescription: "Retries transient network failures with backoff.",
     category: CATEGORY,
+    production: [CHANGE],
+    test: [],
+    diffThreshold: 100,
     markdown: `explanation\n\n${REF}`,
     explainSessionId: "explain-session",
-    changes: [CHANGE],
     ...overrides,
   };
 }
@@ -61,6 +63,27 @@ describe("reviewAndAmend", () => {
     expect(prompt).toContain("Add retry logic to the fetcher");
     expect(prompt).toContain("Retry logic");
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("sonnet");
+  });
+
+  it("gives the reviewer the same changes the explaining session got", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ approved: true, issues: [] }, "review-1"),
+    );
+
+    await reviewAndAmend(
+      baseInput({
+        production: [CHANGE],
+        test: [{ ...CHANGE, id: "c2", path: "src/fetch.test.ts" }],
+      }),
+      { runClaudeProcess },
+    );
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toContain("Production code changes");
+    expect(prompt).toContain("Test code changes");
+    expect(prompt).toContain("src/fetch.ts");
+    expect(prompt).toContain("src/fetch.test.ts");
+    expect(prompt).toMatch(/match the changes/);
   });
 
   it("amends via the explaining session, re-checks coverage, then re-reviews with a fresh session", async () => {

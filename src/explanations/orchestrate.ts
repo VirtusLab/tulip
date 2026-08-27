@@ -60,9 +60,11 @@ async function explainOneCategory(
       prTitle: input.prTitle,
       prDescription: input.prDescription,
       category: set.category,
+      production: set.production,
+      test: set.test,
+      diffThreshold: input.diffThreshold,
       markdown: covered.markdown,
       explainSessionId: covered.sessionId,
-      changes,
     },
     deps,
   );

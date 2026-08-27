@@ -48,8 +48,8 @@ describe("explainCategories", () => {
 
     const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
       // Distinguish explain calls (contain the category description) from reviews
-      // (contain "Review it for") by the prompt content.
-      if (promptText.includes("Review it for")) {
+      // (contain "Reply with approved") by the prompt content.
+      if (promptText.includes("Reply with approved")) {
         return envelope({ approved: true, issues: [] }, "review-session");
       }
       const isA = promptText.includes("First category.");
@@ -100,7 +100,7 @@ describe("explainCategories", () => {
         );
       }
       // Review: approves.
-      expect(promptText).toContain("Review it for");
+      expect(promptText).toContain("Reply with approved");
       return envelope({ approved: true, issues: [] }, "review-1");
     });
 
@@ -134,7 +134,7 @@ describe("explainCategories", () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
       inFlight--;
 
-      if (promptText.includes("Review it for")) {
+      if (promptText.includes("Reply with approved")) {
         return envelope({ approved: true, issues: [] }, "review-session");
       }
       const match = /Category (\d+)/.exec(promptText);

@@ -25,6 +25,13 @@ export interface ReviewIssue {
   description: string;
 }
 
+/** What the reviewing session (task 6.4) needs: the same PR/category/changes context the
+ * explaining session got, plus the markdown to review — so "grounded in the changes" (spec) is
+ * actually checkable, not just the explanation's internal consistency. */
+export interface ReviewPromptInput extends ExplainCategoryInput {
+  markdown: string;
+}
+
 /** Final, reviewed and coverage-verified result for one category. */
 export interface CategoryExplanation {
   category: Category;

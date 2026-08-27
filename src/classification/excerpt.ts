@@ -15,3 +15,12 @@ export function buildExcerpt(change: Change): string {
   }
   return full.slice(0, MAX_EXCERPT_CHARS - TRUNCATION_MARKER.length) + TRUNCATION_MARKER;
 }
+
+/**
+ * True if `excerpt` was truncated by {@link buildExcerpt} — it's then only a fragment of the
+ * change's actual diff, not safe to present as "the full diff" (see e.g.
+ * src/explanations/prompt.ts's diff-vs-reference threshold logic).
+ */
+export function isExcerptTruncated(excerpt: string): boolean {
+  return excerpt.endsWith(TRUNCATION_MARKER);
+}

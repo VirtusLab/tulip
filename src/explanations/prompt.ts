@@ -1,6 +1,6 @@
-import type { Category } from "../categories/types.js";
+import { isExcerptTruncated } from "../classification/excerpt.js";
 import type { ClassifiableChange } from "../classification/types.js";
-import type { ExplainCategoryInput, ReviewIssue } from "./types.js";
+import type { ExplainCategoryInput, ReviewIssue, ReviewPromptInput } from "./types.js";
 
 const MARKUP_INSTRUCTIONS = `To reference source code, use this exact markup, on its own line:
 
@@ -36,11 +36,20 @@ const TEST_CHECKLIST = `For the test code, cover what's relevant:
 
 function formatChange(change: ClassifiableChange, diffThreshold: number): string {
   const location = `${change.path} (${change.status}), side ${change.side}, lines ${change.range.start}-${change.range.end}`;
-  const size = change.excerpt.split("\n").length;
-  if (size <= diffThreshold) {
+  // True size comes from the change's own line range, not the (possibly already
+  // char-truncated, see src/classification/excerpt.ts) excerpt's line count — otherwise a huge
+  // change whose excerpt got cut down to a short fragment would wrongly look small enough to
+  // quote in full. A truncated excerpt is never safe to present as "the full diff", regardless
+  // of how it compares to the threshold.
+  const size = change.range.end - change.range.start + 1;
+  const truncated = isExcerptTruncated(change.excerpt);
+  if (size <= diffThreshold && !truncated) {
     return `- ${location}\n  diff:\n  ${change.excerpt.split("\n").join("\n  ")}`;
   }
-  return `- ${location}\n  (diff omitted: ${size} lines, over the ${diffThreshold}-line threshold —
+  const reason = truncated
+    ? "its stored excerpt was truncated, so it isn't the full diff"
+    : `${size} lines, over the ${diffThreshold}-line threshold`;
+  return `- ${location}\n  (diff omitted: ${reason} —
   reference it by file/side/line-range in your explanation instead of quoting it)`;
 }
 
@@ -125,35 +134,40 @@ these changes wherever they best fit in the existing explanation. Keep everythin
 
 /**
  * Task 6.4: a fresh reviewing session's prompt. Reviews for clarity, conciseness, and
- * correctness/groundedness, per the brief's exact context list — PR title/description, category
- * name, the explanation markdown, and this goal.
+ * correctness/groundedness. Gives the reviewer the same changes the explaining session got
+ * (same diff-vs-reference threshold logic as ./buildExplainPrompt) — without them, "grounded in
+ * the changes" can't actually be checked, only the explanation's internal consistency.
  */
-export function buildReviewPrompt(
-  prTitle: string,
-  prDescription: string,
-  category: Category,
-  markdown: string,
-): string {
+export function buildReviewPrompt(input: ReviewPromptInput): string {
   return `You are reviewing an explanation written for a human reviewer of part of a pull
 request.
 
-PR title: ${prTitle}
+PR title: ${input.prTitle}
 
 PR description:
-${prDescription.trim() || "(no description provided)"}
+${input.prDescription.trim() || "(no description provided)"}
 
-Category being explained: ${category.name}
-${category.description}
+Category being explained: ${input.category.name}
+${input.category.description}
 
 Here is the explanation:
 
-${markdown}
+${input.markdown}
 
-Review it for:
+Here are the actual changes the explanation is supposed to cover — use these to check the
+explanation's claims, not just its internal consistency:
+
+Production code changes in this category:
+${formatChanges(input.production, input.diffThreshold)}
+
+Test code changes in this category:
+${formatChanges(input.test, input.diffThreshold)}
+
+Review the explanation for:
 - clarity — is it easy to follow for a reviewer who hasn't seen the code yet?
 - conciseness — is anything unnecessary or repetitive?
-- correctness — is everything grounded in the changes it's supposed to explain, with nothing
-  invented or mistaken?
+- correctness — does every claim actually match the changes above? Flag anything invented,
+  mistaken, or unsupported by them.
 
 Reply with approved: true if it's good as-is. Otherwise reply with approved: false and a list of
 specific issues to fix.`;

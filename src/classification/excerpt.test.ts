@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Change } from "../diff/change.js";
-import { buildExcerpt, MAX_EXCERPT_CHARS } from "./excerpt.js";
+import { buildExcerpt, isExcerptTruncated, MAX_EXCERPT_CHARS } from "./excerpt.js";
 
 function makeChange(lines: string[]): Change {
   return {
@@ -29,5 +29,20 @@ describe("buildExcerpt", () => {
 
     expect(excerpt.length).toBeLessThan(longLine.length);
     expect(excerpt).toMatch(/truncated/);
+  });
+});
+
+describe("isExcerptTruncated", () => {
+  it("is true for an excerpt buildExcerpt truncated", () => {
+    const longLine = `+${"x".repeat(MAX_EXCERPT_CHARS)}`;
+    const excerpt = buildExcerpt(makeChange([longLine]));
+
+    expect(isExcerptTruncated(excerpt)).toBe(true);
+  });
+
+  it("is false for an excerpt buildExcerpt left untouched", () => {
+    const excerpt = buildExcerpt(makeChange(["+short"]));
+
+    expect(isExcerptTruncated(excerpt)).toBe(false);
   });
 });
