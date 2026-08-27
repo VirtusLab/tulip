@@ -1,7 +1,23 @@
 #!/usr/bin/env node
 
-function main(): void {
-  console.log("tulip");
+import { run } from "../pipeline/run.js";
+import { CliUsageError, parseCliArgs, usage } from "./args.js";
+
+async function main(): Promise<void> {
+  let options: ReturnType<typeof parseCliArgs>;
+  try {
+    options = parseCliArgs(process.argv.slice(2));
+  } catch (error) {
+    if (error instanceof CliUsageError) {
+      console.error(`tulip: ${error.message}\n`);
+      console.error(usage());
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
+  }
+
+  await run(options);
 }
 
 main();
