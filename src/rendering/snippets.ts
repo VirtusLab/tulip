@@ -30,7 +30,7 @@ export function renderSnippetBlock(ref: SnippetRef, fileDiffs: Map<string, FileD
 
   const rowsHtml = data.rows
     .slice(range.first, range.last + 1)
-    .map(renderRow)
+    .map(renderSnippetRow)
     .join("");
 
   return `<div class="snippet" data-path="${escapeHtml(ref.path)}" data-start-index="${range.first}" data-end-index="${range.last}">
@@ -49,13 +49,22 @@ function renderFallback(ref: SnippetRef, message: string): string {
   return `<div class="snippet snippet-unavailable">${message} (${escapeHtml(ref.path)}, ${ref.side} lines ${ref.lines.start}-${ref.lines.end})</div>`;
 }
 
-function renderRow(row: AlignedRow): string {
-  return `<tr>
-<td class="snippet-line-no side-base${cellTypeClass(row.baseType)}">${row.baseLine ?? ""}</td>
-<td class="snippet-cell-base${cellTypeClass(row.baseType)}"><code>${row.baseText !== null ? escapeHtml(row.baseText) : ""}</code></td>
-<td class="snippet-line-no side-head${cellTypeClass(row.headType)}">${row.headLine ?? ""}</td>
-<td class="snippet-cell-head${cellTypeClass(row.headType)}"><code>${row.headText !== null ? escapeHtml(row.headText) : ""}</code></td>
-</tr>`;
+/**
+ * Renders one diff row as a `<tr>`. Mirrored line-for-line in ./assets/app.js's own
+ * `renderSnippetRow` (client-side context expansion inserts more rows without a server
+ * round-trip — see setupSnippetExpansion there) — the two must stay byte-identical; keep them
+ * in sync by hand and see snippets.test.ts's "byte-identical" parity test, which evaluates
+ * app.js's copy in Node and asserts it matches this one on the same input.
+ */
+export function renderSnippetRow(row: AlignedRow): string {
+  return (
+    "<tr>" +
+    `<td class="snippet-line-no side-base${cellTypeClass(row.baseType)}">${row.baseLine ?? ""}</td>` +
+    `<td class="snippet-cell-base${cellTypeClass(row.baseType)}"><code>${row.baseText !== null ? escapeHtml(row.baseText) : ""}</code></td>` +
+    `<td class="snippet-line-no side-head${cellTypeClass(row.headType)}">${row.headLine ?? ""}</td>` +
+    `<td class="snippet-cell-head${cellTypeClass(row.headType)}"><code>${row.headText !== null ? escapeHtml(row.headText) : ""}</code></td>` +
+    "</tr>"
+  );
 }
 
 function cellTypeClass(type: AlignedRow["baseType"]): string {

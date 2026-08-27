@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parse } from "node-html-parser";
 import { describe, expect, it } from "vitest";
 import type { SnippetRef } from "../explanations/markup.js";
 import type { FileDiffData } from "./file-diffs.js";
-import { buildAlignedDiff } from "./line-diff.js";
-import { renderSnippetBlock } from "./snippets.js";
+import { type AlignedRow, buildAlignedDiff } from "./line-diff.js";
+import { renderSnippetBlock, renderSnippetRow } from "./snippets.js";
 
 function ref(overrides: Partial<SnippetRef> = {}): SnippetRef {
   return {
@@ -116,5 +118,72 @@ describe("renderSnippetBlock", () => {
     const html = renderSnippetBlock(ref({ lines: { start: 1, end: 1 } }), fileDiffs(rows));
     expect(html).not.toContain("<script>x</script>");
     expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+// ./assets/app.js's `renderSnippetRow` is a hand-maintained mirror of `renderSnippetRow`
+// exported from this module (used client-side to insert context rows without a server
+// round-trip — see setupSnippetExpansion in app.js). Nothing in the type system enforces the
+// two stay identical, so this loads app.js's actual source, evaluates just its row-rendering
+// block in Node (no browser/DOM needed — `escapeHtml`/`cellTypeClass`/`renderSnippetRow` don't
+// touch `document`/`window`), and asserts both implementations produce the same HTML for the
+// same input.
+function loadClientRenderSnippetRow(): (row: AlignedRow) => string {
+  const appJsPath = fileURLToPath(new URL("./assets/app.js", import.meta.url));
+  const source = readFileSync(appJsPath, "utf8");
+
+  const start = source.indexOf("var SNIPPET_ESCAPES");
+  const end = source.indexOf("function loadFileData");
+  if (start === -1 || end === -1) {
+    throw new Error(
+      "could not locate the row-rendering block in assets/app.js — parity test needs updating",
+    );
+  }
+
+  const factory = new Function(`${source.slice(start, end)}\nreturn renderSnippetRow;`);
+  return factory() as (row: AlignedRow) => string;
+}
+
+describe("renderSnippetRow / assets/app.js parity", () => {
+  it("renders byte-identical HTML to assets/app.js's client-side row renderer", () => {
+    const clientRenderSnippetRow = loadClientRenderSnippetRow();
+    const rows: AlignedRow[] = [
+      {
+        baseLine: 1,
+        baseText: "a",
+        baseType: "context",
+        headLine: 1,
+        headText: "a",
+        headType: "context",
+      },
+      {
+        baseLine: 2,
+        baseText: "removed line",
+        baseType: "remove",
+        headLine: null,
+        headText: null,
+        headType: null,
+      },
+      {
+        baseLine: null,
+        baseText: null,
+        baseType: null,
+        headLine: 2,
+        headText: "added line",
+        headType: "add",
+      },
+      {
+        baseLine: 3,
+        baseText: `<script>&"'</script>`,
+        baseType: "remove",
+        headLine: 3,
+        headText: "<img src=x onerror=1>",
+        headType: "add",
+      },
+    ];
+
+    for (const row of rows) {
+      expect(clientRenderSnippetRow(row)).toBe(renderSnippetRow(row));
+    }
   });
 });

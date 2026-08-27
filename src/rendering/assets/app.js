@@ -140,10 +140,13 @@
     return type ? ` type-${type}` : "";
   }
 
-  // Mirrors ./snippets.ts's server-side row rendering — used to insert newly-revealed context
-  // rows when expand-up/expand-down is clicked (see setupSnippetExpansion). Row text comes from
-  // the page-embedded file-content JSON, which is raw (unescaped) untrusted file content, so it
-  // must be escaped here exactly like the server-rendered rows are.
+  // Mirrors ./snippets.ts's exported `renderSnippetRow` (the server-side row renderer) line for
+  // line — used to insert newly-revealed context rows when expand-up/expand-down is clicked
+  // (see setupSnippetExpansion). Row text comes from the page-embedded file-content JSON, which
+  // is raw (unescaped) untrusted file content, so it must be escaped here exactly like the
+  // server-rendered rows are. The two must stay byte-identical; keep them in sync by hand and
+  // see snippets.test.ts's "byte-identical" parity test, which evaluates this copy in Node
+  // (no browser) and asserts it matches the TS one on the same input.
   function renderSnippetRow(row) {
     return (
       "<tr>" +
