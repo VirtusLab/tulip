@@ -1,3 +1,4 @@
+import { claudeConcurrencyLimiter } from "./concurrency.js";
 import { ClaudeOutputError } from "./errors.js";
 import { type ClaudeProcessRunner, runClaudeProcess } from "./exec.js";
 import { type JsonSchema, validateAgainstSchema } from "./schema.js";
@@ -74,11 +75,12 @@ export async function invokeClaude<T = unknown>(
   );
 }
 
+/** Spawns one `claude` process under the shared concurrency cap (see ./concurrency.ts). */
 async function execute(
   invocation: ClaudeInvocation,
   runProcess: ClaudeProcessRunner,
 ): Promise<ClaudeEnvelope> {
-  const { stdout } = await runProcess(buildArgs(invocation));
+  const { stdout } = await claudeConcurrencyLimiter.run(() => runProcess(buildArgs(invocation)));
   return parseEnvelope(stdout);
 }
 
