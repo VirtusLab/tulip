@@ -1,3 +1,4 @@
+import { withPreamble } from "./preamble.js";
 import { type ClaudeModel, invokeClaude, type RunnerDeps } from "./runner.js";
 import type { JsonSchema } from "./schema.js";
 
@@ -29,7 +30,7 @@ export async function runSession<T = unknown>(
   deps: RunnerDeps = {},
 ): Promise<ClaudeSessionResult<T>> {
   const { result, sessionId } = await invokeClaude<T>(
-    { model: options.model, schema: options.schema, prompt: options.prompt },
+    { model: options.model, schema: options.schema, prompt: withPreamble(options.prompt) },
     deps,
   );
   return { result, sessionId };

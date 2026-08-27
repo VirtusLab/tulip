@@ -26,7 +26,7 @@
 - [x] 3.1 Wrapper for `claude -p` headless runs: model selection, structured output via JSON schema, result parsing
 - [x] 3.2 Session management: create, resume
 - [x] 3.3 Concurrency limiter (max 3 parallel sessions)
-- [ ] 3.4 Shared prompt preamble (short, simple language, no jargon)
+- [x] 3.4 Shared prompt preamble (short, simple language, no jargon)
 - [ ] 3.5 Tests with a mocked `claude` binary
 
 ## Epic 4: Phase 1 — category generation
