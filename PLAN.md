@@ -45,7 +45,7 @@
 - [x] 6.2 Per-category prompt (opus, fresh session): context, diffs vs. file+range refs by configurable threshold, explanation structure per spec
 - [x] 6.3 Snippet coverage verification: all provided changes referenced; resume session to amend missing ones
 - [x] 6.4 Review subagent: clarity/conciseness/correctness; fix & re-review loop, max 3 rounds
-- [ ] 6.5 Tests: markup parsing, coverage check, review loop control
+- [x] 6.5 Tests: markup parsing, coverage check, review loop control
 
 ## Epic 7: Rendering
 - [ ] 7.1 Static HTML template: light/dark theme toggle, floating TOC, programmer font, narrow layout; bundled assets (no network)
