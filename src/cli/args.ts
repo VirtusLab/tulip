@@ -1,10 +1,20 @@
 import { parseArgs } from "node:util";
-import type { RunOptions } from "../pipeline/run.js";
+import { type PrRef, parsePrUrl } from "../github/pr-url.js";
 
 /** Default `--diff-threshold`: max diff lines fed verbatim to the explaining LLM. */
 export const DEFAULT_DIFF_THRESHOLD = 400;
 
-const GITHUB_PR_URL_PATTERN = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+\/?$/;
+/** Options collected from the command line, needed to run the pipeline. */
+export interface RunOptions {
+  /** GitHub PR URL, e.g. https://github.com/owner/repo/pull/123. */
+  prUrl: string;
+  /** The PR URL, parsed into owner/repo/number. */
+  pr: PrRef;
+  /** Max diff size (in lines) fed verbatim to the explaining LLM; larger changes are passed as file+line-range references. */
+  diffThreshold: number;
+  /** Show debug-level progress logging. */
+  verbose: boolean;
+}
 
 /** Thrown for any invalid invocation; the message is shown to the user alongside usage info. */
 export class CliUsageError extends Error {}
@@ -54,7 +64,8 @@ export function parseCliArgs(argv: string[]): RunOptions {
   }
 
   const [prUrl] = positionals;
-  if (prUrl === undefined || !GITHUB_PR_URL_PATTERN.test(prUrl)) {
+  const pr = prUrl === undefined ? undefined : parsePrUrl(prUrl);
+  if (prUrl === undefined || pr === undefined) {
     throw new CliUsageError(
       `Invalid PR URL: "${prUrl}". Expected format: https://github.com/<owner>/<repo>/pull/<number>`,
     );
@@ -62,7 +73,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
 
   const diffThreshold = parseDiffThreshold(values["diff-threshold"]);
 
-  return { prUrl, diffThreshold, verbose: values.verbose ?? false };
+  return { prUrl, pr, diffThreshold, verbose: values.verbose ?? false };
 }
 
 function parseDiffThreshold(raw: string | undefined): number {

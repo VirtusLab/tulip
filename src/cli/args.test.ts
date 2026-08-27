@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { CliUsageError, DEFAULT_DIFF_THRESHOLD, parseCliArgs } from "./args.js";
 
 const VALID_URL = "https://github.com/owner/repo/pull/123";
+const VALID_PR = { owner: "owner", repo: "repo", number: 123 };
 
 describe("parseCliArgs", () => {
   it("parses a valid PR URL with defaults for diff threshold and verbosity", () => {
     expect(parseCliArgs([VALID_URL])).toEqual({
       prUrl: VALID_URL,
+      pr: VALID_PR,
       diffThreshold: DEFAULT_DIFF_THRESHOLD,
       verbose: false,
     });
@@ -15,6 +17,7 @@ describe("parseCliArgs", () => {
   it("accepts --diff-threshold and parses it as an integer", () => {
     expect(parseCliArgs([VALID_URL, "--diff-threshold", "800"])).toEqual({
       prUrl: VALID_URL,
+      pr: VALID_PR,
       diffThreshold: 800,
       verbose: false,
     });

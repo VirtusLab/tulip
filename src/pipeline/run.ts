@@ -1,14 +1,5 @@
+import type { RunOptions } from "../cli/args.js";
 import { createLogger } from "../logging/logger.js";
-
-/** Options collected from the command line, needed to run the pipeline. */
-export interface RunOptions {
-  /** GitHub PR URL, e.g. https://github.com/owner/repo/pull/123. */
-  prUrl: string;
-  /** Max diff size (in lines) fed verbatim to the explaining LLM; larger changes are passed as file+line-range references. */
-  diffThreshold: number;
-  /** Show debug-level progress logging. */
-  verbose: boolean;
-}
 
 /**
  * Runs the full PR-explanation pipeline: fetch the PR, analyze it with LLMs,
