@@ -246,6 +246,44 @@ describe("renderPage", () => {
     expect(root.querySelectorAll(".snippet-expand")).toHaveLength(0);
   });
 
+  it("carries a highlight.js language-class hook for a fenced code block in prose", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [
+        explanation({
+          markdown: "## Production code\n\n```ts\nconst x = 1;\n```\n",
+        }),
+      ],
+    });
+    // node-html-parser treats `<pre>` content as opaque text by default (no nested-element
+    // querying), so this checks the raw markup directly rather than parsing it.
+    expect(html).toContain('<pre><code class="language-ts">');
+  });
+
+  it("carries the diff's guessed language as a data attribute for the client-side highlighter", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
+
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+    });
+
+    expect(parse(html).querySelector(".snippet")?.getAttribute("data-lang")).toBe("typescript");
+  });
+
   it("carries theme-toggle and asset hooks with no network references", () => {
     const html = renderPage({
       prTitle: "t",
@@ -257,6 +295,7 @@ describe("renderPage", () => {
     expect(html).toContain('id="theme-toggle"');
     expect(html).toContain('href="assets/style.css"');
     expect(html).toContain('src="assets/vendor/mermaid.min.js"');
+    expect(html).toContain('src="assets/vendor/highlight.min.js"');
     expect(html).toContain('src="assets/app.js"');
     expect(html).not.toMatch(/https?:\/\/(?!github\.com)/);
     expect(html).not.toContain("cdn.");

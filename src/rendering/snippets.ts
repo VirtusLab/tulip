@@ -1,6 +1,7 @@
 import type { SnippetRef } from "../explanations/markup.js";
 import { escapeHtml } from "./escape.js";
 import type { FileDiffData } from "./file-diffs.js";
+import { languageForPath } from "./language.js";
 import type { AlignedRow } from "./line-diff.js";
 
 /**
@@ -33,13 +34,23 @@ export function renderSnippetBlock(ref: SnippetRef, fileDiffs: Map<string, FileD
     .map(renderSnippetRow)
     .join("");
 
-  return `<div class="snippet" data-path="${escapeHtml(ref.path)}" data-start-index="${range.first}" data-end-index="${range.last}">
+  // Language is guessed from the path only (a small, fixed lookup table — see ./language.ts),
+  // never from file content, so it can't be steered by attacker-controlled text. It rides on
+  // the container rather than each `<code>` cell so the client (./assets/app.js) can add the
+  // `language-<lang>` class and call highlight.js's `highlightElement` on already-escaped text
+  // without needing to touch ./renderSnippetRow (and its byte-identical app.js mirror) at all.
+  const lang = languageForPath(ref.path);
+  const langAttr = lang ? ` data-lang="${escapeHtml(lang)}"` : "";
+
+  return `<div class="snippet" data-path="${escapeHtml(ref.path)}" data-start-index="${range.first}" data-end-index="${range.last}"${langAttr}>
 <details${ref.unfold ? " open" : ""}>
 <summary>${summary}</summary>
 ${canExpandUp ? '<button type="button" class="snippet-expand" data-dir="up">↑ expand context</button>' : ""}
+<div class="snippet-scroll">
 <table class="snippet-table"><tbody>
 ${rowsHtml}
 </tbody></table>
+</div>
 ${canExpandDown ? '<button type="button" class="snippet-expand" data-dir="down">↓ expand context</button>' : ""}
 </details>
 </div>`;

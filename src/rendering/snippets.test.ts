@@ -101,6 +101,30 @@ describe("renderSnippetBlock", () => {
     expect(container?.getAttribute("data-end-index")).toBe("1");
   });
 
+  it("records the file's guessed highlight.js language as a data attribute", () => {
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const html = renderSnippetBlock(
+      ref({ path: "src/a.ts", lines: { start: 1, end: 1 } }),
+      fileDiffs(rows),
+    );
+    expect(parse(html).querySelector(".snippet")?.getAttribute("data-lang")).toBe("typescript");
+  });
+
+  it("omits the language data attribute for an unrecognized extension", () => {
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const html = renderSnippetBlock(
+      ref({ path: "src/a.xyz123", lines: { start: 1, end: 1 } }),
+      fileDiffs(rows),
+    );
+    expect(parse(html).querySelector(".snippet")?.hasAttribute("data-lang")).toBe(false);
+  });
+
+  it("wraps the diff table in a horizontally-scrollable container", () => {
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const html = renderSnippetBlock(ref({ lines: { start: 1, end: 1 } }), fileDiffs(rows));
+    expect(parse(html).querySelector(".snippet-scroll > .snippet-table")).not.toBeNull();
+  });
+
   it("falls back gracefully when the file has no diff data", () => {
     const html = renderSnippetBlock(ref(), new Map());
     expect(html).toContain("could not be loaded");

@@ -24,7 +24,7 @@ export interface PageInput {
 const EMPTY_SECTIONS: CategorySections = { intro: "", subsections: [] };
 
 /** Renders the full, self-contained HTML page (assumes `assets/style.css`, `assets/app.js` and
- * `assets/vendor/mermaid.min.js` sit alongside `index.html` — see ./assemble.ts). */
+ * `assets/vendor/{mermaid,highlight}.min.js` sit alongside `index.html` — see ./assemble.ts). */
 export function renderPage(input: PageInput): string {
   // Split each category's markdown exactly once — both the TOC (which needs the subsection
   // list) and the section body (which needs the intro too) read from this same array.
@@ -66,6 +66,7 @@ ${sections}
 <script type="application/json" id="tulip-mermaid-sources">${escapeInlineScript(JSON.stringify(ctx.mermaidSources))}</script>
 <script type="application/json" id="tulip-file-data">${escapeInlineScript(JSON.stringify(embeddableFileData(input.fileDiffs)))}</script>
 <script src="assets/vendor/mermaid.min.js"></script>
+<script src="assets/vendor/highlight.min.js"></script>
 <script src="assets/app.js" defer></script>
 </body>
 </html>
