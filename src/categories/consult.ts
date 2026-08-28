@@ -3,6 +3,7 @@ import type { RunnerDeps } from "../claude/runner.js";
 import type { JsonSchema } from "../claude/schema.js";
 import { resumeSession } from "../claude/session.js";
 import type { LineRange } from "../diff/change.js";
+import { renderPrompt } from "../prompts/loader.js";
 import { CATEGORY_SCHEMA, type CategoryProposal } from "./types.js";
 
 /** The change (file + line range + a short excerpt) that prompted a new category proposal. */
@@ -41,21 +42,14 @@ const CONSULT_CATEGORY_SCHEMA: JsonSchema = {
   },
 };
 
+/** Text lives in src/prompts/category-consult.md (docs/adr/0006). */
 function buildPrompt(proposedName: string, change: ConsultationChange): string {
-  return `While classifying the PR's changes into the categories you created, the
-classifier found a change that didn't fit any of them. It proposes adding a
-new category named "${proposedName}".
-
-The change is in ${change.path}, lines ${change.range.start}-${change.range.end}:
-
-${change.excerpt}
-
-Should this new category be added? Reply with accept: true if it's a good,
-cohesive addition alongside the categories you already created — you may
-refine its name or description. If you accept, you MUST also include a
-category object with its name and description; never accept without one.
-Reply with accept: false (and no category) if the change should instead fit
-one of the existing categories.`;
+  return renderPrompt("category-consult", {
+    proposedName,
+    path: change.path,
+    range: `${change.range.start}-${change.range.end}`,
+    excerpt: change.excerpt,
+  });
 }
 
 /** Shape actually validated against {@link CONSULT_CATEGORY_SCHEMA} — `sessionId` on

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import {
+  GOLDEN_GENERATE_DEFAULT,
+  GOLDEN_GENERATE_EMPTYDESCRIPTION,
+} from "../prompts/__fixtures__/golden.js";
 import { type GenerateCategoriesInput, generateCategories } from "./generate.js";
 
 const INPUT: GenerateCategoriesInput = {
@@ -155,6 +159,29 @@ describe("generateCategories", () => {
     expect(result.categories).toEqual([
       { id: "c1", name: "Retry logic", description: "Adds retries." },
     ]);
+  });
+
+  it("renders byte-identical prompt output (regression guard for wording changes)", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+    );
+
+    await generateCategories(INPUT, { runClaudeProcess });
+
+    expect(runClaudeProcess.mock.calls[0]?.[1]).toBe(GOLDEN_GENERATE_DEFAULT);
+  });
+
+  it("renders byte-identical prompt output for an empty/whitespace description", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+    );
+
+    await generateCategories(
+      { title: "Trivial fix", description: "   ", files: [{ path: "src/a.ts", status: "added" }] },
+      { runClaudeProcess },
+    );
+
+    expect(runClaudeProcess.mock.calls[0]?.[1]).toBe(GOLDEN_GENERATE_EMPTYDESCRIPTION);
   });
 
   it("rejects an empty category list", async () => {

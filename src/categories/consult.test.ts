@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import { GOLDEN_CONSULT_DEFAULT } from "../prompts/__fixtures__/golden.js";
 import { type ConsultCategoryInput, consultOnCategory } from "./consult.js";
 
 const INPUT: ConsultCategoryInput = {
@@ -90,6 +91,16 @@ describe("consultOnCategory", () => {
 
     expect(INPUT.sessionId).toBe("session-1");
     expect(result.sessionId).toBe("session-2");
+  });
+
+  it("renders byte-identical prompt output (regression guard for wording changes)", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ accept: false }),
+    );
+
+    await consultOnCategory(INPUT, { runClaudeProcess });
+
+    expect(runClaudeProcess.mock.calls[0]?.[1]).toBe(GOLDEN_CONSULT_DEFAULT);
   });
 
   it("rejects an accept: true response that omits the category", async () => {

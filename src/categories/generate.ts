@@ -4,6 +4,7 @@ import type { JsonSchema } from "../claude/schema.js";
 import { runSession } from "../claude/session.js";
 import { config } from "../config.js";
 import type { FileStatus } from "../diff/change.js";
+import { renderPrompt } from "../prompts/loader.js";
 import {
   assignCategoryIds,
   CATEGORY_SCHEMA,
@@ -39,50 +40,15 @@ const GENERATE_CATEGORIES_SCHEMA: JsonSchema = {
   },
 };
 
+/** Text lives in src/prompts/category-generation.md (docs/adr/0006). */
 function buildPrompt(input: GenerateCategoriesInput): string {
   const fileList = input.files.map((file) => `- ${file.path} (${file.status})`).join("\n");
 
-  return `You are preparing to explain a GitHub pull request to a human reviewer.
-
-PR title: ${input.title}
-
-PR description:
-${input.description.trim() || "(no description provided)"}
-
-Changed files:
-${fileList}
-
-Split the changes into a few groups so the reviewer can take them one at a time.
-Each group should be one self-contained slice a reviewer can understand on its own,
-together with its tests and its docs.
-
-Group by what the change does — the concern it addresses — never by file type. Don't
-make a "tests" group or a "documentation" group: tests and doc changes go in the same
-group as the code they cover, so each group holds its main code, its tests, and its
-docs together.
-
-A group is usually one feature or one piece of behaviour. Repetitive or mechanical
-code that recurs across the PR — say, serialization plumbing or delegating wrappers —
-can also be a group of its own, since pulling it together lets the reviewer skim it
-in one pass — this never means a tests or docs group; those still ride with their
-code. The only test is whether the group stands on its own.
-
-A small PR might be one group; a larger one is usually a few. Only split further when
-each part still stands alone — don't cut one feature into "the hard part" and "the
-wiring", since neither makes sense without the other. Keep any one group from covering
-too much.
-
-Order the groups by how much attention they need, most important first: new or tricky
-logic, where a mistake would hurt most, before routine wiring or boilerplate. In each
-description, say what the group covers and how closely to read it — for example "core
-logic, read carefully" or "routine, skim". With no clear tricky-vs-routine split, just
-order by impact.
-
-For each group, give a short name and a one- or two-sentence description. Keep the name to a
-few words naming the concern (e.g. "Retry logic", "JSON flow parsing") — never a file list,
-method-name qualifiers, or a parenthetical aside; that level of detail belongs in the
-description, not the name. As above, tests and docs for a group ride inside that group's own
-name and description — there is still no standalone "tests" or "docs" name.`;
+  return renderPrompt("category-generation", {
+    title: input.title,
+    description: input.description.trim() || "(no description provided)",
+    fileList,
+  });
 }
 
 /**
