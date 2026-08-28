@@ -1,0 +1,7 @@
+A reviewer looked at your explanation and raised these issues:
+
+- too verbose
+- missing diagram
+
+Reply with the full, amended markdown that addresses them. Keep your existing snippet
+references unless an issue specifically requires changing them.

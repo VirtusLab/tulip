@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
-import {
-  GOLDEN_GENERATE_DEFAULT,
-  GOLDEN_GENERATE_EMPTYDESCRIPTION,
-} from "../prompts/__fixtures__/golden.js";
 import { type GenerateCategoriesInput, generateCategories } from "./generate.js";
 
 const INPUT: GenerateCategoriesInput = {
@@ -168,7 +164,9 @@ describe("generateCategories", () => {
 
     await generateCategories(INPUT, { runClaudeProcess });
 
-    expect(runClaudeProcess.mock.calls[0]?.[1]).toBe(GOLDEN_GENERATE_DEFAULT);
+    await expect(runClaudeProcess.mock.calls[0]?.[1]).toMatchFileSnapshot(
+      "__snapshots__/generate.default.txt",
+    );
   });
 
   it("renders byte-identical prompt output for an empty/whitespace description", async () => {
@@ -181,7 +179,9 @@ describe("generateCategories", () => {
       { runClaudeProcess },
     );
 
-    expect(runClaudeProcess.mock.calls[0]?.[1]).toBe(GOLDEN_GENERATE_EMPTYDESCRIPTION);
+    await expect(runClaudeProcess.mock.calls[0]?.[1]).toMatchFileSnapshot(
+      "__snapshots__/generate.empty-description.txt",
+    );
   });
 
   it("rejects an empty category list", async () => {

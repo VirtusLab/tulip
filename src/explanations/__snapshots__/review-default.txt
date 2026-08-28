@@ -1,0 +1,56 @@
+You are reviewing an explanation written for a human reviewer of part of a pull
+request.
+
+PR title: Add retry logic to the fetcher
+
+PR description:
+Retries transient network failures with backoff.
+
+Category being explained: Retry logic
+Adds backoff retries.
+
+Here is the explanation:
+
+explanation
+
+some markdown
+
+Here are the actual changes the explanation is supposed to cover — use these to check the
+explanation's claims, not just its internal consistency:
+
+Code and doc changes in this group (everything that ships):
+- src/fetch.ts (modified), side head, lines 10-12
+  diff:
+  +line1
+  +line2
+  +line3
+
+Test changes in this group:
+- src/fetch.test.ts (modified), side head, lines 10-12
+  diff:
+  +test1
+
+Doc files, comments, and doc-strings in the first list go under "## Documentation";
+everything else there goes in the main section.
+
+Your working directory is a checkout of the PR's head revision (commit
+def456head) — you can read any changed or unchanged file there directly, whether or not
+it's excerpted above. The complete unified diff for the whole PR is at .tulip/pr.diff — read or
+grep it for the full picture beyond what's excerpted above. The pre-change content (commit
+abc123base) of every changed file is under .tulip/base/<path> (e.g. src/foo.ts's base
+version is at .tulip/base/src/foo.ts). Files added by the PR have no base version; files removed
+by the PR have no working-tree (head) copy at all — their only content is under
+.tulip/base/<path>. Reading a file's .tulip/base copy alongside its checked-out (head) copy, plus
+.tulip/pr.diff, is the most reliable way to understand exactly what changed and why. Use this to verify claims against the actual code too, not just
+against the change list above.
+
+Review the explanation for:
+- clarity — is it easy to follow for a reviewer who hasn't seen the code yet?
+- conciseness — is anything unnecessary or repetitive?
+- correctness — does every claim actually match the changes above? Flag anything invented,
+  mistaken, or unsupported by them.
+- coverage — is there a coverage strip, and does it match the changes (tests/docs marked
+  "none" only when truly absent, not to skip work)?
+
+Reply with approved: true if it's good as-is. Otherwise reply with approved: false and a list of
+specific issues to fix.

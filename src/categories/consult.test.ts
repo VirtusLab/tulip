@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
-import { GOLDEN_CONSULT_DEFAULT } from "../prompts/__fixtures__/golden.js";
 import { type ConsultCategoryInput, consultOnCategory } from "./consult.js";
 
 const INPUT: ConsultCategoryInput = {
@@ -100,7 +99,9 @@ describe("consultOnCategory", () => {
 
     await consultOnCategory(INPUT, { runClaudeProcess });
 
-    expect(runClaudeProcess.mock.calls[0]?.[1]).toBe(GOLDEN_CONSULT_DEFAULT);
+    await expect(runClaudeProcess.mock.calls[0]?.[1]).toMatchFileSnapshot(
+      "__snapshots__/consult.default.txt",
+    );
   });
 
   it("rejects an accept: true response that omits the category", async () => {

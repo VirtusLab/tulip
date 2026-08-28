@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Category } from "../categories/types.js";
 import {
-  GOLDEN_CLASSIFY_BATCH,
-  GOLDEN_CLASSIFY_COVERAGEREPAIR,
-  GOLDEN_CLASSIFY_ESCAPEHATCH,
-  GOLDEN_CLASSIFY_INITIAL,
-} from "../prompts/__fixtures__/golden.js";
-import {
   buildBatchClassifyPrompt,
   buildCoverageRepairPrompt,
   buildEscapeHatchResumePrompt,
@@ -35,21 +29,27 @@ function change(id: string, excerpt = "+line1\n+line2"): ClassifiableChange {
 const BATCH = [change("ch1"), change("ch2", "+onlyline")];
 
 // Byte-identical regression guards (docs/adr/0006): asserts the loader-rendered prompt equals
-// the OLD template-literal builder's output for the same inputs, captured before the refactor.
+// the OLD template-literal builder's output for the same inputs. Each case is checked against a
+// committed file snapshot (src/classification/__snapshots__/*.txt) — run `vitest -u` to
+// regenerate after a deliberate .md wording change.
 describe("buildInitialClassifyPrompt", () => {
-  it("renders byte-identical prompt output", () => {
-    expect(buildInitialClassifyPrompt(CATEGORIES, BATCH)).toBe(GOLDEN_CLASSIFY_INITIAL);
+  it("renders byte-identical prompt output", async () => {
+    await expect(buildInitialClassifyPrompt(CATEGORIES, BATCH)).toMatchFileSnapshot(
+      "__snapshots__/classify-initial.txt",
+    );
   });
 });
 
 describe("buildBatchClassifyPrompt", () => {
-  it("renders byte-identical prompt output", () => {
-    expect(buildBatchClassifyPrompt(CATEGORIES, BATCH)).toBe(GOLDEN_CLASSIFY_BATCH);
+  it("renders byte-identical prompt output", async () => {
+    await expect(buildBatchClassifyPrompt(CATEGORIES, BATCH)).toMatchFileSnapshot(
+      "__snapshots__/classify-next-batch.txt",
+    );
   });
 });
 
 describe("buildEscapeHatchResumePrompt", () => {
-  it("renders byte-identical prompt output for an accepted and a rejected outcome", () => {
+  it("renders byte-identical prompt output for an accepted and a rejected outcome", async () => {
     const outcomes: EscapeHatchOutcome[] = [
       {
         change: change("ch1"),
@@ -62,12 +62,16 @@ describe("buildEscapeHatchResumePrompt", () => {
       },
     ];
 
-    expect(buildEscapeHatchResumePrompt(CATEGORIES, outcomes)).toBe(GOLDEN_CLASSIFY_ESCAPEHATCH);
+    await expect(buildEscapeHatchResumePrompt(CATEGORIES, outcomes)).toMatchFileSnapshot(
+      "__snapshots__/classify-escape-hatch.txt",
+    );
   });
 });
 
 describe("buildCoverageRepairPrompt", () => {
-  it("renders byte-identical prompt output", () => {
-    expect(buildCoverageRepairPrompt(CATEGORIES, BATCH)).toBe(GOLDEN_CLASSIFY_COVERAGEREPAIR);
+  it("renders byte-identical prompt output", async () => {
+    await expect(buildCoverageRepairPrompt(CATEGORIES, BATCH)).toMatchFileSnapshot(
+      "__snapshots__/classify-coverage-repair.txt",
+    );
   });
 });

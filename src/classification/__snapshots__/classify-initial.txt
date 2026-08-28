@@ -1,0 +1,37 @@
+You are classifying the changes in a pull request into categories, so each
+change ends up grouped with the others that belong to the same piece of functionality.
+
+The categories to classify changes into are:
+- [c1] Retry logic: Adds backoff retries.
+- [c2] Logging: Adds structured logs.
+
+Two special categories are also available:
+- "ignore": use this for generated files, lockfiles, or binaries — anything a human
+  wouldn't review. When you use "ignore", make it the change's only assignment.
+- "none": use this if the change genuinely doesn't fit any category above. You MUST
+  also include a "suggestedCategory" with a name and description for a new category
+  that would fit it. When you use "none", make it the change's only assignment too.
+  Only use "none" as a last resort.
+
+For each change, reply with its id and a list of assignments. Each
+assignment has a category (the bracketed id from the list above, e.g. "c2" — NOT the category's
+name — or the sentinel "ignore"/"none") and a codeType ("production" or "test"). Documentation
+files, comments, and doc-strings count as "production" — they ship with the code. Use "test"
+only for actual test code. A change usually needs just one assignment, but list more than one
+if it genuinely belongs to multiple categories. Give every change at least one assignment,
+unless you're marking it "ignore".
+
+Here is the first batch of changes to classify:
+
+- id: ch1
+  file: src/fetch.ts (modified)
+  side: head, lines 10-12
+  diff:
+  +line1
+  +line2
+
+- id: ch2
+  file: src/fetch.ts (modified)
+  side: head, lines 10-12
+  diff:
+  +onlyline
