@@ -116,16 +116,31 @@ describe("generateCategories", () => {
     expect(prompt).toMatch(/skim/i);
   });
 
-  it("returns the ordered categories and session id on a valid response", async () => {
-    const categories = [
+  it("asks for short names, with file lists/qualifiers/parentheticals kept out of the name", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+    );
+
+    await generateCategories(INPUT, { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toMatch(/keep the name to a\s+few words/i);
+    expect(prompt).toMatch(/never a file list,\s+method-name qualifiers, or a parenthetical/i);
+  });
+
+  it("assigns ids 'c1', 'c2', ... in presentation order, on top of the model's name+description", async () => {
+    const proposals = [
       { name: "Retry logic", description: "Adds backoff retries." },
-      { name: "Tests", description: "Covers the new retry behavior." },
+      { name: "Backoff tests", description: "Covers the new retry behavior." },
     ];
-    const runClaudeProcess = vi.fn(async () => envelope({ categories }, "abc"));
+    const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
 
     const result = await generateCategories(INPUT, { runClaudeProcess });
 
-    expect(result.categories).toEqual(categories);
+    expect(result.categories).toEqual([
+      { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
+      { id: "c2", name: "Backoff tests", description: "Covers the new retry behavior." },
+    ]);
     expect(result.sessionId).toBe("abc");
   });
 

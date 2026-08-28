@@ -3,7 +3,7 @@ import type { RunnerDeps } from "../claude/runner.js";
 import type { JsonSchema } from "../claude/schema.js";
 import { resumeSession } from "../claude/session.js";
 import type { LineRange } from "../diff/change.js";
-import { CATEGORY_SCHEMA, type Category } from "./types.js";
+import { CATEGORY_SCHEMA, type CategoryProposal } from "./types.js";
 
 /** The change (file + line range + a short excerpt) that prompted a new category proposal. */
 export interface ConsultationChange {
@@ -23,8 +23,10 @@ export interface ConsultCategoryInput {
 
 export interface ConsultCategoryResult {
   accept: boolean;
-  /** Present when accepted (always, enforced below); may refine the proposed name/description. */
-  category?: Category;
+  /** Present when accepted (always, enforced below); may refine the proposed name/description.
+   * Name+description only — the model never assigns an id (see docs/adr/0005); the caller
+   * (src/classification/escape-hatch.ts) assigns one via {@link import("./types.js").nextCategoryId}. */
+  category?: CategoryProposal;
   /** Latest phase-1 session id. Resume the *next* consultation from this id, not the original
    * generateCategories one, so each consultation sees categories accepted by earlier ones. */
   sessionId: string;

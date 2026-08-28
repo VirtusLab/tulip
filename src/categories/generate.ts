@@ -4,7 +4,12 @@ import type { JsonSchema } from "../claude/schema.js";
 import { runSession } from "../claude/session.js";
 import { config } from "../config.js";
 import type { FileStatus } from "../diff/change.js";
-import { CATEGORY_SCHEMA, type Category } from "./types.js";
+import {
+  assignCategoryIds,
+  CATEGORY_SCHEMA,
+  type Category,
+  type CategoryProposal,
+} from "./types.js";
 
 /** A file touched by the PR, as listed for the category-generation prompt. */
 export interface CategoryInputFile {
@@ -73,7 +78,11 @@ description, say what the group covers and how closely to read it — for exampl
 logic, read carefully" or "routine, skim". With no clear tricky-vs-routine split, just
 order by impact.
 
-For each group, give a short name and a one- or two-sentence description.`;
+For each group, give a short name and a one- or two-sentence description. Keep the name to a
+few words naming the concern (e.g. "Retry logic", "JSON flow parsing") — never a file list,
+method-name qualifiers, or a parenthetical aside; that level of detail belongs in the
+description, not the name. As above, tests and docs for a group ride inside that group's own
+name and description — there is still no standalone "tests" or "docs" name.`;
 }
 
 /**
@@ -86,7 +95,7 @@ export async function generateCategories(
   input: GenerateCategoriesInput,
   deps: RunnerDeps = {},
 ): Promise<GenerateCategoriesResult> {
-  const { result, sessionId } = await runSession<{ categories: Category[] }>(
+  const { result, sessionId } = await runSession<{ categories: CategoryProposal[] }>(
     {
       model: config.models.categoryGeneration,
       schema: GENERATE_CATEGORIES_SCHEMA,
@@ -99,5 +108,5 @@ export async function generateCategories(
     throw new ClaudeOutputError("claude returned an empty category list");
   }
 
-  return { categories: result.categories, sessionId };
+  return { categories: assignCategoryIds(result.categories), sessionId };
 }
