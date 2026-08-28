@@ -140,3 +140,48 @@ both themes, in the same code path that already restores+reruns on toggle.
     highlighting/mermaid/theme wiring runs with no console errors and that injected
     `<script>`/`<img onerror>` diff content stays inert in the real generated page — not
     just in the unit tests.
+
+## Amendment: review fixes
+
+A review of the above found the vendored-bundle test silently no-opped on a fresh clone,
+a real accessibility/semantic bug in the syntax-token colors, and two unstyled markdown
+elements. Fixed in the same unit:
+
+- **`highlight-safety.test.ts` silently skipped when the vendored bundle was missing** (so
+  `pnpm test` alone, without `pnpm build` first, reported green without ever running the
+  real highlighter against the XSS payload). Fixed by building the bundle on demand —
+  but *not* in that test's own `beforeAll`, as first tried: esbuild's own environment
+  self-check (`new TextEncoder().encode("") instanceof Uint8Array`) fails under this
+  file's `@vitest-environment jsdom` globals, since jsdom's `Uint8Array` isn't the same
+  constructor esbuild's `TextEncoder` output is checked against. Moved the on-demand build
+  into `vitest.config.ts`'s `globalSetup` (`scripts/vitest-global-setup.mjs`), which runs
+  once in a plain Node process before any test file's environment is set up — the same
+  `buildHljsBundle` `copy-assets.mjs` uses, just invoked from a different, jsdom-free
+  phase. Verified by moving the built bundle aside and running only that test file: it now
+  builds the bundle and runs for real, rather than skipping.
+- **Syntax-token colors reused the diff +/- colors** (`.hljs-string`/`.hljs-addition`/
+  `.hljs-attribute` on `--add-fg`, `.hljs-attr`/`.hljs-variable`/`.hljs-deletion` on
+  `--remove-fg`). Since these tokens render inside diff cells too, this both measured
+  under WCAG AA on the opposite-polarity background (e.g. light `--add-fg` on
+  `--remove-bg` = 4.43:1) and read as a false signal (a green string token on a removed
+  line). Fixed with two new tokens, decoupled from the diff colors entirely and chosen to
+  clear 4.5:1 against `--code-bg`, `--add-bg` *and* `--remove-bg` in both themes:
+  `--token-string` (teal) and `--token-attr` (magenta) — picked from hues that don't
+  overlap red/green, so a token can never itself be misread as an add/remove signal.
+- **GFM tables and images in prose were unstyled.** An unstyled `<table>` looks broken;
+  an `<img>` with no `max-width` could overflow the prose column and force the page body
+  to scroll horizontally, which the layout decision above explicitly rules out. Added
+  `main table:not(.snippet-table)` (border/padding/header background, `:not` to leave the
+  diff table's own rules alone) and `main img { max-width: 100%; height: auto; }`.
+- **Minor:** `h4` now completes the heading scale (was narrowed by the generic prose
+  selector but otherwise unstyled); `blockquote` gets a left border, padding and muted
+  color.
+- **Robustness:** the client highlighter now skips a code cell whose text exceeds
+  `MAX_HIGHLIGHT_CHARS` (20,000 characters) — leaves it as the already-escaped plain text
+  it already was rather than running highlight.js's tokenizer over it, since that cost
+  scales with input size and runs on the main thread. A pathological single line (a
+  minified/generated file caught in a diff) shouldn't be able to jank the local viewer.
+- Guarded against future drift with a test asserting `language.ts`'s
+  `SUPPORTED_LANGUAGES` (every language name it can produce) is exactly the set
+  `scripts/hljs-entry.mjs` registers — a mismatch either way silently breaks highlighting
+  for one language or ships dead weight in the vendored bundle.
