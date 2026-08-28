@@ -1,7 +1,7 @@
 // tsc only compiles .ts files, so the static rendering assets (CSS/JS/vendored mermaid — see
 // src/rendering/assets) need a separate copy step to land next to the compiled JS in dist/,
 // where src/rendering/assemble.ts looks for them at runtime when running from a build.
-import { cp, mkdir } from "node:fs/promises";
+import { cp, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHljsBundle } from "./build-hljs-bundle.mjs";
@@ -46,3 +46,14 @@ for (const font of FONTS) {
 }
 
 await cp(src, dest, { recursive: true });
+
+// Prompt templates (src/prompts/*.md) are hand-edited SOURCE, committed to git — unlike the
+// vendored bundles above — but tsc only compiles .ts files, so they need the same copy step to
+// land next to the compiled loader.js in dist/, where src/prompts/loader.ts (via import.meta.url)
+// looks for them at runtime when running from a build. The directory is flat (no
+// subdirectories), so each .md file is just copied in place.
+const promptsSrc = fileURLToPath(new URL("../src/prompts", import.meta.url));
+const promptsDest = fileURLToPath(new URL("../dist/prompts", import.meta.url));
+await mkdir(promptsDest, { recursive: true });
+const promptFiles = (await readdir(promptsSrc)).filter((name) => name.endsWith(".md"));
+await Promise.all(promptFiles.map((name) => cp(join(promptsSrc, name), join(promptsDest, name))));
