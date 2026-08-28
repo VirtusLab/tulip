@@ -99,8 +99,34 @@
     }
   }
 
-  function mermaidTheme() {
-    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "default";
+  // Reads the page's own palette (see style.css's :root custom properties) so mermaid draws
+  // diagrams in the same colors/font as the rest of the page instead of one of its stock
+  // themes — mermaid's fully-customizable "base" theme takes every color from
+  // `themeVariables`. Read live (not cached) so a theme toggle picks up the new values.
+  function mermaidThemeVariables() {
+    var styles = getComputedStyle(document.documentElement);
+    function v(name, fallback) {
+      var value = styles.getPropertyValue(name);
+      return value ? value.trim() : fallback;
+    }
+    return {
+      background: v("--bg", "#ffffff"),
+      mainBkg: v("--code-bg", "#f6f8fa"),
+      primaryColor: v("--code-bg", "#f6f8fa"),
+      primaryTextColor: v("--fg", "#1f2328"),
+      primaryBorderColor: v("--accent", "#6e40c9"),
+      secondaryColor: v("--surface", "#f6f7f9"),
+      secondaryBorderColor: v("--border", "#d8dee4"),
+      tertiaryColor: v("--surface", "#f6f7f9"),
+      tertiaryBorderColor: v("--border", "#d8dee4"),
+      lineColor: v("--muted", "#57606a"),
+      textColor: v("--fg", "#1f2328"),
+      nodeTextColor: v("--fg", "#1f2328"),
+      clusterBkg: v("--surface", "#f6f7f9"),
+      clusterBorder: v("--border", "#d8dee4"),
+      edgeLabelBackground: v("--bg", "#ffffff"),
+      fontFamily: v("--font-sans", "sans-serif"),
+    };
   }
 
   // Mermaid replaces each `.mermaid` element's content with rendered SVG in place, so a
@@ -122,7 +148,11 @@
           node.textContent = source;
         }
       });
-      window.mermaid.initialize({ startOnLoad: false, theme: mermaidTheme() });
+      window.mermaid.initialize({
+        startOnLoad: false,
+        theme: "base",
+        themeVariables: mermaidThemeVariables(),
+      });
       // suppressErrors: an invalid diagram renders mermaid's own error placeholder instead of
       // rejecting — without it, an invalid diagram left an unhandled promise rejection.
       window.mermaid.run({ nodes: nodes, suppressErrors: true }).catch(() => {});
@@ -242,8 +272,68 @@
         if (reachedEnd) {
           button.remove();
         }
+        highlightSnippetContainer(container);
       });
     });
+  }
+
+  // Syntax highlighting (task: highlighting.md). Runs client-side, against text the server (or
+  // ./renderSnippetRow above) already HTML-escaped into `<code>` elements — highlight.js's
+  // `highlightElement` reads the element's plain-text content (`textContent`, which the browser
+  // has already unescaped back to the raw string) and rewrites the element's markup itself,
+  // re-escaping everything it emits. Nothing here ever assigns raw/untrusted text to
+  // `innerHTML` — that's what keeps this safe against a malicious PR's file content, no matter
+  // what it contains (see snippets.test.ts / template.test.ts's XSS cases, and this file's own
+  // safety test in highlight-safety.test.ts).
+  function highlightElementSafely(code, lang) {
+    if (!window.hljs || !lang || !window.hljs.getLanguage(lang)) {
+      return;
+    }
+    code.classList.add(`language-${lang}`);
+    try {
+      window.hljs.highlightElement(code);
+    } catch (_e) {
+      // Leave the (already-safe, escaped) plain text as-is on any highlighter failure.
+    }
+  }
+
+  // Highlights a `{{snippet}}` diff block's code cells (task 7.3's `.snippet`, see
+  // ./snippets.ts) using the language ./snippets.ts guessed from the file path and recorded on
+  // the container as `data-lang`. `:not([data-highlighted])` scopes this to cells highlight.js
+  // hasn't already processed, so calling it again after expand-up/down (see
+  // setupSnippetExpansion) only touches the newly-inserted rows.
+  function highlightSnippetContainer(container) {
+    var lang = container.getAttribute("data-lang");
+    if (!lang) {
+      return;
+    }
+    var codes = container.querySelectorAll(
+      ".snippet-cell-base code:not([data-highlighted]), .snippet-cell-head code:not([data-highlighted])",
+    );
+    codes.forEach((code) => {
+      highlightElementSafely(code, lang);
+    });
+  }
+
+  // Highlights fenced code blocks in prose (LLM-authored markdown outside `{{snippet}}` refs —
+  // see ./markdown.ts / ./prose.ts). marked already emits `<code class="language-xxx">` for a
+  // fenced block tagged with a language (e.g. ```ts); blocks with no tag are left as plain,
+  // already-escaped text rather than guessed at.
+  function highlightProseCode() {
+    document
+      .querySelectorAll('main pre > code[class*="language-"]:not([data-highlighted])')
+      .forEach((code) => {
+        var match = /language-(\S+)/.exec(code.className);
+        highlightElementSafely(code, match?.[1]);
+      });
+  }
+
+  function setupHighlighting() {
+    if (!window.hljs) {
+      return;
+    }
+    highlightProseCode();
+    document.querySelectorAll(".snippet[data-lang]").forEach(highlightSnippetContainer);
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -251,5 +341,6 @@
     setupToc();
     setupMermaid();
     setupSnippetExpansion();
+    setupHighlighting();
   });
 })();
