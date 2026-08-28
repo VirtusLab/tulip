@@ -32,12 +32,11 @@ diff in the prompt either.
 2. **Fetch deeper history.** Raise fetch depth from 1 to a configured value
    (`config.limits.checkoutFetchDepth`, default 50) for both base and head, so `git log`/`git
    blame` have more than a single commit to work with.
-3. **Grant read-only git access, not blanket Bash.** Pass `--allowedTools` to every `claude`
+3. ~~**Grant read-only git access, not blanket Bash.** Pass `--allowedTools` to every `claude`
    invocation, allowlisting `Bash(git diff:*)`, `Bash(git show:*)`, `Bash(git log:*)`,
-   `Bash(git blame:*)` (`config.claude.allowedTools`). Everything else Bash-shaped still needs
-   permission, which headless mode has no one to grant, so it stays denied. `--allowedTools`'s
-   syntax is confirmed straight from `claude --help` (own example: `Bash(git *) Edit`) — a
-   `Tool(prefix)` specifier, comma- or space-separated, one argv token per entry here.
+   `Bash(git blame:*)`.~~ **Superseded** — see "Amendment: no Bash git grant at all" below. Left
+   struck through rather than deleted: it's what shipped first, and why it was wrong is the point
+   of the amendment.
 4. **Fix `formatChange` to use the change's full diff lines, not the classification excerpt.**
    Add `lines: string[]` to `ClassifiableChange` (populated from `Change.lines` in
    `prepareClassifiableChanges`), and have `formatChange` quote `change.lines` when under
@@ -46,14 +45,12 @@ diff in the prompt either.
    diff" anywhere else. This also removes the need for `formatChange`'s truncation check
    entirely: the full lines are always available regardless of how phase 2 truncated the excerpt.
 5. **Tell the model what it now has.** The explain/review prompts state that the working
-   directory is a checkout of the PR's head revision, give the base and head SHAs, note that
-   read-only git commands (diff/show/log/blame) are available via Bash, and that files may be
-   read directly.
+   directory is a checkout of the PR's head revision, give the base and head SHAs for reference,
+   and that files may be read directly (no mention of running git commands — see the amendment).
 
-Pushback on the given guidance: none — the four decisions above match what was asked. The one
-addition is including `Bash(git blame:*)`'s siblings' exact wildcard form (`git log:*` etc.)
-under the same `Tool(prefix)` syntax `--help` documents for `Bash`, rather than inventing a
-different pattern.
+Pushback on the original guidance: none at the time — decisions 1, 2, 4, 5 above (and the
+original form of 3) matched what was asked. Decision 3 turned out to be wrong in a way review
+caught before it shipped to production; see the amendment.
 
 ## Consequences
 
@@ -67,8 +64,8 @@ different pattern.
 - `ExplainCategoryInput`/`ExplainCategoriesInput` (and the review-loop equivalents) grow a
   `baseSha`/`headSha` pair, threaded from `PrMetadata` through `pipeline/run.ts` — a small,
   mechanical widening of an existing interface.
-- `--allowedTools` is fixed and global (not per-invocation configuration) — if a future phase
-  needs a different tool allowlist, this will need to become a parameter instead of a constant.
+- `--allowedTools` is never passed by default (see the amendment) — sessions get repo access
+  purely through Read/Grep/Glob on the checked-out working tree, no Bash grant at all.
 
 ## Implementation plan
 
@@ -95,3 +92,64 @@ different pattern.
 9. Manual, no-LLM verification: fetch softwaremill/jox#351's base/head SHAs (`gh pr view`) and
    run `createCheckout` directly against the real PR (network git, no `claude` calls) to confirm
    the temp dir ends up with a real working tree.
+
+## Amendment: no Bash git grant at all
+
+### Context
+
+A security review of the above, verified live before it shipped, found decision 3
+(`Bash(git diff:*)`/`show`/`log`/`blame`) CRITICAL: it lets the model run e.g.
+
+```
+git log --format=%B -1 --output=/any/writable/path
+```
+
+writing a file with fully attacker-controlled content — the PR author's own commit message —
+anywhere the OS user running tulip can write. `--output=<path>` (and blame/diff's own `-O`) can
+appear at any argv position, so `claude`'s `--allowedTools`/`--disallowedTools` matching (a
+prefix match on the command string) cannot distinguish `git log --oneline` from `git log
+--output=<path>`: both start with the allowed prefix `git log`. This is reachable purely via
+prompt injection — a malicious PR's commit message or diff content, fed into the explaining
+session's prompt, can instruct it to run the write. The reviewer verified this executes with
+zero denials from `claude`.
+
+A narrower fix (regex-checking the allowlist entries, or a wrapping shim script that shadows
+`git` on `PATH` and rejects write/escape flags before exec-ing the real binary) was considered
+and prototyped, but the underlying justification for granting Bash *at all* turned out to be
+weak: decision 1 already gives sessions the head revision's real working tree, and `claude -p`
+sessions get Read/Grep/Glob on it with **no allowlist needed** — that was true before this ADR
+and remains true. The only thing `Bash(git ...)` added was `git log`/`blame` history beyond the
+working tree's current state, which nothing in the jox#351 incident (checkout access, diff
+visibility) actually required. Removing the grant removes the vector entirely, with no shim to
+maintain or trust.
+
+### Decision
+
+- `config.claude.allowedTools` defaults to `[]`. The field (and `buildArgs`' handling of it) stay
+  in place — `buildArgs` omits `--allowedTools` from argv entirely when the list is empty, rather
+  than passing an empty flag — so the mechanism remains available, just unused.
+- No shim, no wrapper, no `--disallowedTools` allowlist-of-exclusions: none of these can be
+  verified airtight against an argv-position-independent flag, and none were needed once Bash
+  access itself is off the table.
+- Explain/review prompts drop the "read-only git commands" wording; they still tell the session
+  its cwd is the head checkout and give both SHAs (for reference / correlating with the diffs
+  already in the prompt), but no longer imply it can run git itself.
+- `createCheckout`'s own git calls (init/remote/fetch/checkout — code-driven, not
+  model-driven) are separately isolated from the operator's `~/.gitconfig`/system config via
+  `GIT_CONFIG_NOSYSTEM=1`/`GIT_CONFIG_GLOBAL=/dev/null`, so a malicious PR's `.gitattributes`
+  can't invoke an operator-configured smudge/textconv filter during checkout. This was already
+  planned (finding 6 of the same review) and is orthogonal to the Bash-grant question — it holds
+  regardless of whether sessions ever get git access again.
+
+### Consequences
+
+- The arbitrary-file-write vector is closed: sessions have no way to invoke `git` (or any other
+  command) at all in the default configuration.
+- Sessions lose `git log`/`git blame` history beyond the checked-out head revision. Nothing in
+  scope currently needs it; if a future need justifies it, re-adding any command execution here
+  requires a hardened wrapper (shim shadowing `git` on `PATH`, rejecting write/escape flags
+  server-side before exec-ing the real binary, with output-flag detection independent of argv
+  position) — not a bare `--allowedTools` entry, which this incident showed is insufficient by
+  itself for anything that can write files. Left as explicit future work, not implemented now.
+- `config.claude.allowedTools` and its plumbing (`buildArgs`' empty-list check) stay as
+  documented dead-but-ready code for that future work, rather than being deleted outright.
