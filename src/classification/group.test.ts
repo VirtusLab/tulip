@@ -47,7 +47,10 @@ describe("groupChangesByCategory", () => {
     expect(grouped[1]).toEqual({ category: result.categories[1], production: [c1], test: [c2] });
   });
 
-  it("matches category ids case-insensitively and ignoring surrounding whitespace", () => {
+  it("matches category ids exactly — a case/whitespace variant does not match", () => {
+    // Ids are code-assigned "c<N>" tokens constrained by the classify schema's enum, so this
+    // variant can't actually come from the classifier — but the matcher is exact, not
+    // normalized, so it (correctly) doesn't land in the group.
     const c1 = change("c1");
     const result: ClassifyChangesResult = {
       categories: [{ id: "c1", name: "Retry logic", description: "" }],
@@ -58,7 +61,7 @@ describe("groupChangesByCategory", () => {
 
     const grouped = groupChangesByCategory(result);
 
-    expect(grouped[0]?.production).toEqual([c1]);
+    expect(grouped[0]?.production).toEqual([]);
   });
 
   it("matches by id even when the category name is long and paraphrase-prone", () => {

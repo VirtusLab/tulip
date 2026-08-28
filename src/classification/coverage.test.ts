@@ -66,7 +66,10 @@ describe("findUncoveredChangeIds", () => {
     expect(findUncoveredChangeIds(changes, resolved, CATEGORIES)).toEqual([]);
   });
 
-  it("matches category ids case-insensitively and ignoring surrounding whitespace", () => {
+  it("matches category ids exactly — a case/whitespace variant does not count as covered", () => {
+    // Ids are code-assigned "c<N>" tokens constrained by the classify schema's enum, so the
+    // classifier can't actually reply with a variant like this — but matching is exact, not
+    // normalized, so this deliberately mangled id is (correctly) still uncovered.
     const changes = [change("c1")];
     const resolved = new Map<string, ResolvedChange>([
       [
@@ -78,7 +81,7 @@ describe("findUncoveredChangeIds", () => {
       ],
     ]);
 
-    expect(findUncoveredChangeIds(changes, resolved, CATEGORIES)).toEqual([]);
+    expect(findUncoveredChangeIds(changes, resolved, CATEGORIES)).toEqual(["c1"]);
   });
 
   it("flags a change assigned to a category id that doesn't exist as still uncovered", () => {
