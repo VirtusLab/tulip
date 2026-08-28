@@ -57,6 +57,23 @@ describe("classifyInBatches", () => {
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("haiku");
   });
 
+  it("tells the classifier that docs/comments/doc-strings count as production", async () => {
+    const changes = [change("c1")];
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope([
+        { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "production" }] },
+      ]),
+    );
+
+    await classifyInBatches(CATEGORIES, changes, passThrough, { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toMatch(
+      /documentation files, comments, and doc-strings count as\s+"production"/i,
+    );
+    expect(prompt).toMatch(/use\s+"test" only for actual test code/i);
+  });
+
   it("resumes the same session for later batches, restating the current category list", async () => {
     // Force two batches by exceeding MAX_BATCH_SIZE (20).
     const changes = Array.from({ length: 25 }, (_, i) => change(`c${i}`));

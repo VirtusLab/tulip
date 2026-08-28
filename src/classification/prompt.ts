@@ -27,9 +27,11 @@ const SPECIAL_CATEGORIES_EXPLANATION = `Two special categories are also availabl
 
 const OUTPUT_INSTRUCTIONS = `For each change, reply with its id and a list of assignments. Each
 assignment has a category (one of the names above, or "ignore"/"none") and a codeType
-("production" or "test"). A change usually needs just one assignment, but list more than one
-if it genuinely belongs to multiple categories. Give every change at least one assignment,
-unless you're marking it "ignore".`;
+("production" or "test"). Documentation files, comments, and doc-strings count as
+"production" — they ship with the code. Use "test" only for actual test code. A change
+usually needs just one assignment, but list more than one if it genuinely belongs to
+multiple categories. Give every change at least one assignment, unless you're marking it
+"ignore".`;
 
 /** First classification call: explains the categories and the task, then lists the first batch. */
 export function buildInitialClassifyPrompt(
