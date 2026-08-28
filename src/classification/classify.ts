@@ -1,4 +1,4 @@
-import type { Category } from "../categories/types.js";
+import type { Category, CategoryProposal } from "../categories/types.js";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession, runSession } from "../claude/session.js";
@@ -12,7 +12,7 @@ import {
   NONE_CATEGORY,
 } from "./types.js";
 import {
-  CLASSIFY_BATCH_SCHEMA,
+  buildClassifyBatchSchema,
   type ClassifyBatchResponse,
   type RawChangeClassification,
 } from "./wire.js";
@@ -26,7 +26,11 @@ import {
 export type ResolvedChange =
   | { kind: "ignored" }
   | { kind: "categorized"; assignments: CategoryAssignment[] }
-  | { kind: "none"; suggestedCategory: Category; existingAssignments: CategoryAssignment[] };
+  | {
+      kind: "none";
+      suggestedCategory: CategoryProposal;
+      existingAssignments: CategoryAssignment[];
+    };
 
 /** Result of running the classifier over every batch (escape hatch already resolved per-batch;
  * see {@link AfterBatchHook}), before the final coverage-verification step. */
@@ -75,7 +79,7 @@ export async function classifyInBatches(
   const firstResponse = await runSession<ClassifyBatchResponse>(
     {
       model: config.models.classification,
-      schema: CLASSIFY_BATCH_SCHEMA,
+      schema: buildClassifyBatchSchema(categories),
       prompt: buildInitialClassifyPrompt(categories, firstBatch),
     },
     deps,
@@ -91,7 +95,7 @@ export async function classifyInBatches(
     const response = await resumeSession<ClassifyBatchResponse>(
       {
         sessionId,
-        schema: CLASSIFY_BATCH_SCHEMA,
+        schema: buildClassifyBatchSchema(currentCategories),
         prompt: buildBatchClassifyPrompt(currentCategories, batch),
       },
       deps,

@@ -10,6 +10,9 @@ export type CodeType = "production" | "test";
 
 /** One category a change was placed into, and whether it's production or test code. */
 export interface CategoryAssignment {
+  /** The category's `id` (see ../categories/types.ts's `Category`), or the "ignore"/"none"
+   * sentinel below — never the category's free-text `name`, which the classifier can't be
+   * trusted to echo back verbatim (see docs/adr/0005). */
   category: string;
   codeType: CodeType;
 }

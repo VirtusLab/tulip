@@ -6,7 +6,9 @@ import { type AfterBatchHook, classifyInBatches, resolveRawClassification } from
 import type { ClassifiableChange } from "./types.js";
 import type { RawChangeClassification } from "./wire.js";
 
-const CATEGORIES: Category[] = [{ name: "Retry logic", description: "Adds backoff retries." }];
+const CATEGORIES: Category[] = [
+  { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
+];
 
 /** A no-op afterBatch hook, for tests that don't exercise the escape hatch. */
 const passThrough: AfterBatchHook = async (resolved, classifierSessionId, categories) => ({
@@ -42,36 +44,52 @@ describe("classifyInBatches", () => {
   it("sends the category list and special-category explanation in the first batch", async () => {
     const changes = [change("c1")];
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope([
-        { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "production" }] },
-      ]),
+      envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
     );
 
     await classifyInBatches(CATEGORIES, changes, passThrough, { runClaudeProcess });
 
     const [args, prompt] = runClaudeProcess.mock.calls[0] ?? [];
-    expect(prompt).toContain("Retry logic");
+    expect(prompt).toContain("[c1] Retry logic");
     expect(prompt).toContain("Adds backoff retries.");
     expect(prompt).toMatch(/"ignore"/);
     expect(prompt).toMatch(/"none"/);
+    expect(prompt).toMatch(/bracketed id/i);
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("haiku");
+  });
+
+  it("builds the classify schema's category enum from the current category ids plus none/ignore", async () => {
+    const twoCategories: Category[] = [
+      ...CATEGORIES,
+      { id: "c2", name: "Logging", description: "Adds structured logs." },
+    ];
+    const changes = [change("c1")];
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
+    );
+
+    await classifyInBatches(twoCategories, changes, passThrough, { runClaudeProcess });
+
+    const args = runClaudeProcess.mock.calls[0]?.[0] as string[];
+    const schema = JSON.parse(args[args.indexOf("--json-schema") + 1] ?? "{}");
+    const categoryEnum =
+      schema.properties.classifications.items.properties.assignments.items.properties.category.enum;
+    expect(categoryEnum).toEqual(["c1", "c2", "none", "ignore"]);
   });
 
   it("tells the classifier that docs/comments/doc-strings count as production", async () => {
     const changes = [change("c1")];
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope([
-        { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "production" }] },
-      ]),
+      envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
     );
 
     await classifyInBatches(CATEGORIES, changes, passThrough, { runClaudeProcess });
 
     const prompt = runClaudeProcess.mock.calls[0]?.[1];
     expect(prompt).toMatch(
-      /documentation files, comments, and doc-strings count as\s+"production"/i,
+      /documentation\s+files, comments, and doc-strings count as\s+"production"/i,
     );
-    expect(prompt).toMatch(/use\s+"test" only for actual test code/i);
+    expect(prompt).toMatch(/use\s+"test"\s+only for actual test code/i);
   });
 
   it("resumes the same session for later batches, restating the current category list", async () => {
@@ -84,7 +102,7 @@ describe("classifyInBatches", () => {
       return envelope(
         batch.map((c) => ({
           changeId: c.id,
-          assignments: [{ category: "Retry logic", codeType: "production" }],
+          assignments: [{ category: "c1", codeType: "production" }],
         })),
         `session-${call}`,
       );
@@ -103,7 +121,11 @@ describe("classifyInBatches", () => {
 
   it("threads the afterBatch hook's updated categories/session into the next batch's prompt", async () => {
     const changes = Array.from({ length: 21 }, (_, i) => change(`c${i}`));
-    const extraCategory: Category = { name: "New area", description: "Escape-hatch addition." };
+    const extraCategory: Category = {
+      id: "c2",
+      name: "New area",
+      description: "Escape-hatch addition.",
+    };
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
@@ -111,7 +133,7 @@ describe("classifyInBatches", () => {
       return envelope(
         batch.map((c) => ({
           changeId: c.id,
-          assignments: [{ category: "Retry logic", codeType: "production" }],
+          assignments: [{ category: "c1", codeType: "production" }],
         })),
         `raw-session-${call}`,
       );
@@ -136,9 +158,7 @@ describe("classifyInBatches", () => {
   it("parses assignments, keyed by changeId", async () => {
     const changes = [change("c1")];
     const runClaudeProcess = vi.fn(async () =>
-      envelope([
-        { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "production" }] },
-      ]),
+      envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
     );
 
     const { resolved } = await classifyInBatches(CATEGORIES, changes, passThrough, {
@@ -147,33 +167,37 @@ describe("classifyInBatches", () => {
 
     expect(resolved.get("c1")).toEqual({
       kind: "categorized",
-      assignments: [{ category: "Retry logic", codeType: "production" }],
+      assignments: [{ category: "c1", codeType: "production" }],
     });
   });
 
   it("keeps multiple assignments for a change that belongs to more than one category", async () => {
+    const twoCategories: Category[] = [
+      ...CATEGORIES,
+      { id: "c2", name: "Logging", description: "Adds structured logs." },
+    ];
     const changes = [change("c1")];
     const runClaudeProcess = vi.fn(async () =>
       envelope([
         {
           changeId: "c1",
           assignments: [
-            { category: "Retry logic", codeType: "production" },
-            { category: "Logging", codeType: "production" },
+            { category: "c1", codeType: "production" },
+            { category: "c2", codeType: "production" },
           ],
         },
       ]),
     );
 
-    const { resolved } = await classifyInBatches(CATEGORIES, changes, passThrough, {
+    const { resolved } = await classifyInBatches(twoCategories, changes, passThrough, {
       runClaudeProcess,
     });
 
     expect(resolved.get("c1")).toEqual({
       kind: "categorized",
       assignments: [
-        { category: "Retry logic", codeType: "production" },
-        { category: "Logging", codeType: "production" },
+        { category: "c1", codeType: "production" },
+        { category: "c2", codeType: "production" },
       ],
     });
   });
@@ -182,8 +206,8 @@ describe("classifyInBatches", () => {
     const changes = [change("c1"), change("c2")];
     const runClaudeProcess = vi.fn(async () =>
       envelope([
-        { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "production" }] },
-        { changeId: "c2", assignments: [{ category: "Retry logic", codeType: "test" }] },
+        { changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] },
+        { changeId: "c2", assignments: [{ category: "c1", codeType: "test" }] },
       ]),
     );
 
@@ -238,7 +262,7 @@ describe("resolveRawClassification", () => {
     const entry: RawChangeClassification = {
       changeId: "c1",
       assignments: [
-        { category: "Retry logic", codeType: "production" },
+        { category: "c1", codeType: "production" },
         {
           category: "none",
           codeType: "production",
@@ -250,7 +274,7 @@ describe("resolveRawClassification", () => {
     expect(resolveRawClassification(entry)).toEqual({
       kind: "none",
       suggestedCategory: { name: "New area", description: "Doesn't fit elsewhere." },
-      existingAssignments: [{ category: "Retry logic", codeType: "production" }],
+      existingAssignments: [{ category: "c1", codeType: "production" }],
     });
   });
 

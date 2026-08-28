@@ -2,7 +2,9 @@ import type { Category } from "../categories/types.js";
 import type { ClassifiableChange } from "./types.js";
 
 function formatCategoryList(categories: Category[]): string {
-  return categories.map((category) => `- ${category.name}: ${category.description}`).join("\n");
+  return categories
+    .map((category) => `- [${category.id}] ${category.name}: ${category.description}`)
+    .join("\n");
 }
 
 function formatChange(change: ClassifiableChange): string {
@@ -26,12 +28,12 @@ const SPECIAL_CATEGORIES_EXPLANATION = `Two special categories are also availabl
   Only use "none" as a last resort.`;
 
 const OUTPUT_INSTRUCTIONS = `For each change, reply with its id and a list of assignments. Each
-assignment has a category (one of the names above, or "ignore"/"none") and a codeType
-("production" or "test"). Documentation files, comments, and doc-strings count as
-"production" — they ship with the code. Use "test" only for actual test code. A change
-usually needs just one assignment, but list more than one if it genuinely belongs to
-multiple categories. Give every change at least one assignment, unless you're marking it
-"ignore".`;
+assignment has a category (the bracketed id from the list above, e.g. "c2" — NOT the category's
+name — or the sentinel "ignore"/"none") and a codeType ("production" or "test"). Documentation
+files, comments, and doc-strings count as "production" — they ship with the code. Use "test"
+only for actual test code. A change usually needs just one assignment, but list more than one
+if it genuinely belongs to multiple categories. Give every change at least one assignment,
+unless you're marking it "ignore".`;
 
 /** First classification call: explains the categories and the task, then lists the first batch. */
 export function buildInitialClassifyPrompt(
@@ -77,8 +79,9 @@ export interface EscapeHatchOutcome {
 
 function formatEscapeHatchOutcome(outcome: EscapeHatchOutcome): string {
   const verdict = outcome.accepted
-    ? `Your suggested new category was accepted, and refined to "${outcome.category?.name}". ` +
-      "You may use it now, or still pick a different existing category if it fits better."
+    ? `Your suggested new category was accepted, and refined to "${outcome.category?.name}" ` +
+      `(id "${outcome.category?.id}"). You may use its id now, or still pick a different ` +
+      "existing category if it fits better."
     : "Your suggested new category was NOT accepted. Pick from the current category list " +
       'below instead — do not reply "none" for this change.';
   return `${formatChange(outcome.change)}
