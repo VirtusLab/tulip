@@ -182,10 +182,25 @@ Both live under the checkout's own temp dir, so `PrCheckout.cleanup()` removes t
 The explain/review prompts (`describeCheckoutAccess`) now point sessions at both paths,
 additively — the existing per-change diff excerpts/references stay, still the primary grounding.
 
+**Symlink-escape finding and mitigation.** A review verified live that the head working tree is
+checked out (RULING 1, above) *before* `materializeChangeArtifacts` runs, and `git checkout`
+faithfully recreates tracked symlinks — so a malicious PR that commits `.tulip` itself as a
+symlink (e.g. `.tulip -> ..`) turns `mkdir(tulipDir, {recursive: true})` into a confused-deputy
+write through that link: `.tulip/pr.diff` and every `.tulip/base/<path>` (proprietary base
+source, for a private repo) land at the symlink's target instead, outside the checkout, and are
+never cleaned up (`cleanup()` only `rm`s `checkout.dir`, not wherever the link pointed). The same
+gap let a PR plant forged `.tulip/base/<path>` content of its own that would silently survive and
+masquerade as genuine pre-change content. Mitigation: `materializeChangeArtifacts` now `rm`s
+`tulipDir` (`recursive: true, force: true`) before `mkdir`-ing it — `rm` on a path that is
+itself a symlink unlinks the link without following it, so `.tulip` is guaranteed fresh and
+self-owned (real directory, no pre-existing content) before anything is written into it.
+
 ### Consequences
 
 - A session can always get the complete diff and a real base/head comparison for any file,
-  regardless of `diffThreshold` or prompt size — no git access, no new attack surface (the
-  written paths are derived from the already-parsed diff, not session input).
+  regardless of `diffThreshold` or prompt size — no git access. The written paths are derived
+  from the already-parsed diff, not raw session input, but a PR's own tracked files (e.g. a
+  `.tulip` symlink) can still collide with the materialization path itself — closed by clearing
+  `.tulip` before every write, per the finding above.
 - One more filesystem write pass per PR (proportional to changed-file count); negligible next to
   the checkout itself.
