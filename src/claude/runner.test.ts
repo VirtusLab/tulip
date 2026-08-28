@@ -41,7 +41,7 @@ describe("invokeClaude", () => {
     expect(runClaudeProcess).toHaveBeenCalledTimes(1);
   });
 
-  it("builds the CLI args (-p, --output-format json, --json-schema, --allowedTools, --model) and sends the prompt via stdin, not argv", async () => {
+  it("builds the CLI args (-p, --output-format json, --json-schema, --model) and sends the prompt via stdin, not argv", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       processResult(envelope()),
     );
@@ -55,8 +55,6 @@ describe("invokeClaude", () => {
         "json",
         "--json-schema",
         JSON.stringify(SCHEMA),
-        "--allowedTools",
-        ...config.claude.allowedTools,
         "--model",
         "sonnet",
       ],
@@ -65,7 +63,8 @@ describe("invokeClaude", () => {
     );
   });
 
-  it("allowlists only read-only git subcommands via --allowedTools, not blanket Bash", async () => {
+  it("never passes --allowedTools by default — no Bash grant of any kind (see src/config.ts's claude.allowedTools doc comment: a Bash(git ...) grant was found to let the model write arbitrary files via e.g. `git log --output=<path>`); sessions rely on their default Read/Grep/Glob access instead", async () => {
+    expect(config.claude.allowedTools).toEqual([]);
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       processResult(envelope()),
     );
@@ -73,19 +72,8 @@ describe("invokeClaude", () => {
     await invokeClaude(BASE_INVOCATION, { runClaudeProcess });
 
     const [args] = runClaudeProcess.mock.calls[0] ?? [];
-    const allowedTools = args as string[];
-    const flagIndex = allowedTools.indexOf("--allowedTools");
-    expect(flagIndex).toBeGreaterThanOrEqual(0);
-    expect(allowedTools).toEqual(
-      expect.arrayContaining([
-        "Bash(git diff:*)",
-        "Bash(git show:*)",
-        "Bash(git log:*)",
-        "Bash(git blame:*)",
-      ]),
-    );
-    expect(allowedTools).not.toContain("Bash");
-    expect(allowedTools.some((tool) => tool === "Bash(*)" || tool === "Bash(*:*)")).toBe(false);
+    expect(args as string[]).not.toContain("--allowedTools");
+    expect((args as string[]).some((arg) => arg.startsWith("Bash"))).toBe(false);
   });
 
   it("passes cwd through to the process runner when given", async () => {

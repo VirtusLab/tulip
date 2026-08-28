@@ -47,15 +47,13 @@ function formatChange(change: ClassifiableChange, diffThreshold: number): string
   reference it by file/side/line-range in your explanation instead of quoting it)`;
 }
 
-/** Tells a session what its checkout gives it access to: the head revision's working tree
- * (readable directly) plus both SHAs, so it can also run the read-only git commands granted via
- * `--allowedTools` (see src/config.ts's `claude.allowedTools`, src/claude/runner.ts). */
+/** Tells a session what its checkout gives it access to: the head revision's working tree,
+ * readable directly with its Read/Grep/Glob tools (no Bash/git access is granted — see
+ * src/config.ts's `claude.allowedTools` doc comment for why), plus both SHAs for reference. */
 function describeCheckoutAccess(input: { baseSha: string; headSha: string }): string {
   return `Your working directory is a checkout of the PR's head revision (commit
-${input.headSha}) — you can read any file there directly. The PR's base revision (commit
-${input.baseSha}) is also available locally, so you can run read-only git commands (git diff,
-git show, git log, git blame) against either commit to inspect history or compare revisions
-beyond what's given above.`;
+${input.headSha}) — you can read any file there directly. The PR's base revision is commit
+${input.baseSha}, for reference.`;
 }
 
 function formatChanges(changes: ClassifiableChange[], diffThreshold: number): string {
@@ -98,8 +96,8 @@ ${formatChanges(input.test, input.diffThreshold)}
 
 ${describeCheckoutAccess(input)}
 
-First research the changes above — read through the actual files and history to understand what
-they do. Then analyze how they work; jotting down scratch notes for yourself is fine, but only
+First research the changes above — read through the actual files to understand what they do.
+Then analyze how they work; jotting down scratch notes for yourself is fine, but only
 your final answer matters.
 
 Then write the explanation as markdown, interleaving prose with Mermaid diagrams (fenced with
@@ -170,8 +168,8 @@ ${formatChanges(input.production, input.diffThreshold)}
 Test code changes in this category:
 ${formatChanges(input.test, input.diffThreshold)}
 
-${describeCheckoutAccess(input)} Use this to verify claims against the actual code and history
-too, not just against the change list above.
+${describeCheckoutAccess(input)} Use this to verify claims against the actual code too, not just
+against the change list above.
 
 Review the explanation for:
 - clarity — is it easy to follow for a reviewer who hasn't seen the code yet?

@@ -103,11 +103,13 @@ function buildArgs(invocation: ClaudeInvocation): string[] {
     "json",
     "--json-schema",
     JSON.stringify(invocation.schema),
-    // Read-only git access (diff/show/log/blame) via Bash, on top of a session's default
-    // Read/Grep/Glob — NOT blanket Bash (see src/config.ts's `claude.allowedTools` doc comment).
-    "--allowedTools",
-    ...config.claude.allowedTools,
   ];
+  // Omitted entirely when empty (the default — see src/config.ts's `claude.allowedTools` doc
+  // comment for why no Bash grant is safe to add): an empty `--allowedTools` flag isn't the
+  // same as not passing it, so this can't just always push the flag.
+  if (config.claude.allowedTools.length > 0) {
+    args.push("--allowedTools", ...config.claude.allowedTools);
+  }
   if (invocation.model) {
     args.push("--model", invocation.model);
   }

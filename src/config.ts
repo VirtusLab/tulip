@@ -10,12 +10,17 @@
 export const config = {
   /** Fixed CLI flags applied to every `claude` invocation, regardless of phase. */
   claude: {
-    /** `--allowedTools` entries granting read-only git access via Bash, in addition to a
-     * session's default Read/Grep/Glob — so it can inspect history/diffs/blame beyond a single
-     * file without a blanket (and, headless, unapprovable) Bash grant — see src/claude/runner.ts.
-     * Syntax per `claude --help`'s own `--allowedTools` example ("Bash(git *) Edit"): a
-     * `Tool(prefix)` specifier, one per argv token. */
-    allowedTools: ["Bash(git diff:*)", "Bash(git show:*)", "Bash(git log:*)", "Bash(git blame:*)"],
+    /** `--allowedTools` entries, e.g. `"Bash(git log:*)"` (syntax per `claude --help`'s own
+     * `--allowedTools` example, "Bash(git *) Edit": a `Tool(prefix)` specifier, one per argv
+     * token). Deliberately empty: a security review found that any `Bash(git ...)` grant lets
+     * the model run e.g. `git log --output=<path>`, writing attacker-controlled content (a
+     * malicious PR's own commit message) to an arbitrary path — `claude`'s prefix-based
+     * `--allowedTools`/`--disallowedTools` matching can't block a flag that may appear at any
+     * argv position (see docs/adr/0002). Sessions instead rely on their default Read/Grep/Glob
+     * access to the checked-out working tree (see src/github/checkout.ts) — no Bash grant, no
+     * vector. Kept as a list (not removed) so it stays the one place to configure this, and
+     * `buildArgs` (src/claude/runner.ts) omits `--allowedTools` entirely when it's empty. */
+    allowedTools: [],
   },
 
   /** `claude --model` alias used to start each phase's fresh session. */

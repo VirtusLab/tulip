@@ -84,9 +84,9 @@ describe("explainCategory", () => {
     expect(prompt).toContain("abc123base");
     expect(prompt).toContain("def456head");
     expect(prompt).toMatch(/working directory is a checkout/);
-    expect(prompt).toMatch(/git diff/);
-    expect(prompt).toMatch(/git log/);
-    expect(prompt).toMatch(/git blame/);
+    // No Bash/git access is granted (see src/config.ts's claude.allowedTools doc comment) — the
+    // prompt must not imply the session can run git commands itself.
+    expect(prompt).not.toMatch(/git diff|git log|git blame|git show/);
   });
 
   it("includes the full diff for a change whose range is at or under the threshold", async () => {

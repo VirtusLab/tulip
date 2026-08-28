@@ -82,7 +82,9 @@ describe("reviewAndAmend", () => {
     expect(prompt).toContain("base-sha");
     expect(prompt).toContain("head-sha");
     expect(prompt).toMatch(/working directory is a checkout/);
-    expect(prompt).toMatch(/git diff/);
+    // No Bash/git access is granted (see src/config.ts's claude.allowedTools doc comment) — the
+    // prompt must not imply the session can run git commands itself.
+    expect(prompt).not.toMatch(/git diff|git log|git blame|git show/);
   });
 
   it("gives the reviewer the same changes the explaining session got", async () => {
