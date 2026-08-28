@@ -38,7 +38,9 @@ export const CATEGORY_SCHEMA: JsonSchema = {
 /** Assigns ids "c1", "c2", ... to a freshly generated, ordered category list (c1 = most
  * important) — see src/categories/generate.ts. */
 export function assignCategoryIds(proposals: CategoryProposal[]): Category[] {
-  return proposals.map((proposal, index) => ({ id: `c${index + 1}`, ...proposal }));
+  // `id` spread last: a stray `id` key on a parsed proposal (CATEGORY_SCHEMA has no
+  // additionalProperties:false, so nothing strips one) must never override the code-assigned id.
+  return proposals.map((proposal, index) => ({ ...proposal, id: `c${index + 1}` }));
 }
 
 /** Next fresh, unique category id continuing the "c<N>" sequence, given the current category

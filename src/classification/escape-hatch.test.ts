@@ -120,6 +120,53 @@ describe("resolveNoneClassifications", () => {
     expect(state.classifierSessionId).toBe("classifier-session-2");
   });
 
+  it("keeps the code-assigned id even if the phase-1 reply carries a stray 'id' field", async () => {
+    // CATEGORY_SCHEMA has no additionalProperties:false, so an extra "id" key on the accepted
+    // category isn't rejected — nextCategoryId's assignment must still win.
+    const resolved = new Map<string, ResolvedChange>([
+      [
+        "c1",
+        {
+          kind: "none",
+          suggestedCategory: { name: "Metrics", description: "Adds counters." },
+          existingAssignments: [],
+        },
+      ],
+    ]);
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+      call++;
+      if (call === 1) {
+        return envelope(
+          {
+            accept: true,
+            category: { id: "not-a-real-id", name: "Metrics", description: "Adds counters." },
+          },
+          "phase1-session-2",
+        );
+      }
+      return envelope(
+        {
+          classifications: [
+            { changeId: "c1", assignments: [{ category: "c2", codeType: "production" }] },
+          ],
+        },
+        "classifier-session-2",
+      );
+    });
+
+    const state = baseState();
+    await resolveNoneClassifications(resolved, new Map([["c1", change("c1")]]), state, {
+      runClaudeProcess,
+    });
+
+    expect(state.categories).toContainEqual({
+      id: "c2",
+      name: "Metrics",
+      description: "Adds counters.",
+    });
+  });
+
   it("rejects a new category and asks the classifier to pick from the existing list, no 'none' allowed", async () => {
     const resolved = new Map<string, ResolvedChange>([
       [

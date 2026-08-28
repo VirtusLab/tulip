@@ -144,6 +144,19 @@ describe("generateCategories", () => {
     expect(result.sessionId).toBe("abc");
   });
 
+  it("keeps the code-assigned id even if a parsed proposal carries a stray 'id' field", async () => {
+    // CATEGORY_SCHEMA has no additionalProperties:false, so an extra "id" key on the model's
+    // reply isn't rejected — assignCategoryIds must still win, not silently adopt it.
+    const proposals = [{ id: "not-a-real-id", name: "Retry logic", description: "Adds retries." }];
+    const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
+
+    const result = await generateCategories(INPUT, { runClaudeProcess });
+
+    expect(result.categories).toEqual([
+      { id: "c1", name: "Retry logic", description: "Adds retries." },
+    ]);
+  });
+
   it("rejects an empty category list", async () => {
     const runClaudeProcess = vi.fn(async () => envelope({ categories: [] }));
 

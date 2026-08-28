@@ -123,10 +123,11 @@ async function consultOnEach(
       if (existing) {
         outcomes.push({ change, accepted: true, category: existing });
       } else {
-        // Fresh id, never invented by the model — see docs/adr/0005.
+        // Fresh id, never invented by the model — see docs/adr/0005. `id` spread last: a stray
+        // `id` key on the parsed proposal must never override the code-assigned one.
         const acceptedCategory: Category = {
-          id: nextCategoryId(state.categories),
           ...proposedCategory,
+          id: nextCategoryId(state.categories),
         };
         state.categories = [...state.categories, acceptedCategory];
         state.acceptedNewCategories++;
