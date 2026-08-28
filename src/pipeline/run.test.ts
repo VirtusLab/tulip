@@ -102,6 +102,9 @@ function baseDeps(order: string[] = []) {
       order.push("checkout");
       return checkout;
     }),
+    materializeChangeArtifacts: vi.fn(async (): Promise<void> => {
+      order.push("materialize");
+    }),
     generateCategories: vi.fn(async (): Promise<GenerateCategoriesResult> => {
       order.push("phase1");
       return { categories: [{ name: "Greeting", description: "Adds hello()." }], sessionId: "s1" };
@@ -149,7 +152,20 @@ describe("run", () => {
 
     await run(options(), deps);
 
-    expect(order).toEqual(["fetch", "checkout", "phase1", "phase2", "phase3", "render"]);
+    expect(order).toEqual([
+      "fetch",
+      "checkout",
+      "materialize",
+      "phase1",
+      "phase2",
+      "phase3",
+      "render",
+    ]);
+    expect(deps.materializeChangeArtifacts).toHaveBeenCalledWith(
+      await deps.createCheckout.mock.results[0]?.value,
+      expect.objectContaining({ files: expect.any(Array) }),
+      ADDED_FILE_DIFF,
+    );
     expect(deps.generateCategories).toHaveBeenCalledWith(
       {
         title: "Add hello()",
@@ -205,6 +221,7 @@ describe("run", () => {
 
     expect(process.exitCode).toBeUndefined();
     expect(deps.createCheckout).not.toHaveBeenCalled();
+    expect(deps.materializeChangeArtifacts).not.toHaveBeenCalled();
     expect(deps.generateCategories).not.toHaveBeenCalled();
     expect(deps.classifyChanges).not.toHaveBeenCalled();
     expect(deps.explainCategories).not.toHaveBeenCalled();
@@ -407,6 +424,28 @@ describe("run", () => {
         (line) =>
           line.includes("creating checkout failed") &&
           line.includes("fatal: could not fetch head sha"),
+      ),
+    ).toBe(true);
+  });
+
+  it("on a materializeChangeArtifacts failure, names the phase, sets exit code 1, and still cleans up the checkout", async () => {
+    const deps = baseDeps();
+    deps.materializeChangeArtifacts = vi.fn(async (): Promise<void> => {
+      throw new Error("ENOSPC: no space left on device");
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.generateCategories).not.toHaveBeenCalled();
+    const checkout = await deps.createCheckout.mock.results[0]?.value;
+    expect(checkout.cleanup).toHaveBeenCalledTimes(1);
+    const lines = infoLines(deps);
+    expect(
+      lines.some(
+        (line) =>
+          line.includes("materializing change artifacts failed") &&
+          line.includes("ENOSPC: no space left on device"),
       ),
     ).toBe(true);
   });

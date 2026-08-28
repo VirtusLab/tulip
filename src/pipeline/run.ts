@@ -7,6 +7,7 @@ import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
 import { createCheckout, type PrCheckout } from "../github/checkout.js";
+import { materializeChangeArtifacts } from "../github/materialize.js";
 import { fetchPrMetadata, type PrMetadata } from "../github/pr-fetcher.js";
 import type { PrRef } from "../github/pr-url.js";
 import { createLogger, type Logger } from "../logging/logger.js";
@@ -26,6 +27,7 @@ export interface PipelineOptions {
 export interface PipelineDeps {
   fetchPrMetadata?: typeof fetchPrMetadata;
   createCheckout?: typeof createCheckout;
+  materializeChangeArtifacts?: typeof materializeChangeArtifacts;
   generateCategories?: typeof generateCategories;
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
@@ -55,6 +57,8 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const logger = deps.logger ?? createLogger({ verbose: options.verbose });
   const doFetchPrMetadata = deps.fetchPrMetadata ?? fetchPrMetadata;
   const doCreateCheckout = deps.createCheckout ?? createCheckout;
+  const doMaterializeChangeArtifacts =
+    deps.materializeChangeArtifacts ?? materializeChangeArtifacts;
   const doGenerateCategories = deps.generateCategories ?? generateCategories;
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
@@ -89,6 +93,11 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     // const (rather than reading `checkout.dir` in the closures below) because TypeScript can't
     // narrow a mutated outer `let` across a closure boundary.
     const checkoutDir = checkout.dir;
+
+    logger.debug("materializing change artifacts...");
+    await runPhase("materializing change artifacts", () =>
+      doMaterializeChangeArtifacts(checkout as PrCheckout, diff, metadata.diff),
+    );
 
     logger.info("phase 1: generating categories...");
     const phase1 = await runPhase("phase 1 (generating categories)", () =>
