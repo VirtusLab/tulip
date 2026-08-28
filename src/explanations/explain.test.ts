@@ -9,7 +9,7 @@ import type { ExplainCategoryInput } from "./types.js";
 
 const MAX_EXCERPT_CHARS = config.limits.maxExcerptChars;
 
-const CATEGORY: Category = { name: "Retry logic", description: "Adds backoff retries." };
+const CATEGORY: Category = { id: "c1", name: "Retry logic", description: "Adds backoff retries." };
 
 function change(overrides: Partial<ClassifiableChange> = {}): ClassifiableChange {
   return {

@@ -71,8 +71,8 @@ function fakeCheckout(): PrCheckout & { cleanup: ReturnType<typeof vi.fn> } {
 
 function classificationResult(): ClassifyChangesResult {
   return {
-    categories: [{ name: "Greeting", description: "Adds hello()." }],
-    assignments: new Map([[CHANGE_ID, [{ category: "Greeting", codeType: "production" }]]]),
+    categories: [{ id: "c1", name: "Greeting", description: "Adds hello()." }],
+    assignments: new Map([[CHANGE_ID, [{ category: "c1", codeType: "production" }]]]),
     ignoredChangeIds: new Set(),
     changesById: new Map([
       [
@@ -107,7 +107,10 @@ function baseDeps(order: string[] = []) {
     }),
     generateCategories: vi.fn(async (): Promise<GenerateCategoriesResult> => {
       order.push("phase1");
-      return { categories: [{ name: "Greeting", description: "Adds hello()." }], sessionId: "s1" };
+      return {
+        categories: [{ id: "c1", name: "Greeting", description: "Adds hello()." }],
+        sessionId: "s1",
+      };
     }),
     classifyChanges: vi.fn(async () => {
       order.push("phase2");
@@ -115,7 +118,12 @@ function baseDeps(order: string[] = []) {
     }),
     explainCategories: vi.fn(async (): Promise<CategoryExplanation[]> => {
       order.push("phase3");
-      return [{ category: { name: "Greeting", description: "Adds hello()." }, markdown: "prose" }];
+      return [
+        {
+          category: { id: "c1", name: "Greeting", description: "Adds hello()." },
+          markdown: "prose",
+        },
+      ];
     }),
     renderExplanations: vi.fn(async (): Promise<AssembleResult> => {
       order.push("render");
@@ -178,7 +186,7 @@ describe("run", () => {
     expect(deps.classifyChanges).toHaveBeenCalledWith(
       {
         diff: expect.anything(),
-        categories: [{ name: "Greeting", description: "Adds hello()." }],
+        categories: [{ id: "c1", name: "Greeting", description: "Adds hello()." }],
         phase1SessionId: "s1",
       },
       { cwd: "/tmp/tulip-checkout" },
@@ -192,7 +200,7 @@ describe("run", () => {
         headSha: "head-sha",
         categorySets: [
           expect.objectContaining({
-            category: { name: "Greeting", description: "Adds hello()." },
+            category: { id: "c1", name: "Greeting", description: "Adds hello()." },
           }),
         ],
       }),

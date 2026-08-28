@@ -8,7 +8,7 @@ import { renderPage } from "./template.js";
 
 function explanation(overrides: Partial<CategoryExplanation> = {}): CategoryExplanation {
   return {
-    category: { name: "Auth", description: "Authentication changes" },
+    category: { id: "c1", name: "Auth", description: "Authentication changes" },
     markdown: "## Production code\n\nDoes the thing.\n\n## Test code\n\nTests the thing.\n",
     ...overrides,
   };
@@ -38,8 +38,8 @@ describe("renderPage", () => {
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs: new Map(),
       explanations: [
-        explanation({ category: { name: "First", description: "" } }),
-        explanation({ category: { name: "Second", description: "" } }),
+        explanation({ category: { id: "c1", name: "First", description: "" } }),
+        explanation({ category: { id: "c2", name: "Second", description: "" } }),
       ],
     });
     const root = parse(html);
@@ -152,9 +152,9 @@ describe("renderPage", () => {
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs: new Map(),
       explanations: [
-        explanation({ category: { name: "Auth", description: "" } }),
+        explanation({ category: { id: "c1", name: "Auth", description: "" } }),
         explanation({
-          category: { name: "Logging", description: "" },
+          category: { id: "c1", name: "Logging", description: "" },
           markdown: "Just prose.",
         }),
       ],
@@ -323,7 +323,11 @@ describe("renderPage XSS safety", () => {
       fileDiffs: new Map(),
       explanations: [
         explanation({
-          category: { name: "<script>alert(1)</script>", description: "<img src=x onerror=1>" },
+          category: {
+            id: "c1",
+            name: "<script>alert(1)</script>",
+            description: "<img src=x onerror=1>",
+          },
           markdown: "Body.",
         }),
       ],

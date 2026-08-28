@@ -26,12 +26,13 @@ function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessRe
   };
 }
 
-const CATEGORIES: Category[] = [{ name: "A", description: "first" }];
+const CATEGORIES: Category[] = [{ id: "c1", name: "A", description: "first" }];
 
 describe("classifyChanges", () => {
   it("runs classification, escape hatch and coverage repair end to end", async () => {
-    // c1: classified directly. c2: "none" -> accepted as new category "B", re-classified.
-    // c3: "ignore". c4: missing from every reply until the coverage-repair round.
+    // change "c1": classified directly under category id c1. change "c2": "none" -> accepted as
+    // new category "B" (assigned id c2), re-classified under it. change "c3": "ignore". change
+    // "c4": missing from every reply until the coverage-repair round.
     const diff: ParsedDiff = {
       files: [
         fileWithChange("c1"),
@@ -44,10 +45,12 @@ describe("classifyChanges", () => {
     let classifierResumeCount = 0;
     const runClaudeProcess = vi.fn(async (args: string[], input: string) => {
       if (args.includes("--model")) {
+        // Classifier replies with the category id ("c1"), not the name ("A") — see
+        // docs/adr/0005.
         return envelope(
           {
             classifications: [
-              { changeId: "c1", assignments: [{ category: "A", codeType: "production" }] },
+              { changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] },
               {
                 changeId: "c2",
                 assignments: [
@@ -68,7 +71,8 @@ describe("classifyChanges", () => {
 
       const resumeId = args[args.indexOf("--resume") + 1];
       if (resumeId === "phase1-0") {
-        // consultOnCategory, resuming the phase-1 session.
+        // consultOnCategory, resuming the phase-1 session. The model proposes/refines by name
+        // only — it never assigns an id (see docs/adr/0005); escape-hatch.ts assigns "c2" itself.
         expect(input).toContain("B");
         return envelope(
           { accept: true, category: { name: "B", description: "refined" } },
@@ -78,12 +82,13 @@ describe("classifyChanges", () => {
 
       classifierResumeCount++;
       if (classifierResumeCount === 1) {
-        // Escape-hatch retry, for c2 only.
+        // Escape-hatch retry, for c2 only. The resume prompt must tell the classifier the new
+        // category's id ("c2"), and the reply uses that id.
         expect(input).toContain("c2");
         return envelope(
           {
             classifications: [
-              { changeId: "c2", assignments: [{ category: "B", codeType: "test" }] },
+              { changeId: "c2", assignments: [{ category: "c2", codeType: "test" }] },
             ],
           },
           "classifier-2",
@@ -94,7 +99,7 @@ describe("classifyChanges", () => {
       return envelope(
         {
           classifications: [
-            { changeId: "c4", assignments: [{ category: "A", codeType: "production" }] },
+            { changeId: "c4", assignments: [{ category: "c1", codeType: "production" }] },
           ],
         },
         "classifier-3",
@@ -107,12 +112,12 @@ describe("classifyChanges", () => {
     );
 
     expect(result.categories).toEqual([
-      { name: "A", description: "first" },
-      { name: "B", description: "refined" },
+      { id: "c1", name: "A", description: "first" },
+      { id: "c2", name: "B", description: "refined" },
     ]);
-    expect(result.assignments.get("c1")).toEqual([{ category: "A", codeType: "production" }]);
-    expect(result.assignments.get("c2")).toEqual([{ category: "B", codeType: "test" }]);
-    expect(result.assignments.get("c4")).toEqual([{ category: "A", codeType: "production" }]);
+    expect(result.assignments.get("c1")).toEqual([{ category: "c1", codeType: "production" }]);
+    expect(result.assignments.get("c2")).toEqual([{ category: "c2", codeType: "test" }]);
+    expect(result.assignments.get("c4")).toEqual([{ category: "c1", codeType: "production" }]);
     expect(result.assignments.has("c3")).toBe(false);
     expect(result.ignoredChangeIds).toEqual(new Set(["c3"]));
     expect([...result.changesById.keys()].sort()).toEqual(["c1", "c2", "c3", "c4"]);
@@ -120,7 +125,8 @@ describe("classifyChanges", () => {
   });
 
   it("threads a category accepted while resolving batch 1 into batch 2's prompt", async () => {
-    // 20 changes in batch 1 (one proposes "none" -> accepted as "B"), 5 more in batch 2.
+    // 20 changes in batch 1 (one proposes "none" -> accepted as "B", assigned id c2), 5 more in
+    // batch 2.
     const batch1Ids = Array.from({ length: 20 }, (_, i) => `b1-${i}`);
     const batch2Ids = Array.from({ length: 5 }, (_, i) => `b2-${i}`);
     const diff: ParsedDiff = {
@@ -144,7 +150,7 @@ describe("classifyChanges", () => {
                   },
                 ],
               }
-            : { changeId: id, assignments: [{ category: "A", codeType: "production" }] },
+            : { changeId: id, assignments: [{ category: "c1", codeType: "production" }] },
         );
         return envelope({ classifications }, "classifier-1");
       }
@@ -156,22 +162,24 @@ describe("classifyChanges", () => {
         );
       }
       if (call === 3) {
-        // Escape-hatch reclassify, for b1-0 only, before batch 2 is ever asked.
+        // Escape-hatch reclassify, for b1-0 only, before batch 2 is ever asked. Replies with the
+        // newly assigned id "c2".
         return envelope(
           {
             classifications: [
-              { changeId: "b1-0", assignments: [{ category: "B", codeType: "production" }] },
+              { changeId: "b1-0", assignments: [{ category: "c2", codeType: "production" }] },
             ],
           },
           "classifier-2",
         );
       }
-      // Batch 2's prompt: must already list "B", accepted while resolving batch 1.
+      // Batch 2's prompt: must already list "B" (id c2), accepted while resolving batch 1.
       expect(input).toContain("B");
       expect(input).toContain("refined");
+      expect(input).toContain("c2");
       const classifications = batch2Ids.map((id) => ({
         changeId: id,
-        assignments: [{ category: "A", codeType: "production" }],
+        assignments: [{ category: "c1", codeType: "production" }],
       }));
       return envelope({ classifications }, "classifier-3");
     });
@@ -183,9 +191,9 @@ describe("classifyChanges", () => {
 
     expect(runClaudeProcess).toHaveBeenCalledTimes(4);
     expect(result.categories).toEqual([
-      { name: "A", description: "first" },
-      { name: "B", description: "refined" },
+      { id: "c1", name: "A", description: "first" },
+      { id: "c2", name: "B", description: "refined" },
     ]);
-    expect(result.assignments.get("b1-0")).toEqual([{ category: "B", codeType: "production" }]);
+    expect(result.assignments.get("b1-0")).toEqual([{ category: "c2", codeType: "production" }]);
   });
 });
