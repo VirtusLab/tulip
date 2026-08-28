@@ -35,8 +35,7 @@ export interface CreateCheckoutOptions {
 /**
  * Creates a local checkout containing just enough history to read any file at the PR's base or
  * head revision, with the head revision's working tree checked out (so a claude session's
- * Read/Grep/Glob tools, and its allowlisted read-only git commands, see real files — see
- * src/claude/runner.ts). Fetches both commits shallowly (depth {@link config}.limits
+ * Read/Grep/Glob tools see real files). Fetches both commits shallowly (depth {@link config}.limits
  * .checkoutFetchDepth) by SHA, so it works even when the base/head branches have since moved or
  * been deleted.
  */
