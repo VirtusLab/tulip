@@ -11,6 +11,7 @@ Remaining tasks, roughly by priority.
 - [x] Central config module for models (per phase), timeouts, retry/cap counts, batch/excerpt/embed sizes — currently constants scattered across modules; optionally expose via CLI flags/env
 
 ## Features (deferred from spec)
+- [ ] Optionally feed phase-1 per-file churn (+/- counts) or diffs to sharpen attention ordering (needs CategoryInputFile + diff-stats plumbing)
 - [ ] Checkpointing & resumability of a partially-completed run (spec: "a later concern")
 - [ ] Surface per-run LLM cost (envelopes carry `total_cost_usd`; sum and log it)
 - [ ] Category-level progress for phase 3 in non-verbose mode is minimal; consider a progress line per review round
