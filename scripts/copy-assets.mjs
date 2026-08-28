@@ -24,4 +24,25 @@ await cp(mermaidSrc, join(vendorDir, "mermaid.min.js"));
 // package (unlike mermaid) ships no prebuilt browser bundle to copy.
 await buildHljsBundle(join(vendorDir, "highlight.min.js"));
 
+// Self-hosted webfonts (see style.css's @font-face rules) — also refreshed here, not checked
+// in. Each @fontsource package ships every weight/style/subset as separate variable-font
+// woff2 files; only the "wght"-axis (no optical-size axis — smaller file), non-italic, latin
+// subset is copied, since that's all this page needs (docs/adr/0004). The OFL requires the
+// license file travel with the font, so it's copied alongside each woff2.
+const fontsDir = join(vendorDir, "fonts");
+await mkdir(fontsDir, { recursive: true });
+const FONTS = [
+  { pkg: "@fontsource-variable/inter", woff2: "inter-latin-wght-normal.woff2", license: "inter" },
+  {
+    pkg: "@fontsource-variable/jetbrains-mono",
+    woff2: "jetbrains-mono-latin-wght-normal.woff2",
+    license: "jetbrains-mono",
+  },
+];
+for (const font of FONTS) {
+  const pkgDir = fileURLToPath(new URL(`../node_modules/${font.pkg}/`, import.meta.url));
+  await cp(join(pkgDir, "files", font.woff2), join(fontsDir, font.woff2));
+  await cp(join(pkgDir, "LICENSE"), join(fontsDir, `${font.license}-LICENSE.txt`));
+}
+
 await cp(src, dest, { recursive: true });

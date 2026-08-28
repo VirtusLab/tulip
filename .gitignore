@@ -10,3 +10,7 @@ dist/
 # demand by tests that need it) — see those scripts' comments. Not hand-maintained, so not
 # checked in.
 /src/rendering/assets/vendor/highlight.min.js
+
+# Copied from the @fontsource-variable/* devDependencies by scripts/copy-assets.mjs on every
+# build — see that script's comment. Not hand-maintained, so not checked in.
+/src/rendering/assets/vendor/fonts/
