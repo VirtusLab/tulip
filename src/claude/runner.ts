@@ -1,3 +1,4 @@
+import { config } from "../config.js";
 import { claudeConcurrencyLimiter } from "./concurrency.js";
 import { ClaudeOutputError } from "./errors.js";
 import { type ClaudeProcessRunner, runClaudeProcess } from "./exec.js";
@@ -102,6 +103,10 @@ function buildArgs(invocation: ClaudeInvocation): string[] {
     "json",
     "--json-schema",
     JSON.stringify(invocation.schema),
+    // Read-only git access (diff/show/log/blame) via Bash, on top of a session's default
+    // Read/Grep/Glob — NOT blanket Bash (see src/config.ts's `claude.allowedTools` doc comment).
+    "--allowedTools",
+    ...config.claude.allowedTools,
   ];
   if (invocation.model) {
     args.push("--model", invocation.model);
