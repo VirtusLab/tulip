@@ -1,0 +1,93 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const ASSETS_DIR = fileURLToPath(new URL("./assets", import.meta.url));
+
+function readAsset(name: string): string {
+  return readFileSync(`${ASSETS_DIR}/${name}`, "utf8");
+}
+
+// Structural/content checks on the bundled CSS/JS assets (layout, palette, highlighter wiring)
+// that don't need a real browser to verify — see docs/adr/0004 for what these implement.
+describe("style.css", () => {
+  const css = readAsset("style.css");
+
+  it("keeps prose elements narrow while letting diff/code blocks use the full width", () => {
+    // Prose elements get their own centered measure...
+    expect(css).toMatch(/--prose-measure:\s*\d/);
+    expect(css).toMatch(
+      /main\s+:is\([^)]*\bp\b[^)]*\)\s*\{[^}]*max-width:\s*var\(--prose-measure\)/,
+    );
+    // ...while `.snippet` (the diff block) is never given that narrow measure.
+    const snippetRuleMatch = css.match(/\.snippet\s*\{[^}]*\}/);
+    expect(snippetRuleMatch?.[0]).toBeDefined();
+    expect(snippetRuleMatch?.[0]).not.toContain("--prose-measure");
+  });
+
+  it("gives code a smaller font size than prose", () => {
+    expect(css).toMatch(/--code-font-size:\s*0\.\d+rem/);
+    expect(css).toMatch(/body\s*\{[^}]*font-size:\s*16px/);
+  });
+
+  it("only lets diff/code containers scroll horizontally, never the page", () => {
+    expect(css).toMatch(/\.snippet-scroll\s*\{[^}]*overflow-x:\s*auto/);
+    expect(css).not.toMatch(/\bbody\s*\{[^}]*overflow-x:\s*auto/);
+  });
+
+  it("defines a full palette for both light and dark themes", () => {
+    for (const variable of ["--bg", "--fg", "--link", "--accent", "--add-fg", "--remove-fg"]) {
+      // Once in :root (light), and again in both the prefers-color-scheme and [data-theme="dark"]
+      // dark blocks.
+      const occurrences = css.split(variable).length - 1;
+      expect(
+        occurrences,
+        `${variable} should be defined for light and dark`,
+      ).toBeGreaterThanOrEqual(3);
+    }
+    expect(css).toContain("@media (prefers-color-scheme: dark)");
+    expect(css).toContain(':root[data-theme="dark"]');
+  });
+
+  it("defines a highlight.js theme keyed off the page's own palette", () => {
+    for (const cls of [".hljs-keyword", ".hljs-string", ".hljs-comment", ".hljs-title"]) {
+      expect(css).toContain(cls);
+    }
+    // Themed with this page's CSS variables, not hardcoded hex colors copied from a bundled
+    // highlight.js theme.
+    const hljsSection = css.slice(css.indexOf(".hljs {"));
+    expect(hljsSection).toMatch(/var\(--/);
+  });
+
+  it("references no external network resources", () => {
+    expect(css).not.toMatch(/https?:\/\//);
+    expect(css).not.toMatch(/@import/);
+    expect(css).not.toContain("cdn.");
+  });
+});
+
+describe("app.js", () => {
+  const js = readAsset("app.js");
+
+  it("wires up highlight.js via its safe, escaping element API", () => {
+    expect(js).toContain("window.hljs.highlightElement");
+    // Never hand raw/untrusted text to innerHTML directly — highlight.js's own safe API does
+    // that internally, from the element's already-escaped textContent.
+    expect(js).not.toMatch(/\.innerHTML\s*=\s*(?!"")[a-zA-Z_]/);
+  });
+
+  it("re-highlights newly-inserted rows after context expansion", () => {
+    const start = js.indexOf("function setupSnippetExpansion");
+    const end = js.indexOf("\n  function ", start + 1);
+    expect(js.slice(start, end)).toContain("highlightSnippetContainer");
+  });
+
+  it("guesses the diff language from data-lang and skips unknown languages", () => {
+    expect(js).toContain('container.getAttribute("data-lang")');
+    expect(js).toContain("window.hljs.getLanguage(lang)");
+  });
+
+  it("references no external network resources", () => {
+    expect(js).not.toMatch(/https?:\/\//);
+  });
+});
