@@ -32,7 +32,7 @@ function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessRe
 
 function baseState(overrides: Partial<ClassificationState> = {}): ClassificationState {
   return {
-    categories: [{ name: "Retry logic", description: "Adds backoff retries." }],
+    categories: [{ id: "c1", name: "Retry logic", description: "Adds backoff retries." }],
     phase1SessionId: "phase1-session",
     classifierSessionId: "classifier-session",
     acceptedNewCategories: 0,
@@ -87,10 +87,11 @@ describe("resolveNoneClassifications", () => {
       // classifier resume
       expect(input).toContain("accepted");
       expect(input).toContain("Metrics");
+      expect(input).toContain("c2"); // the freshly assigned id, per the resume prompt
       return envelope(
         {
           classifications: [
-            { changeId: "c1", assignments: [{ category: "Metrics", codeType: "production" }] },
+            { changeId: "c1", assignments: [{ category: "c2", codeType: "production" }] },
           ],
         },
         "classifier-session-2",
@@ -107,9 +108,10 @@ describe("resolveNoneClassifications", () => {
 
     expect(result.get("c1")).toEqual({
       kind: "categorized",
-      assignments: [{ category: "Metrics", codeType: "production" }],
+      assignments: [{ category: "c2", codeType: "production" }],
     });
     expect(state.categories).toContainEqual({
+      id: "c2",
       name: "Metrics",
       description: "Adds counters (refined).",
     });
@@ -140,7 +142,7 @@ describe("resolveNoneClassifications", () => {
       return envelope(
         {
           classifications: [
-            { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "test" }] },
+            { changeId: "c1", assignments: [{ category: "c1", codeType: "test" }] },
           ],
         },
         "classifier-session-2",
@@ -157,11 +159,11 @@ describe("resolveNoneClassifications", () => {
 
     expect(result.get("c1")).toEqual({
       kind: "categorized",
-      assignments: [{ category: "Retry logic", codeType: "test" }],
+      assignments: [{ category: "c1", codeType: "test" }],
     });
     expect(state.acceptedNewCategories).toBe(0);
     expect(state.categories).toEqual([
-      { name: "Retry logic", description: "Adds backoff retries." },
+      { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
     ]);
   });
 
@@ -180,7 +182,7 @@ describe("resolveNoneClassifications", () => {
       envelope(
         {
           classifications: [
-            { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "production" }] },
+            { changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] },
           ],
         },
         "classifier-session-2",
@@ -226,11 +228,13 @@ describe("resolveNoneClassifications", () => {
           "phase1-session",
         );
       }
+      // "One" gets accepted and assigned the next id, "c2"; c2's proposal is auto-rejected (cap
+      // hit), so it falls back to picking the pre-existing "c1".
       return envelope(
         {
           classifications: [
-            { changeId: "c1", assignments: [{ category: "One", codeType: "production" }] },
-            { changeId: "c2", assignments: [{ category: "Retry logic", codeType: "production" }] },
+            { changeId: "c1", assignments: [{ category: "c2", codeType: "production" }] },
+            { changeId: "c2", assignments: [{ category: "c1", codeType: "production" }] },
           ],
         },
         "classifier-session-2",
@@ -324,7 +328,7 @@ describe("resolveNoneClassifications", () => {
       return envelope(
         {
           classifications: [
-            { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "production" }] },
+            { changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] },
           ],
         },
         "classifier-session-2",
@@ -340,12 +344,12 @@ describe("resolveNoneClassifications", () => {
     );
 
     expect(state.categories).toEqual([
-      { name: "Retry logic", description: "Adds backoff retries." },
+      { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
     ]);
     expect(state.acceptedNewCategories).toBe(0);
     expect(result.get("c1")).toEqual({
       kind: "categorized",
-      assignments: [{ category: "Retry logic", codeType: "production" }],
+      assignments: [{ category: "c1", codeType: "production" }],
     });
   });
 

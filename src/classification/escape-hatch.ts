@@ -1,13 +1,13 @@
 import { consultOnCategory } from "../categories/consult.js";
-import type { Category } from "../categories/types.js";
+import { type Category, nextCategoryId } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
-import { categoryNamesMatch } from "./category-name.js";
+import { categoryNamesMatch } from "./category-match.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
 import { buildEscapeHatchResumePrompt, type EscapeHatchOutcome } from "./prompt.js";
 import type { ClassifiableChange } from "./types.js";
-import { CLASSIFY_BATCH_SCHEMA, type ClassifyBatchResponse } from "./wire.js";
+import { buildClassifyBatchSchema, type ClassifyBatchResponse } from "./wire.js";
 
 /** Cap on new categories accepted per run — the spec sets no cap; this exists to bound runaway
  * escape-hatch consultation. After the cap, further "none" proposals are treated as rejected
@@ -59,7 +59,7 @@ export async function resolveNoneClassifications(
   const response = await resumeSession<ClassifyBatchResponse>(
     {
       sessionId: state.classifierSessionId,
-      schema: CLASSIFY_BATCH_SCHEMA,
+      schema: buildClassifyBatchSchema(state.categories),
       prompt: buildEscapeHatchResumePrompt(state.categories, outcomes),
     },
     deps,
@@ -113,16 +113,21 @@ async function consultOnEach(
     state.phase1SessionId = consultation.sessionId;
 
     if (consultation.accept && consultation.category) {
-      const acceptedCategory = consultation.category;
+      const proposedCategory = consultation.category;
       // A category whose (normalized) name already matches one on the list isn't actually new —
       // appending it anyway would produce a duplicate category and, downstream, duplicate
       // sections for the same name. Treat it as an accept of the existing category instead.
       const existing = state.categories.find((category) =>
-        categoryNamesMatch(category.name, acceptedCategory.name),
+        categoryNamesMatch(category.name, proposedCategory.name),
       );
       if (existing) {
         outcomes.push({ change, accepted: true, category: existing });
       } else {
+        // Fresh id, never invented by the model — see docs/adr/0005.
+        const acceptedCategory: Category = {
+          id: nextCategoryId(state.categories),
+          ...proposedCategory,
+        };
         state.categories = [...state.categories, acceptedCategory];
         state.acceptedNewCategories++;
         outcomes.push({ change, accepted: true, category: acceptedCategory });
