@@ -61,10 +61,12 @@ column. `.snippet` and fenced prose code get no such constraint, so they use the
 width. Only `.snippet-scroll` (wrapping the diff table) and `pre` get `overflow-x: auto`;
 nothing sets it on `body`.
 
-**Typography and palette: system font stacks, GitHub-derived colors.** No vendored
-webfont — a strong system stack (`ui-sans-serif, -apple-system, ... "Inter", ...` /
+**Typography and palette: ~~system font stacks~~ self-hosted webfonts (see the "self-hosted
+webfonts" amendment below) over a system-font fallback stack, GitHub-derived colors.** A
+strong system stack (`ui-sans-serif, -apple-system, ... "Inter", ...` /
 `ui-monospace, "SF Mono", "Cascadia Code", ...`) looks good on every major OS this tool
-runs on and adds zero asset weight. The palette (light and dark) intentionally follows
+runs on; it's now the *fallback* tier behind the vendored fonts rather than the whole
+story. The palette (light and dark) intentionally follows
 GitHub's own diff/link colors: this page's audience already reads GitHub diffs daily, so
 add/remove/link hues carry existing muscle memory. `--code-font-size` (0.8125rem) is
 smaller than prose (16px body). highlight.js's token classes (`.hljs-keyword`,
@@ -90,9 +92,13 @@ both themes, in the same code path that already restores+reruns on toggle.
 - **`100vw`/negative-margin "breakout" for `.snippet`**, keeping `main` narrow. Rejected
   for the horizontal-scrollbar-width gotcha noted above, and because it's strictly more
   code than just widening `main` and narrowing prose elements individually.
-- **Vendoring a webfont.** Rejected — adds real weight and complexity (subsetting,
+- ~~**Vendoring a webfont.** Rejected — adds real weight and complexity (subsetting,
   license, embedding) for a marginal gain over a well-chosen system stack, whose main
-  targets (macOS/Windows/Linux desktops) already ship strong UI fonts.
+  targets (macOS/Windows/Linux desktops) already ship strong UI fonts.~~ **Superseded** —
+  see "Amendment: self-hosted webfonts" below. A user decision (backed by research into
+  current OSS options) judged the visual/consistency gain worth it, and the actual
+  vendored weight turned out much smaller than "adds real weight" assumed (see the
+  amendment for the number).
 
 ## Consequences
 
@@ -185,3 +191,73 @@ elements. Fixed in the same unit:
   `SUPPORTED_LANGUAGES` (every language name it can produce) is exactly the set
   `scripts/hljs-entry.mjs` registers — a mismatch either way silently breaks highlighting
   for one language or ships dead weight in the vendored bundle.
+
+## Amendment: self-hosted webfonts
+
+### Context
+
+The original decision above used only system font stacks, explicitly rejecting a
+vendored webfont for weight/complexity reasons (see the struck-through bullet in
+"Alternatives considered"). A follow-up user decision, backed by research into current
+open-source options, judged a real (not system-substitute) typeface worth it for a
+reviewer-facing tool people look at for extended periods — **Inter** for prose and
+**JetBrains Mono** for code, both widely regarded, actively maintained, SIL OFL 1.1
+("free and open... may be shared, modified and redistributed") open-source fonts
+designed for exactly these roles (Inter: UI/text legibility at small sizes; JetBrains
+Mono: designed specifically for reading code, with generous letter spacing and
+disambiguated similar characters like `0`/`O`/`l`/`1`).
+
+### Decision
+
+Self-host both, vendored the same way as `mermaid`/`highlight.js` — copied from a
+devDependency at build time, not committed, so a fresh clone still produces a complete
+page after `pnpm install && pnpm build`. Specifically:
+
+- **`@fontsource-variable/inter` and `@fontsource-variable/jetbrains-mono`** (new
+  devDependencies) — the variable-font builds, since a single variable-weight file
+  covers every weight this page uses (400 body text, 600-650 headings/summaries, 700
+  bold) more cheaply than shipping several static-weight files.
+- **Latin subset, weight-axis-only file, non-italic.** Each package ships every
+  subset (cyrillic, greek, vietnamese, ...) and axis combination (weight-only vs.
+  weight+optical-size) as separate woff2 files; `scripts/copy-assets.mjs` copies just
+  `*-latin-wght-normal.woff2` from each — the smallest single file that covers this
+  page's actual content (English prose, code, GitHub URLs) and every weight it uses.
+  Skipping the optical-size axis (Inter's `standard`/`opsz` files) saves ~24KB on Inter
+  alone (48KB vs. 72KB) for a page that never varies optical size. No italic file is
+  vendored either — markdown `*emphasis*` still renders in the browser's synthesized
+  (auto-slanted) oblique, a common and unremarkable tradeoff, rather than doubling the
+  font payload for the occasional `<em>`.
+- **Hand-written `@font-face` rules in `style.css`**, not a copy of `@fontsource`'s own
+  CSS (which references its own multi-subset file layout) — one `@font-face` per font,
+  `src: url("vendor/fonts/....woff2") format("woff2-variations")`, `font-display: swap`
+  (avoid invisible text while the local file loads — a font `<link rel=preload>` isn't
+  worth it for a same-origin `file://` load), local path relative to `style.css` itself.
+  `--font-sans`/`--font-mono` gain `"Inter Variable"`/`"JetBrains Mono Variable"` (the
+  `@font-face` family names, matching `@fontsource`'s own convention so they can't
+  collide with a same-named static font already installed on the reader's system) as
+  the *first* entry, ahead of the existing system stack — the system fonts are now a
+  fallback for the brief `font-display: swap` flash and for any environment that
+  somehow can't load a local woff2, not the primary choice.
+- **Ligatures left at the font's default** — no `font-variant-ligatures`/
+  `font-feature-settings` override. JetBrains Mono's ligatures (e.g. `!=`, `=>`) are a
+  reasonable default for a code-reading tool; nothing here disables or forces them.
+- **Licensing.** OFL 1.1 requires the license text travel with the font. Each
+  package's `LICENSE` file is copied alongside its woff2 into
+  `assets/vendor/fonts/{inter,jetbrains-mono}-LICENSE.txt` — not referenced by the page
+  (fonts aren't "sold... by themselves" here, bundled with the tool's own output), but
+  present in the shipped output directory per the license's terms.
+
+### Consequences
+
+- **Added page weight: ~87KB** (`inter-latin-wght-normal.woff2` 48,256 bytes +
+  `jetbrains-mono-latin-wght-normal.woff2` 40,404 bytes = 88,660 bytes), i.e. what a
+  browser actually fetches to render the page — comfortably inside "a few hundred KB".
+  The two `LICENSE.txt` files (~9KB combined) add to the shipped output directory but
+  are never fetched by the page itself.
+- New devDependencies: `@fontsource-variable/inter`, `@fontsource-variable/jetbrains-mono`.
+- `scripts/copy-assets.mjs` gains a font-copying step (mirrors the mermaid/highlight.js
+  vendoring exactly: copy from `node_modules`, into `assets/vendor/fonts/`, gitignored).
+- Still zero network references: `@font-face src` is a relative local path, verified by
+  both a static content test (`assets.test.ts`) and a real generated page executed in
+  `jsdom` with `runScripts: "dangerously"` (no console/jsdom errors, `--font-sans`
+  resolves with `"Inter Variable"` first).
