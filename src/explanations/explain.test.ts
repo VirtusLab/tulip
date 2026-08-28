@@ -19,6 +19,7 @@ function change(overrides: Partial<ClassifiableChange> = {}): ClassifiableChange
     side: "head",
     range: { start: 10, end: 12 },
     excerpt: "+line1\n+line2\n+line3",
+    lines: ["+line1", "+line2", "+line3"],
     ...overrides,
   };
 }
@@ -29,8 +30,10 @@ function baseInput(overrides: Partial<ExplainCategoryInput> = {}): ExplainCatego
     prDescription: "Retries transient network failures with backoff.",
     category: CATEGORY,
     production: [change()],
-    test: [change({ id: "c2", path: "src/fetch.test.ts", excerpt: "+test1" })],
+    test: [change({ id: "c2", path: "src/fetch.test.ts", excerpt: "+test1", lines: ["+test1"] })],
     diffThreshold: 100,
+    baseSha: "base-sha",
+    headSha: "head-sha",
     ...overrides,
   };
 }
@@ -68,14 +71,32 @@ describe("explainCategory", () => {
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("opus");
   });
 
-  it("includes the full diff excerpt for a change whose range is at or under the threshold", async () => {
+  it("tells the session its cwd is the head checkout, and gives both base/head SHAs", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ markdown: "# explanation" }),
+    );
+
+    await explainCategory(baseInput({ baseSha: "abc123base", headSha: "def456head" }), {
+      runClaudeProcess,
+    });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toContain("abc123base");
+    expect(prompt).toContain("def456head");
+    expect(prompt).toMatch(/working directory is a checkout/);
+    expect(prompt).toMatch(/git diff/);
+    expect(prompt).toMatch(/git log/);
+    expect(prompt).toMatch(/git blame/);
+  });
+
+  it("includes the full diff for a change whose range is at or under the threshold", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
 
     // range is 10-12 (3 lines, from the `change()` helper's default) — under diffThreshold: 5.
     await explainCategory(
-      baseInput({ production: [change({ excerpt: "+kept line" })], diffThreshold: 5 }),
+      baseInput({ production: [change({ lines: ["+kept line"] })], diffThreshold: 5 }),
       { runClaudeProcess },
     );
 
@@ -83,56 +104,63 @@ describe("explainCategory", () => {
     expect(prompt).toContain("+kept line");
   });
 
-  it("references only file/side/line-range when the true range exceeds the threshold, even if the excerpt itself is short", async () => {
+  it("references only file/side/line-range when the true range exceeds the threshold, even if the diff itself is short", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
-    // The excerpt is short, but the change's own line range (1-500) is what's measured against
-    // the threshold — a short excerpt must not make a genuinely huge change look quotable.
-    const shortExcerpt = "+kept line";
+    // The diff is short, but the change's own line range (1-500) is what's measured against
+    // the threshold — a short diff must not make a genuinely huge change look quotable.
+    const shortLine = "+kept line";
 
     await explainCategory(
       baseInput({
-        production: [change({ range: { start: 1, end: 500 }, excerpt: shortExcerpt })],
+        production: [change({ range: { start: 1, end: 500 }, lines: [shortLine] })],
         diffThreshold: 3,
       }),
       { runClaudeProcess },
     );
 
     const prompt = runClaudeProcess.mock.calls[0]?.[1];
-    expect(prompt).not.toContain(shortExcerpt);
+    expect(prompt).not.toContain(shortLine);
     expect(prompt).toContain("src/fetch.ts");
     expect(prompt).toContain("side head");
     expect(prompt).toContain("lines 1-500");
     expect(prompt).toMatch(/omitted/);
   });
 
-  it("references only file/side/line-range when the excerpt was truncated, even under the threshold", async () => {
+  it("includes the full diff even when the classification excerpt was truncated, as long as the line count is under the threshold", async () => {
+    // Regression test: formatChange must read from `change.lines` (the full diff), never from
+    // `change.excerpt` — phase 2 truncates excerpts by character count (config.limits
+    // .maxExcerptChars) for cheap classification prompts, which is unrelated to this
+    // line-count threshold and must not cause an in-threshold change to be omitted here.
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
     const longLine = `+${"x".repeat(MAX_EXCERPT_CHARS)}`;
+    const lines = [longLine, "+line2", "+line3"];
     const truncatedExcerpt = buildExcerpt({
       id: "c1",
       path: "src/fetch.ts",
       side: "head",
       range: { start: 10, end: 12 },
-      lines: [longLine],
+      lines,
     });
+    expect(truncatedExcerpt).not.toBe(lines.join("\n")); // sanity: the excerpt really is truncated
 
     await explainCategory(
-      // range is 10-12 (3 lines) — comfortably under diffThreshold: 1000 — but the excerpt is
-      // truncated, so it must still be omitted.
-      baseInput({ production: [change({ excerpt: truncatedExcerpt })], diffThreshold: 1000 }),
+      // range is 10-12 (3 lines) — comfortably under diffThreshold: 1000.
+      baseInput({
+        production: [change({ excerpt: truncatedExcerpt, lines })],
+        diffThreshold: 1000,
+      }),
       { runClaudeProcess },
     );
 
     const prompt = runClaudeProcess.mock.calls[0]?.[1];
-    expect(prompt).not.toContain(truncatedExcerpt);
-    expect(prompt).toContain("src/fetch.ts");
-    expect(prompt).toContain("lines 10-12");
-    expect(prompt).toMatch(/omitted/);
-    expect(prompt).toMatch(/truncated/);
+    expect(prompt).toContain(longLine);
+    expect(prompt).toContain("+line2");
+    expect(prompt).toContain("+line3");
+    expect(prompt).not.toMatch(/omitted/);
   });
 
   it("returns the markdown and session id", async () => {

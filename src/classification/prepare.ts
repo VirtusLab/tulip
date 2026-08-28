@@ -16,6 +16,7 @@ export function prepareClassifiableChanges(diff: ParsedDiff): ClassifiableChange
       side: change.side,
       range: change.range,
       excerpt: buildExcerpt(change),
+      lines: change.lines,
     })),
   );
 }

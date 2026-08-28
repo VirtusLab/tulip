@@ -47,6 +47,7 @@ describe("prepareClassifiableChanges", () => {
         side: "head",
         range: { start: 1, end: 1 },
         excerpt: "+new line",
+        lines: ["+new line"],
       },
       {
         id: "src/b.ts:head:1-2",
@@ -55,6 +56,7 @@ describe("prepareClassifiableChanges", () => {
         side: "head",
         range: { start: 1, end: 2 },
         excerpt: "+line1\n+line2",
+        lines: ["+line1", "+line2"],
       },
     ]);
   });

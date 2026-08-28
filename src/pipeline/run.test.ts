@@ -84,6 +84,7 @@ function classificationResult(): ClassifyChangesResult {
           side: "head",
           range: { start: 1, end: 3 },
           excerpt: "+export function hello() {",
+          lines: ["+export function hello() {"],
         },
       ],
     ]),
@@ -331,6 +332,7 @@ describe("run", () => {
         side: "head" as const,
         range: { start: 1, end: 3 },
         excerpt: "+export function hello() {",
+        lines: ["+export function hello() {"],
       },
     ];
     deps.classifyChanges = vi.fn(async () => {
@@ -362,6 +364,7 @@ describe("run", () => {
         side: "head" as const,
         range: { start: 1, end: 3 },
         excerpt: "+export function hello() {",
+        lines: ["+export function hello() {"],
       },
     ];
     deps.explainCategories = vi.fn(async () => {

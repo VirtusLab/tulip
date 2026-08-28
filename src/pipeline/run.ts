@@ -131,6 +131,8 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           prTitle: metadata.title,
           prDescription: metadata.body,
           diffThreshold: options.diffThreshold,
+          baseSha: metadata.base.sha,
+          headSha: metadata.head.sha,
           categorySets,
         },
         { logger, cwd: checkoutDir },

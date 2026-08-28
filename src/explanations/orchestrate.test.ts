@@ -23,7 +23,7 @@ function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessRe
 }
 
 function change(id: string, path: string, range = { start: 1, end: 3 }): ClassifiableChange {
-  return { id, path, status: "modified", side: "head", range, excerpt: "+line" };
+  return { id, path, status: "modified", side: "head", range, excerpt: "+line", lines: ["+line"] };
 }
 
 function categorySet(
@@ -48,6 +48,8 @@ describe("explainCategories", () => {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
       categorySets: [categorySet(categoryA, [changeA], []), categorySet(categoryB, [changeB], [])],
     };
 
@@ -81,6 +83,8 @@ describe("explainCategories", () => {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
       categorySets: [categorySet(category, production, test)],
     };
 
@@ -128,6 +132,8 @@ describe("explainCategories", () => {
       prTitle: "Big PR",
       prDescription: "Many categories.",
       diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
       categorySets: categories,
     };
 
@@ -166,6 +172,8 @@ describe("explainCategories", () => {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
       categorySets: [
         categorySet(categoryA, [change("a1", "src/a.ts")], []),
         categorySet(categoryB, [change("b1", "src/b.ts")], []),
@@ -201,6 +209,8 @@ describe("explainCategories", () => {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
       categorySets: [
         categorySet(categoryA, [change("a1", "src/a.ts")], []),
         categorySet(categoryB, [change("b1", "src/b.ts")], []),
@@ -237,6 +247,8 @@ describe("explainCategories", () => {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
       categorySets: [
         categorySet(categoryA, [change("a1", "src/a.ts")], []),
         categorySet(categoryEmpty, [], []),
@@ -274,6 +286,8 @@ describe("explainCategories", () => {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
       categorySets: [
         categorySet(categoryA, [change("a1", "src/a.ts")], []),
         categorySet(categoryB, [change("b1", "src/b.ts")], []),

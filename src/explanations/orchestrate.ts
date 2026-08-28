@@ -11,6 +11,9 @@ export interface ExplainCategoriesInput {
   prDescription: string;
   /** Max diff size (in lines) fed verbatim per change; see src/pipeline/run.js's PipelineOptions. */
   diffThreshold: number;
+  /** PR base/head revision SHAs, told to each session (see ./types.js's ExplainCategoryInput). */
+  baseSha: string;
+  headSha: string;
   /** In presentation order (see src/classification/group.js). */
   categorySets: CategoryChangeSet[];
 }
@@ -117,6 +120,8 @@ async function explainOneCategory(
         production: set.production,
         test: set.test,
         diffThreshold: input.diffThreshold,
+        baseSha: input.baseSha,
+        headSha: input.headSha,
       },
       deps,
     );
@@ -136,6 +141,8 @@ async function explainOneCategory(
         production: set.production,
         test: set.test,
         diffThreshold: input.diffThreshold,
+        baseSha: input.baseSha,
+        headSha: input.headSha,
         markdown: covered.markdown,
         explainSessionId: covered.sessionId,
       },

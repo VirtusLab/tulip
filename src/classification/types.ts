@@ -26,6 +26,10 @@ export interface ClassifiableChange {
   range: LineRange;
   /** Diff lines for this range, `+`/`-` markers included; truncated if very large (see ./excerpt.ts). */
   excerpt: string;
+  /** Full, untruncated diff lines for this range — the underlying `Change.lines`, kept separate
+   * from `excerpt` so later phases can always show the real diff regardless of `excerpt`'s
+   * char-based truncation (see src/explanations/prompt.ts). */
+  lines: string[];
 }
 
 /** Sentinel category names the classifier may use instead of a real category (see spec). */

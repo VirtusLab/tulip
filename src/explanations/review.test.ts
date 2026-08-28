@@ -18,6 +18,7 @@ const CHANGE: ClassifiableChange = {
   side: "head",
   range: { start: 10, end: 14 },
   excerpt: "+line",
+  lines: ["+line"],
 };
 
 const REF = serializeSnippetRef({
@@ -35,6 +36,8 @@ function baseInput(overrides: Partial<ReviewLoopInput> = {}): ReviewLoopInput {
     production: [CHANGE],
     test: [],
     diffThreshold: 100,
+    baseSha: "base-sha",
+    headSha: "head-sha",
     markdown: `explanation\n\n${REF}`,
     explainSessionId: "explain-session",
     ...overrides,
@@ -66,6 +69,20 @@ describe("reviewAndAmend", () => {
     expect(prompt).toContain("Add retry logic to the fetcher");
     expect(prompt).toContain("Retry logic");
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("sonnet");
+  });
+
+  it("tells the reviewer its working directory is the head checkout, and gives both SHAs", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ approved: true, issues: [] }, "review-1"),
+    );
+
+    await reviewAndAmend(baseInput(), { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toContain("base-sha");
+    expect(prompt).toContain("head-sha");
+    expect(prompt).toMatch(/working directory is a checkout/);
+    expect(prompt).toMatch(/git diff/);
   });
 
   it("gives the reviewer the same changes the explaining session got", async () => {

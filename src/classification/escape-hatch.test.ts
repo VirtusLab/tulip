@@ -15,6 +15,7 @@ function change(id: string): ClassifiableChange {
     side: "head",
     range: { start: 1, end: 1 },
     excerpt: "+line",
+    lines: ["+line"],
   };
 }
 

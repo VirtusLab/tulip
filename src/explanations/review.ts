@@ -58,6 +58,8 @@ export async function reviewAndAmend(
           production: input.production,
           test: input.test,
           diffThreshold: input.diffThreshold,
+          baseSha: input.baseSha,
+          headSha: input.headSha,
           markdown,
         }),
       },

@@ -16,6 +16,7 @@ function change(overrides: Partial<ClassifiableChange> = {}): ClassifiableChange
     side: "head",
     range: { start: 10, end: 14 },
     excerpt: "+line",
+    lines: ["+line"],
     ...overrides,
   };
 }
