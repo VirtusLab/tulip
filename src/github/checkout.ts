@@ -80,8 +80,13 @@ export async function createCheckout(
   };
 }
 
+/** Isolates `git` from the operator's own `~/.gitconfig` and system config while it operates on
+ * an untrusted PR's checkout — e.g. so a malicious PR's `.gitattributes` can't invoke an
+ * operator-configured smudge/textconv filter/driver during fetch or checkout. */
+const GIT_ISOLATION_ENV = { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
+
 async function defaultRunGit(args: string[], cwd: string): Promise<string> {
-  return runCommand("git", args, { cwd });
+  return runCommand("git", args, { cwd, env: GIT_ISOLATION_ENV });
 }
 
 async function defaultRm(dir: string): Promise<void> {

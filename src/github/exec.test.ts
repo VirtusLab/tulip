@@ -17,4 +17,17 @@ describe("runCommand", () => {
 
     await expect(result).rejects.toThrow(/timed out after 50ms/);
   });
+
+  it("merges `env` over (not replacing) the parent's own environment", async () => {
+    const stdout = await runCommand(
+      process.execPath,
+      [
+        "-e",
+        "process.stdout.write(String(process.env.TULIP_TEST_VAR) + '|' + typeof process.env.PATH)",
+      ],
+      { env: { TULIP_TEST_VAR: "isolated" } },
+    );
+
+    expect(stdout).toBe("isolated|string");
+  });
 });

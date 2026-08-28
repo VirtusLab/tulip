@@ -9,16 +9,19 @@ const MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
 /** Runs an external command and returns its stdout. Shared by the `gh` and `git` wrappers. Kills
  * the process and throws a clear error if it doesn't exit within `timeoutMs` (default
- * {@link config}.timeouts.githubCommandMs). */
+ * {@link config}.timeouts.githubCommandMs). `env`, if given, is merged over (not replacing)
+ * `process.env` — e.g. src/github/checkout.ts uses it to isolate `git` from the operator's own
+ * config while operating on an untrusted PR's checkout. */
 export async function runCommand(
   bin: string,
   args: string[],
-  options: { cwd?: string; timeoutMs?: number } = {},
+  options: { cwd?: string; timeoutMs?: number; env?: Record<string, string> } = {},
 ): Promise<string> {
   const timeoutMs = options.timeoutMs ?? config.timeouts.githubCommandMs;
   try {
     const { stdout } = await execFileAsync(bin, args, {
       cwd: options.cwd,
+      env: options.env ? { ...process.env, ...options.env } : undefined,
       maxBuffer: MAX_BUFFER_BYTES,
       timeout: timeoutMs,
     });
