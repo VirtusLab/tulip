@@ -84,6 +84,8 @@ describe("explainCategory", () => {
     expect(prompt).toContain("abc123base");
     expect(prompt).toContain("def456head");
     expect(prompt).toMatch(/working directory is a checkout/);
+    expect(prompt).toContain(".tulip/pr.diff");
+    expect(prompt).toContain(".tulip/base");
     // No Bash/git access is granted (see src/config.ts's claude.allowedTools doc comment) — the
     // prompt must not imply the session can run git commands itself.
     expect(prompt).not.toMatch(/git diff|git log|git blame|git show/);

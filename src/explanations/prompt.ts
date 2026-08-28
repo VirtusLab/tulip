@@ -49,11 +49,18 @@ function formatChange(change: ClassifiableChange, diffThreshold: number): string
 
 /** Tells a session what its checkout gives it access to: the head revision's working tree,
  * readable directly with its Read/Grep/Glob tools (no Bash/git access is granted — see
- * src/config.ts's `claude.allowedTools` doc comment for why), plus both SHAs for reference. */
+ * src/config.ts's `claude.allowedTools` doc comment for why), plus the full diff and every
+ * changed file's pre-change content, both materialized as plain files (see
+ * src/github/materialize.ts) so they're freely readable regardless of prompt size. */
 function describeCheckoutAccess(input: { baseSha: string; headSha: string }): string {
   return `Your working directory is a checkout of the PR's head revision (commit
-${input.headSha}) — you can read any file there directly. The PR's base revision is commit
-${input.baseSha}, for reference.`;
+${input.headSha}) — you can read any changed or unchanged file there directly, whether or not
+it's excerpted above. The complete unified diff for the whole PR is at .tulip/pr.diff — read or
+grep it for the full picture beyond what's excerpted above. The pre-change content (commit
+${input.baseSha}) of every changed file is under .tulip/base/<path> (e.g. src/foo.ts's base
+version is at .tulip/base/src/foo.ts); files added by the PR have no base version. Reading a
+file's .tulip/base copy alongside its checked-out (head) copy, plus .tulip/pr.diff, is the most
+reliable way to understand exactly what changed and why.`;
 }
 
 function formatChanges(changes: ClassifiableChange[], diffThreshold: number): string {
