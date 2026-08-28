@@ -153,3 +153,39 @@ maintain or trust.
   itself for anything that can write files. Left as explicit future work, not implemented now.
 - `config.claude.allowedTools` and its plumbing (`buildArgs`' empty-list check) stay as
   documented dead-but-ready code for that future work, rather than being deleted outright.
+
+## Amendment: deterministic materialization of the diff and base files
+
+### Context
+
+The no-Bash-grant decision above left two gaps for a session trying to actually understand a
+change, neither needing any git access to close: it only ever sees the *head* revision on disk
+(no base/before content to diff against by eye), and the full unified diff only reaches it as
+whatever's pasted into the prompt — which `diffThreshold` deliberately truncates for large
+changes (see src/explanations/prompt.ts's `formatChange`), so a session can never read the
+complete diff for a large change no matter how much it wants to.
+
+### Decision
+
+Materialize both, as plain files, code-driven (not model-run) right after the checkout is
+created (`materializeChangeArtifacts`, src/github/materialize.ts, called from
+src/pipeline/run.ts):
+
+- The complete unified diff (`PrMetadata.diff`, untruncated) is written verbatim to
+  `.tulip/pr.diff`.
+- Every changed file's pre-change content is written to `.tulip/base/<path>` (the base-side path
+  for a rename), fetched via `PrCheckout.getFileAtBase` — the same git-object-DB lookup the
+  renderer already uses. Binary files and added files (nothing existed at base) are skipped. The
+  post-change (head) version is never duplicated — it's already the checkout's working tree.
+
+Both live under the checkout's own temp dir, so `PrCheckout.cleanup()` removes them for free.
+The explain/review prompts (`describeCheckoutAccess`) now point sessions at both paths,
+additively — the existing per-change diff excerpts/references stay, still the primary grounding.
+
+### Consequences
+
+- A session can always get the complete diff and a real base/head comparison for any file,
+  regardless of `diffThreshold` or prompt size — no git access, no new attack surface (the
+  written paths are derived from the already-parsed diff, not session input).
+- One more filesystem write pass per PR (proportional to changed-file count); negligible next to
+  the checkout itself.
