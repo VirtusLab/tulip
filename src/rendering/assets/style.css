@@ -18,6 +18,14 @@
   --toc-bg: #f6f7f9;
   --shadow: 0 4px 16px rgba(31, 35, 40, 0.08);
 
+  /* Syntax-highlight token colors — deliberately their own tokens, never --add-fg/--remove-fg.
+     highlight.js tokens render inside diff cells (add/remove-tinted backgrounds) as well as
+     plain code, so reusing the diff colors there both read as a false add/remove signal on the
+     opposite-polarity line and measured under WCAG AA on that combination. Each clears 4.5:1
+     against --code-bg, --add-bg and --remove-bg alike (see docs/adr/0004's amendment). */
+  --token-string: #0b6e6e;
+  --token-attr: #a3115f;
+
   --font-sans:
     ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial,
     sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
@@ -50,6 +58,8 @@
     --remove-fg: #f85149;
     --toc-bg: #161b22;
     --shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+    --token-string: #56d4dd;
+    --token-attr: #ff9bce;
   }
 }
 
@@ -69,6 +79,8 @@
   --remove-fg: #f85149;
   --toc-bg: #161b22;
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  --token-string: #56d4dd;
+  --token-attr: #ff9bce;
 }
 
 * {
@@ -107,7 +119,8 @@ main :is(ul, ol) {
 
 h1,
 h2,
-h3 {
+h3,
+h4 {
   line-height: 1.25;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -125,6 +138,17 @@ h2 {
 h3 {
   font-size: 1.0625rem;
   color: var(--accent);
+}
+
+h4 {
+  font-size: 0.9375rem;
+  color: var(--muted);
+}
+
+blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1rem;
+  color: var(--muted);
 }
 
 a {
@@ -171,6 +195,11 @@ pre code {
    screens, but well beyond the prose measure. */
 main pre {
   max-width: min(100%, 1100px);
+}
+
+main img {
+  max-width: 100%;
+  height: auto;
 }
 
 #pr-header {
@@ -390,6 +419,30 @@ main pre {
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
 }
 
+/* GFM tables (marked's default table renderer) in prose — unstyled otherwise, a bare <table>
+   looks broken. `:not(.snippet-table)` keeps this off the diff table above, which has its own
+   (higher-specificity, so this must come after it) rules. */
+main table:not(.snippet-table) {
+  width: 100%;
+  max-width: var(--prose-measure);
+  margin-inline: auto;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+main table:not(.snippet-table) th,
+main table:not(.snippet-table) td {
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.7rem;
+  text-align: left;
+  word-break: break-word;
+}
+
+main table:not(.snippet-table) th {
+  background: var(--surface);
+  font-weight: 600;
+}
+
 /* highlight.js theme — written against this page's own palette (rather than one of
    highlight.js's bundled theme stylesheets) so highlighted code, diff +/- colors and the rest
    of the UI stay one cohesive palette in both light and dark, and so a theme toggle needs no
@@ -419,7 +472,7 @@ main pre {
 .hljs-regexp,
 .hljs-addition,
 .hljs-attribute {
-  color: var(--add-fg);
+  color: var(--token-string);
 }
 
 .hljs-number,
@@ -446,12 +499,9 @@ main pre {
 .hljs-variable,
 .hljs-template-variable,
 .hljs-selector-id,
-.hljs-selector-class {
-  color: var(--remove-fg);
-}
-
+.hljs-selector-class,
 .hljs-deletion {
-  color: var(--remove-fg);
+  color: var(--token-attr);
 }
 
 .hljs-meta {

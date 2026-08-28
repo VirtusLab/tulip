@@ -59,6 +59,35 @@ describe("style.css", () => {
     expect(hljsSection).toMatch(/var\(--/);
   });
 
+  it("keeps syntax-token colors independent of the diff +/- colors", () => {
+    // Token colors render inside diff cells too — reusing --add-fg/--remove-fg there both
+    // failed measured contrast on the opposite-polarity background and read as a false
+    // add/remove signal (e.g. a green string token on a removed/red line).
+    const hljsSection = css.slice(css.indexOf(".hljs {"));
+    expect(hljsSection).not.toMatch(/color:\s*var\(--add-fg\)/);
+    expect(hljsSection).not.toMatch(/color:\s*var\(--remove-fg\)/);
+    expect(hljsSection).toMatch(/color:\s*var\(--token-string\)/);
+    expect(hljsSection).toMatch(/color:\s*var\(--token-attr\)/);
+    for (const variable of ["--token-string", "--token-attr"]) {
+      const occurrences = css.split(variable).length - 1;
+      // Defined for light and dark, plus at least one use.
+      expect(
+        occurrences,
+        `${variable} should be defined for light and dark`,
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("styles GFM tables and constrains prose images", () => {
+    expect(css).toMatch(/main table:not\(\.snippet-table\)[^{]*\{[^}]*border-collapse/);
+    expect(css).toMatch(/main img\s*\{[^}]*max-width:\s*100%/);
+  });
+
+  it("completes the heading scale and gives blockquote a visual identity", () => {
+    expect(css).toMatch(/h4\s*\{[^}]*font-size/);
+    expect(css).toMatch(/blockquote\s*\{[^}]*border-left/);
+  });
+
   it("references no external network resources", () => {
     expect(css).not.toMatch(/https?:\/\//);
     expect(css).not.toMatch(/@import/);
