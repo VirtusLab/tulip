@@ -1,5 +1,20 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { languageForPath } from "./language.js";
+import { languageForPath, SUPPORTED_LANGUAGES } from "./language.js";
+
+const HLJS_ENTRY_PATH = join(import.meta.dirname, "../../scripts/hljs-entry.mjs");
+
+/** Every language name scripts/hljs-entry.mjs actually registers with highlight.js, parsed out
+ * of its source (not imported — it's a build-time esbuild entry point, not a module meant to be
+ * loaded in Node/vitest). */
+function registeredHljsLanguages(): Set<string> {
+  const source = readFileSync(HLJS_ENTRY_PATH, "utf8");
+  const names = [...source.matchAll(/hljs\.registerLanguage\("([a-z0-9_-]+)"/g)].map(
+    (match) => match[1] as string,
+  );
+  return new Set(names);
+}
 
 describe("languageForPath", () => {
   it.each([
@@ -58,5 +73,15 @@ describe("languageForPath", () => {
 
   it("does not mistake a dotfile's leading dot for an extension separator", () => {
     expect(languageForPath(".gitignore")).toBeUndefined();
+  });
+});
+
+describe("SUPPORTED_LANGUAGES / scripts/hljs-entry.mjs drift guard", () => {
+  it("maps to exactly the languages the vendored bundle registers — no more, no less", () => {
+    // A language mapped here but not registered there means the client asks
+    // `hljs.getLanguage(lang)` for something that will never exist (silently disabling
+    // highlighting for every file of that language); a language registered there but never
+    // mapped here is dead weight in the vendored bundle.
+    expect([...SUPPORTED_LANGUAGES].sort()).toEqual([...registeredHljsLanguages()].sort());
   });
 });

@@ -70,6 +70,15 @@ const FILENAME_LANGUAGE: Record<string, string> = {
   makefile: "makefile",
 };
 
+/** Every highlight.js language name this module can produce — must equal the set
+ * scripts/hljs-entry.mjs registers (language.test.ts's drift-guard test checks this): a name
+ * missing there means `languageForPath` points the client at a language `hljs.getLanguage`
+ * will never find, silently disabling highlighting for it. */
+export const SUPPORTED_LANGUAGES: ReadonlySet<string> = new Set([
+  ...Object.values(EXTENSION_LANGUAGE),
+  ...Object.values(FILENAME_LANGUAGE),
+]);
+
 /** Guesses a highlight.js language name from `path`'s filename, or `undefined` for an unknown
  * or absent extension — the caller (./snippets.ts) then skips highlighting rather than
  * guessing. */
