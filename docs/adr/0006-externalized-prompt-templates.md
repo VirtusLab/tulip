@@ -55,8 +55,8 @@ language.
   the stated goal.
 - The type checker no longer enforces that a prompt's interpolation points and a call site's
   supplied fields agree; `coverage.test.ts` is the explicit, must-pass substitute, plus
-  exact-equality tests (`*.test.ts` per phase) asserting each builder's rendered output is
-  byte-identical to the pre-refactor template-literal output for representative inputs.
+  byte-identity tests (`*.test.ts` per phase) asserting each builder's rendered output against a
+  committed file snapshot (see the amendment below) for representative inputs.
 - One more build step (`copy-assets.mjs` copying `.md` files) that must stay in sync with where
   `tsc` emits `loader.js`; `dist.test.ts` checks this post-build so a real `tulip` run doesn't
   silently fail to find its prompts.
@@ -78,3 +78,23 @@ language.
   a list, escape-hatch verdict selection) is a handful of cases, cheaply expressed in TS; pulling
   it into template syntax would make the `.md` files harder to read as prose and add a
   dependency for no real gain.
+
+## Amendment: file-snapshot goldens, not hand-pasted fixtures
+
+The first implementation captured byte-identity expectations as escaped string constants in one
+catch-all `src/prompts/__fixtures__/golden.ts`. Review flagged this as undercutting the ADR's own
+goal: editing a `.md` file — the workflow this whole change exists to enable — left no way to
+regenerate the corresponding golden string except hand-re-pasting an escaped literal.
+
+Fixed by switching every byte-identity assertion to vitest's `toMatchFileSnapshot`, one snapshot
+file per case, colocated with the phase that owns it (`src/categories/__snapshots__/`,
+`src/classification/__snapshots__/`, `src/explanations/__snapshots__/`) rather than gathered in
+`src/prompts/`. A deliberate wording change now fails exactly the affected snapshot tests with a
+readable diff, and `vitest -u` regenerates the affected files — no hand-editing, no leaf-package
+catch-all. `golden.ts` is deleted; the placeholder-coverage test and the strict renderer are
+unchanged. Same 13 branch cases as before.
+
+Also renamed `checkout-access.md` to `explain-checkout-access.md` for consistency: every other
+template carries its owning phase's prefix (`classify-*`, `explain-*`, `review*`,
+`category-*`); this was the one exception despite being explanations-only. `preamble.md` stays
+unprefixed — it's the one template genuinely shared across phases.
