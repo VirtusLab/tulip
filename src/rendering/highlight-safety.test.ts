@@ -2,15 +2,18 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HLJSApi } from "highlight.js";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { languageForPath } from "./language.js";
 import type { AlignedRow } from "./line-diff.js";
 import { renderSnippetRow } from "./snippets.js";
 
 // Built by scripts/copy-assets.mjs (part of `pnpm build`) from the `highlight.js` devDependency
-// — see that script's comment for why it can't just be copied like mermaid's bundle. Not
-// rebuilt here (unlike the parity test's app.js slicing, which needs no build step): keeping
-// this test import-free of scripts/*.mjs keeps it outside tsc's `rootDir` boundary.
+// — see that script's comment for why it can't just be copied like mermaid's bundle. Built on
+// demand if `pnpm build` hasn't run yet by vitest.config.ts's globalSetup (NOT a beforeAll in
+// this file: esbuild's own environment self-check breaks under this file's `@vitest-environment
+// jsdom` globals, so the on-demand build has to happen in a plain-Node phase before any test
+// file's environment is set up) — so `pnpm test` alone still runs this test for real instead of
+// silently no-opping it.
 // `import.meta.dirname` rather than `new URL(..., import.meta.url)` — under the jsdom test
 // environment, `import.meta.url` isn't a `file:` URL.
 const BUNDLE_PATH = join(import.meta.dirname, "assets/vendor/highlight.min.js");
@@ -23,12 +26,19 @@ const BUNDLE_PATH = join(import.meta.dirname, "assets/vendor/highlight.min.js");
  * ./assets/app.js's `highlightSnippetContainer` makes.
  */
 describe("highlight.js wiring — XSS safety (real DOM, real highlighter)", () => {
-  if (!existsSync(BUNDLE_PATH)) {
-    it.skip("run `pnpm build` (or `node scripts/copy-assets.mjs`) first to build the vendored highlight.js bundle", () => {});
-    return;
-  }
+  let hljsSource: string;
 
-  const hljsSource = readFileSync(BUNDLE_PATH, "utf8");
+  beforeAll(() => {
+    // vitest.config.ts's globalSetup builds this before any test file runs — if it's still
+    // missing here, something's actually broken (not just "hasn't been built yet"), so fail
+    // loudly rather than silently skip.
+    if (!existsSync(BUNDLE_PATH)) {
+      throw new Error(
+        `expected vitest's globalSetup to have built ${BUNDLE_PATH} — see scripts/vitest-global-setup.mjs`,
+      );
+    }
+    hljsSource = readFileSync(BUNDLE_PATH, "utf8");
+  });
 
   function loadHljs(): HLJSApi {
     new Function(hljsSource)();
