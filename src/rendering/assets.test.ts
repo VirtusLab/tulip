@@ -116,6 +116,11 @@ describe("app.js", () => {
     expect(js).toContain("window.hljs.getLanguage(lang)");
   });
 
+  it("skips highlighting a pathologically large code cell", () => {
+    expect(js).toMatch(/MAX_HIGHLIGHT_CHARS\s*=\s*\d+/);
+    expect(js).toMatch(/textContent\.length\s*>\s*MAX_HIGHLIGHT_CHARS/);
+  });
+
   it("references no external network resources", () => {
     expect(js).not.toMatch(/https?:\/\//);
   });

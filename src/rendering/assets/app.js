@@ -285,8 +285,17 @@
   // `innerHTML` — that's what keeps this safe against a malicious PR's file content, no matter
   // what it contains (see snippets.test.ts / template.test.ts's XSS cases, and this file's own
   // safety test in highlight-safety.test.ts).
+  // A pathological single line (e.g. a minified/generated file) shouldn't jank the local
+  // viewer just because it happens to be in a diff — highlight.js's own tokenizing cost grows
+  // with input size, and this all runs on the main thread. Leaves the (already-safe, escaped)
+  // plain text as-is past this length rather than highlighting it.
+  var MAX_HIGHLIGHT_CHARS = 20000;
+
   function highlightElementSafely(code, lang) {
     if (!window.hljs || !lang || !window.hljs.getLanguage(lang)) {
+      return;
+    }
+    if (code.textContent.length > MAX_HIGHLIGHT_CHARS) {
       return;
     }
     code.classList.add(`language-${lang}`);
