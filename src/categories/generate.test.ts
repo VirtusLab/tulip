@@ -62,8 +62,58 @@ describe("generateCategories", () => {
     expect(prompt).toContain("src/fetch.ts (modified)");
     expect(prompt).toContain("src/fetch.test.ts (modified)");
     expect(prompt).toMatch(/self-contained/i);
-    expect(prompt).toMatch(/most important|highest-impact/i);
+    expect(prompt).toMatch(/most important|attention/i);
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("sonnet");
+  });
+
+  it("groups by functionality/concern, never by file type", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+    );
+
+    await generateCategories(INPUT, { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    // The old "by functionality or type" wording licensed a type-based split — must be gone.
+    expect(prompt).not.toMatch(/functionality or type/i);
+    expect(prompt).toMatch(/never by file type/i);
+  });
+
+  it("bans a standalone tests or documentation group and requires tests/docs to ride along", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+    );
+
+    await generateCategories(INPUT, { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toMatch(/don't\s+make a "tests" group or a "documentation" group/i);
+    expect(prompt).toMatch(/tests and doc changes go in the same\s+group as the code they cover/i);
+  });
+
+  it("allows a coherent boilerplate group without licensing a tests/docs split", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+    );
+
+    await generateCategories(INPUT, { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toMatch(/repetitive or mechanical\s+code/i);
+    expect(prompt).toMatch(/this never means a tests or docs group/i);
+  });
+
+  it("orders groups by attention and asks for a read-carefully/skim label per group", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+    );
+
+    await generateCategories(INPUT, { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toMatch(/order the groups by how much attention they need/i);
+    expect(prompt).toMatch(/read carefully/i);
+    expect(prompt).toMatch(/skim/i);
   });
 
   it("returns the ordered categories and session id on a valid response", async () => {
