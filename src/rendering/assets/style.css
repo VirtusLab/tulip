@@ -26,12 +26,15 @@
   --token-string: #0b6e6e;
   --token-attr: #a3115f;
 
+  /* Self-hosted (see the @font-face rules below and docs/adr/0004) — the system stack after
+     them is a fallback for the brief flash before the vendored font loads (font-display:
+     swap) and for any environment that somehow can't load a local woff2. */
   --font-sans:
-    ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, Helvetica, Arial,
-    sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    "Inter Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto,
+    Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --font-mono:
-    ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas,
-    "Liberation Mono", monospace;
+    "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono",
+    "Fira Code", Menlo, Consolas, "Liberation Mono", monospace;
 
   --prose-measure: 72ch;
   --page-max-width: 1500px;
@@ -39,6 +42,29 @@
      kept as its own variable so every code surface (snippet cells, prose fences, summaries)
      agrees on it. */
   --code-font-size: 0.8125rem;
+}
+
+/* Self-hosted webfonts (docs/adr/0004): Inter for prose, JetBrains Mono for code, both SIL OFL
+   1.1, vendored from the @fontsource-variable/* devDependencies (see scripts/copy-assets.mjs —
+   not checked into git, refreshed at every build, mirroring mermaid/highlight.js's vendoring).
+   `url()` here resolves relative to this stylesheet, i.e. assets/vendor/fonts/. Only each
+   font's variable-weight, non-italic, latin-subset file is vendored — the smallest single
+   file that covers every weight this page actually uses (see the weight values below) —
+   keeping the page a small font-only network-free add (see docs/adr/0004 for the total). */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("vendor/fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url("vendor/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
 }
 
 @media (prefers-color-scheme: dark) {

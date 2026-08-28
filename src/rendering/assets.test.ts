@@ -88,10 +88,36 @@ describe("style.css", () => {
     expect(css).toMatch(/blockquote\s*\{[^}]*border-left/);
   });
 
+  it("self-hosts Inter and JetBrains Mono via local @font-face rules", () => {
+    const faceBlocks = [...css.matchAll(/@font-face\s*\{[^}]*\}/g)].map((match) => match[0]);
+    expect(faceBlocks).toHaveLength(2);
+
+    const interFace = faceBlocks.find((block) => block.includes("Inter Variable"));
+    const monoFace = faceBlocks.find((block) => block.includes("JetBrains Mono Variable"));
+    expect(interFace).toBeDefined();
+    expect(monoFace).toBeDefined();
+
+    for (const face of [interFace, monoFace]) {
+      // Local, relative vendored path — never a remote font host (fonts.googleapis.com,
+      // fonts.gstatic.com, or any other CDN).
+      expect(face).toMatch(/src:\s*url\("vendor\/fonts\/[\w.-]+\.woff2"\)/);
+      expect(face).not.toMatch(/https?:\/\//);
+      expect(face).toContain("font-display: swap");
+    }
+
+    // Prepended to the existing system-font fallback stacks, not replacing them.
+    expect(css).toMatch(/--font-sans:\s*\n\s*"Inter Variable",/);
+    expect(css).toMatch(/--font-mono:\s*\n\s*"JetBrains Mono Variable",/);
+  });
+
   it("references no external network resources", () => {
     expect(css).not.toMatch(/https?:\/\//);
     expect(css).not.toMatch(/@import/);
     expect(css).not.toContain("cdn.");
+    // Specifically: no remote font host, in case a future edit adds a @font-face without a
+    // local src (the generic check above would already catch this, but a font is the most
+    // likely place a remote URL would sneak back in).
+    expect(css).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
   });
 });
 
