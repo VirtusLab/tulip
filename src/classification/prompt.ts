@@ -1,4 +1,5 @@
 import type { Category } from "../categories/types.js";
+import { renderPrompt } from "../prompts/loader.js";
 import type { ClassifiableChange } from "./types.js";
 
 function formatCategoryList(categories: Category[]): string {
@@ -19,40 +20,23 @@ function formatChanges(changes: ClassifiableChange[]): string {
   return changes.map(formatChange).join("\n\n");
 }
 
-const SPECIAL_CATEGORIES_EXPLANATION = `Two special categories are also available:
-- "ignore": use this for generated files, lockfiles, or binaries — anything a human
-  wouldn't review. When you use "ignore", make it the change's only assignment.
-- "none": use this if the change genuinely doesn't fit any category above. You MUST
-  also include a "suggestedCategory" with a name and description for a new category
-  that would fit it. When you use "none", make it the change's only assignment too.
-  Only use "none" as a last resort.`;
+/** Text lives in src/prompts/classify-special-categories.md (docs/adr/0006). */
+const SPECIAL_CATEGORIES_EXPLANATION = renderPrompt("classify-special-categories", {});
 
-const OUTPUT_INSTRUCTIONS = `For each change, reply with its id and a list of assignments. Each
-assignment has a category (the bracketed id from the list above, e.g. "c2" — NOT the category's
-name — or the sentinel "ignore"/"none") and a codeType ("production" or "test"). Documentation
-files, comments, and doc-strings count as "production" — they ship with the code. Use "test"
-only for actual test code. A change usually needs just one assignment, but list more than one
-if it genuinely belongs to multiple categories. Give every change at least one assignment,
-unless you're marking it "ignore".`;
+/** Text lives in src/prompts/classify-output-instructions.md (docs/adr/0006). */
+const OUTPUT_INSTRUCTIONS = renderPrompt("classify-output-instructions", {});
 
 /** First classification call: explains the categories and the task, then lists the first batch. */
 export function buildInitialClassifyPrompt(
   categories: Category[],
   batch: ClassifiableChange[],
 ): string {
-  return `You are classifying the changes in a pull request into categories, so each
-change ends up grouped with the others that belong to the same piece of functionality.
-
-The categories to classify changes into are:
-${formatCategoryList(categories)}
-
-${SPECIAL_CATEGORIES_EXPLANATION}
-
-${OUTPUT_INSTRUCTIONS}
-
-Here is the first batch of changes to classify:
-
-${formatChanges(batch)}`;
+  return renderPrompt("classify-initial", {
+    categoryList: formatCategoryList(categories),
+    specialCategories: SPECIAL_CATEGORIES_EXPLANATION,
+    outputInstructions: OUTPUT_INSTRUCTIONS,
+    changes: formatChanges(batch),
+  });
 }
 
 /**
@@ -64,10 +48,10 @@ export function buildBatchClassifyPrompt(
   categories: Category[],
   batch: ClassifiableChange[],
 ): string {
-  return `Here is the next batch of changes to classify. The categories to use are:
-${formatCategoryList(categories)}
-
-${formatChanges(batch)}`;
+  return renderPrompt("classify-next-batch", {
+    categoryList: formatCategoryList(categories),
+    changes: formatChanges(batch),
+  });
 }
 
 /** One change's escape-hatch outcome, for {@link buildEscapeHatchResumePrompt}. */
@@ -77,13 +61,19 @@ export interface EscapeHatchOutcome {
   category?: Category;
 }
 
+/** Verdict text lives in src/prompts/classify-escape-hatch-outcome-{accepted,rejected}.md
+ * (docs/adr/0006) — which one applies is a TS-level conditional (docs/adr/0006's "conditional
+ * assembly" case), so it's picked and rendered here rather than in the parent template. */
 function formatEscapeHatchOutcome(outcome: EscapeHatchOutcome): string {
   const verdict = outcome.accepted
-    ? `Your suggested new category was accepted, and refined to "${outcome.category?.name}" ` +
-      `(id "${outcome.category?.id}"). You may use its id now, or still pick a different ` +
-      "existing category if it fits better."
-    : "Your suggested new category was NOT accepted. Pick from the current category list " +
-      'below instead — do not reply "none" for this change.';
+    ? renderPrompt("classify-escape-hatch-outcome-accepted", {
+        // `?? "undefined"` mirrors the old template literal's `${outcome.category?.name}`,
+        // which stringified to the literal text "undefined" if category were ever missing —
+        // shouldn't happen (see EscapeHatchOutcome's category doc comment) but kept byte-exact.
+        categoryName: outcome.category?.name ?? "undefined",
+        categoryId: outcome.category?.id ?? "undefined",
+      })
+    : renderPrompt("classify-escape-hatch-outcome-rejected", {});
   return `${formatChange(outcome.change)}
   outcome: ${verdict}`;
 }
@@ -97,14 +87,10 @@ export function buildEscapeHatchResumePrompt(
   categories: Category[],
   outcomes: EscapeHatchOutcome[],
 ): string {
-  return `The category list is now:
-${formatCategoryList(categories)}
-
-Here's what happened with the new categories you proposed:
-
-${outcomes.map(formatEscapeHatchOutcome).join("\n\n")}
-
-Reply with an updated classification for just these changes.`;
+  return renderPrompt("classify-escape-hatch", {
+    categoryList: formatCategoryList(categories),
+    outcomes: outcomes.map(formatEscapeHatchOutcome).join("\n\n"),
+  });
 }
 
 /**
@@ -116,17 +102,10 @@ export function buildCoverageRepairPrompt(
   categories: Category[],
   missing: ClassifiableChange[],
 ): string {
-  return `These changes were missed — they weren't covered by any category in your replies so
-far. Classify each of them now, using the same rules as before:
-
-The categories to classify changes into are:
-${formatCategoryList(categories)}
-
-${SPECIAL_CATEGORIES_EXPLANATION}
-
-${OUTPUT_INSTRUCTIONS}
-
-Changes:
-
-${formatChanges(missing)}`;
+  return renderPrompt("classify-coverage-repair", {
+    categoryList: formatCategoryList(categories),
+    specialCategories: SPECIAL_CATEGORIES_EXPLANATION,
+    outputInstructions: OUTPUT_INSTRUCTIONS,
+    changes: formatChanges(missing),
+  });
 }
