@@ -23,8 +23,7 @@ const PRODUCTION_CHECKLIST = `For the production code, cover what's relevant —
 - whether it touches mutable state (especially global mutable state), and other side effects
 - old vs. new call-stack diagrams (as Mermaid sequence diagrams), if the flow of calls changed
 - any new dependencies, and why they're needed
-- whether this is a refactor (and so trivial to review), and what refactorings are involved
-- any documentation added or changed, and what kind`;
+- whether this is a refactor (and so trivial to review), and what refactorings are involved`;
 
 const TEST_CHECKLIST = `For the test code, cover what's relevant:
 - whether the tests are unit or integration tests
@@ -96,11 +95,14 @@ ${input.category.description}
 
 ${MARKUP_INSTRUCTIONS}
 
-Production code changes in this category:
+Code and doc changes in this group (everything that ships):
 ${formatChanges(input.production, input.diffThreshold)}
 
-Test code changes in this category:
+Test changes in this group:
 ${formatChanges(input.test, input.diffThreshold)}
+
+Doc files, comments, and doc-strings in the first list go under "## Documentation";
+everything else there goes in the main section.
 
 ${describeCheckoutAccess(input)}
 
@@ -110,9 +112,23 @@ your final answer matters.
 
 Then write the explanation as markdown, interleaving prose with Mermaid diagrams (fenced with
 \`\`\`mermaid) and snippet references. Use diagrams generously, including before/after
-call-sequence diagrams wherever the flow of calls changed. Split the explanation into two
-sections, "## Production code" and "## Test code" (the latter covering the testing strategy) —
-omit whichever section has nothing to say.
+call-sequence diagrams wherever the flow of calls changed.
+
+Start with a one-line coverage strip so the reviewer sees at a glance what this group
+ships, for example:
+
+Coverage — Tests: added · Docs: none
+
+(the strip covers tests and docs only — the main section always covers the code itself).
+Write "none" for a facet with nothing here; that absence is itself useful — it tells
+the reviewer whether the change shipped tested and documented.
+
+Then write "## ..." sections only for facets that have something to explain:
+- a section on the main change — name it for what it covers, not "production";
+- "## Tests" if tests changed — cover the testing strategy;
+- "## Documentation" if any docs, comments, or doc-strings changed — say what changed
+  and whether it still matches the code.
+Skip a section that would only say "none"; the coverage strip already carries that.
 
 ${PRODUCTION_CHECKLIST}
 
@@ -170,11 +186,14 @@ ${input.markdown}
 Here are the actual changes the explanation is supposed to cover — use these to check the
 explanation's claims, not just its internal consistency:
 
-Production code changes in this category:
+Code and doc changes in this group (everything that ships):
 ${formatChanges(input.production, input.diffThreshold)}
 
-Test code changes in this category:
+Test changes in this group:
 ${formatChanges(input.test, input.diffThreshold)}
+
+Doc files, comments, and doc-strings in the first list go under "## Documentation";
+everything else there goes in the main section.
 
 ${describeCheckoutAccess(input)} Use this to verify claims against the actual code too, not just
 against the change list above.
@@ -184,6 +203,8 @@ Review the explanation for:
 - conciseness — is anything unnecessary or repetitive?
 - correctness — does every claim actually match the changes above? Flag anything invented,
   mistaken, or unsupported by them.
+- coverage — is there a coverage strip, and does it match the changes (tests/docs marked
+  "none" only when truly absent, not to skip work)?
 
 Reply with approved: true if it's good as-is. Otherwise reply with approved: false and a list of
 specific issues to fix.`;

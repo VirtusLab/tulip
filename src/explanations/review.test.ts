@@ -104,11 +104,23 @@ describe("reviewAndAmend", () => {
     );
 
     const prompt = runClaudeProcess.mock.calls[0]?.[1];
-    expect(prompt).toContain("Production code changes");
-    expect(prompt).toContain("Test code changes");
+    expect(prompt).toContain("Code and doc changes in this group");
+    expect(prompt).toContain("Test changes in this group");
     expect(prompt).toContain("src/fetch.ts");
     expect(prompt).toContain("src/fetch.test.ts");
     expect(prompt).toMatch(/match the changes/);
+  });
+
+  it("asks the reviewer to check the coverage strip's honesty", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ approved: true, issues: [] }, "review-1"),
+    );
+
+    await reviewAndAmend(baseInput(), { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toMatch(/coverage — is there a coverage strip/i);
+    expect(prompt).toMatch(/marked\s+"none" only when truly absent, not to skip work/i);
   });
 
   it("amends via the explaining session, re-checks coverage, then re-reviews with a fresh session", async () => {

@@ -62,13 +62,56 @@ describe("explainCategory", () => {
     expect(prompt).toContain("Retries transient network failures with backoff.");
     expect(prompt).toContain("Retry logic");
     expect(prompt).toContain("Adds backoff retries.");
-    expect(prompt).toContain("Production code changes");
-    expect(prompt).toContain("Test code changes");
+    expect(prompt).toContain("Code and doc changes in this group");
+    expect(prompt).toContain("Test changes in this group");
     expect(prompt).toContain("src/fetch.ts");
     expect(prompt).toContain("src/fetch.test.ts");
     expect(prompt).toMatch(/snippet/);
     expect(prompt).toMatch(/mermaid/);
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("opus");
+  });
+
+  it("tells the model docs live in the first (production) array and where they go", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ markdown: "# explanation" }),
+    );
+
+    await explainCategory(baseInput(), { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toMatch(/doc files, comments, and doc-strings.*go under "## Documentation"/i);
+  });
+
+  it("asks for a coverage strip followed by conditional sections, not a fixed two-way split", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ markdown: "# explanation" }),
+    );
+
+    await explainCategory(baseInput(), { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).toMatch(/coverage strip/i);
+    expect(prompt).toMatch(/Coverage — Tests: added · Docs: none/);
+    expect(prompt).toMatch(/covers tests and docs only/i);
+    // The main section must be named for its content, not hardcoded as "production" — this is
+    // what keeps a docs-only category from being mislabeled "## Production code".
+    expect(prompt).toMatch(/name it for what it covers, not "production"/i);
+    expect(prompt).toMatch(/## Documentation.*if any docs, comments, or doc-strings changed/i);
+    expect(prompt).not.toMatch(/## Production code/);
+    expect(prompt).not.toMatch(/omit whichever section has nothing to say/i);
+  });
+
+  it("drops the redundant documentation bullet from the production checklist", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ markdown: "# explanation" }),
+    );
+
+    await explainCategory(baseInput(), { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    // Documentation is now its own conditional "## Documentation" section (asserted above); the
+    // checklist bullet duplicating that is gone.
+    expect(prompt).not.toMatch(/any documentation added or changed, and what kind/i);
   });
 
   it("tells the session its cwd is the head checkout, and gives both base/head SHAs", async () => {
