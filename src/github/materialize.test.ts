@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FileDiff, ParsedDiff } from "../diff/change.js";
+import { createLogger } from "../logging/logger.js";
 import { materializeChangeArtifacts } from "./materialize.js";
 
 const RAW_DIFF = "diff --git a/src/a.ts b/src/a.ts\n@@ -1,1 +1,1 @@\n-old\n+new\n";
@@ -123,5 +124,95 @@ describe("materializeChangeArtifacts", () => {
     await materializeChangeArtifacts(checkout, diff, RAW_DIFF);
 
     await expect(readFile(join(dir, ".tulip", "base", "src/a.ts"), "utf8")).rejects.toThrow();
+  });
+
+  it("refuses to follow a tracked .tulip symlink escaping the checkout, and writes fresh instead", async () => {
+    dir = await mkdtemp(join(tmpdir(), "tulip-materialize-"));
+    // Simulates a malicious PR whose head checkout contains a tracked symlink at `.tulip`
+    // (`git checkout` recreates tracked symlinks verbatim) pointing outside the checkout.
+    const escapeDir = await mkdtemp(join(tmpdir(), "tulip-escape-"));
+    await symlink(escapeDir, join(dir, ".tulip"));
+    const checkout = fakeCheckout(dir, {});
+    const diff: ParsedDiff = { files: [] };
+
+    try {
+      await materializeChangeArtifacts(checkout, diff, RAW_DIFF);
+
+      // The escape target is never written into — the symlink itself was removed, not followed.
+      await expect(readdir(escapeDir)).resolves.toEqual([]);
+      // .tulip is now a real, self-owned directory inside the checkout.
+      const stats = await lstat(join(dir, ".tulip"));
+      expect(stats.isSymbolicLink()).toBe(false);
+      await expect(readFile(join(dir, ".tulip", "pr.diff"), "utf8")).resolves.toBe(RAW_DIFF);
+    } finally {
+      await rm(escapeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("clears stale/planted content from a pre-existing .tulip before writing", async () => {
+    dir = await mkdtemp(join(tmpdir(), "tulip-materialize-"));
+    // Simulates a PR that itself commits a `.tulip/base/decoy.txt` — without clearing first,
+    // this forged "base content" would survive materialization and could spoof the LLM.
+    await mkdir(join(dir, ".tulip", "base"), { recursive: true });
+    await writeFile(
+      join(dir, ".tulip", "base", "decoy.txt"),
+      "forged pre-change content\n",
+      "utf8",
+    );
+    const checkout = fakeCheckout(dir, {});
+    const diff: ParsedDiff = { files: [] };
+
+    await materializeChangeArtifacts(checkout, diff, RAW_DIFF);
+
+    await expect(readFile(join(dir, ".tulip", "base", "decoy.txt"), "utf8")).rejects.toThrow();
+  });
+
+  it("materializes a base file whose path merely starts with '..' (not a traversal segment)", async () => {
+    dir = await mkdtemp(join(tmpdir(), "tulip-materialize-"));
+    const checkout = fakeCheckout(dir, { "..foo/bar.ts": "dotdot-prefixed path content\n" });
+    const diff: ParsedDiff = { files: [fileDiff({ path: "..foo/bar.ts", status: "modified" })] };
+
+    await materializeChangeArtifacts(checkout, diff, RAW_DIFF);
+
+    await expect(readFile(join(dir, ".tulip", "base", "..foo", "bar.ts"), "utf8")).resolves.toBe(
+      "dotdot-prefixed path content\n",
+    );
+  });
+
+  it("refuses to write a base file for a path with a real traversal segment", async () => {
+    dir = await mkdtemp(join(tmpdir(), "tulip-materialize-"));
+    const checkout = fakeCheckout(dir, { "../escape.txt": "should never be read" });
+    const diff: ParsedDiff = { files: [fileDiff({ path: "../escape.txt", status: "modified" })] };
+
+    await materializeChangeArtifacts(checkout, diff, RAW_DIFF);
+
+    expect(checkout.getFileAtBase).not.toHaveBeenCalled();
+    await expect(readFile(join(dir, ".tulip", "escape.txt"), "utf8")).rejects.toThrow();
+  });
+
+  it("continues materializing other files, and logs a warning, when one file's base fetch fails", async () => {
+    dir = await mkdtemp(join(tmpdir(), "tulip-materialize-"));
+    const checkout = fakeCheckout(dir, {});
+    checkout.getFileAtBase.mockImplementation(async (path: string) => {
+      if (path === "src/bad.ts") throw new Error("simulated fs failure");
+      return path === "src/good.ts" ? "good content\n" : undefined;
+    });
+    const diff: ParsedDiff = {
+      files: [
+        fileDiff({ path: "src/bad.ts", status: "modified" }),
+        fileDiff({ path: "src/good.ts", status: "modified" }),
+      ],
+    };
+    const write = vi.fn();
+    const logger = createLogger({ write });
+
+    await materializeChangeArtifacts(checkout, diff, RAW_DIFF, { logger });
+
+    await expect(readFile(join(dir, ".tulip", "base", "src/good.ts"), "utf8")).resolves.toBe(
+      "good content\n",
+    );
+    await expect(readFile(join(dir, ".tulip", "base", "src/bad.ts"), "utf8")).rejects.toThrow();
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(write.mock.calls[0]?.[0]).toMatch(/warning.*src\/bad\.ts.*simulated fs failure/);
   });
 });

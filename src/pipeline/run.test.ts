@@ -165,6 +165,7 @@ describe("run", () => {
       await deps.createCheckout.mock.results[0]?.value,
       expect.objectContaining({ files: expect.any(Array) }),
       ADDED_FILE_DIFF,
+      { logger: deps.logger },
     );
     expect(deps.generateCategories).toHaveBeenCalledWith(
       {

@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { FileDiff, ParsedDiff } from "../diff/change.js";
+import { createLogger, type Logger } from "../logging/logger.js";
 import type { PrCheckout } from "./checkout.js";
 
 /** Subdirectory (inside the checkout dir) holding deterministic exploration aids for a claude
@@ -19,19 +20,41 @@ const BASE_SUBDIR = "base";
  *
  * Head (after) content isn't duplicated here — it's already the checkout's working tree at
  * `checkout.dir`. Skips binary files (no meaningful base text) and added files (nothing existed
- * at base to write).
+ * at base to write). A single file's materialization failing (e.g. an unwriteable path) is
+ * logged and skipped rather than aborting the rest.
+ *
+ * Removes any pre-existing `.tulip` before writing — the PR's own head checkout may already
+ * contain one (a real file/dir, or, in the worst case, a tracked *symlink* pointing outside the
+ * checkout: `git checkout` faithfully recreates tracked symlinks, and a plain `mkdir(...,
+ * {recursive: true})` would then create/write straight through it as a confused-deputy escape
+ * from the checkout directory). `rm` on a path that is itself a symlink unlinks the link without
+ * following it, so this guarantees `.tulip` is fresh and self-owned before anything is written
+ * into it — see docs/adr/0002's materialization amendment.
  */
 export async function materializeChangeArtifacts(
   checkout: Pick<PrCheckout, "dir" | "getFileAtBase">,
   diff: ParsedDiff,
   rawDiff: string,
+  options: { logger?: Logger } = {},
 ): Promise<void> {
+  const logger = options.logger ?? createLogger();
   const tulipDir = join(checkout.dir, TULIP_DIR);
+  await rm(tulipDir, { recursive: true, force: true });
   await mkdir(tulipDir, { recursive: true });
   await writeFile(join(tulipDir, DIFF_FILENAME), rawDiff, "utf8");
 
   const baseDir = join(tulipDir, BASE_SUBDIR);
-  await Promise.all(diff.files.map((file) => materializeBaseFile(checkout, baseDir, file)));
+  const results = await Promise.allSettled(
+    diff.files.map((file) => materializeBaseFile(checkout, baseDir, file)),
+  );
+  for (const [index, result] of results.entries()) {
+    if (result.status === "rejected") {
+      const path = diff.files[index]?.path ?? "(unknown path)";
+      logger.info(
+        `warning: failed to materialize base content for ${path}: ${errorMessage(result.reason)}`,
+      );
+    }
+  }
 }
 
 async function materializeBaseFile(
@@ -60,12 +83,18 @@ async function materializeBaseFile(
 /** Resolves `basePath` under `baseDir`, refusing to write outside it. Defense in depth against
  * a `../`-containing path in the diff — real diff paths shouldn't contain traversal segments,
  * but this is the one place a PR's own file paths drive a filesystem write (see docs/adr/0002's
- * arbitrary-file-write finding for why paths derived from PR content get this scrutiny here). */
+ * arbitrary-file-write finding for why paths derived from PR content get this scrutiny here).
+ * Checked at path-segment boundaries (`".."` itself, or `".." + sep`), not by string prefix —
+ * a prefix check would false-positive on a legitimate path like `..foo/bar.ts`. */
 function resolveWithinBaseDir(baseDir: string, basePath: string): string | undefined {
   const destination = join(baseDir, basePath);
   const rel = relative(baseDir, destination);
-  if (rel.startsWith("..") || isAbsolute(rel)) {
+  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     return undefined;
   }
   return destination;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

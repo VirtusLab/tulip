@@ -96,7 +96,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.debug("materializing change artifacts...");
     await runPhase("materializing change artifacts", () =>
-      doMaterializeChangeArtifacts(checkout as PrCheckout, diff, metadata.diff),
+      doMaterializeChangeArtifacts(checkout as PrCheckout, diff, metadata.diff, { logger }),
     );
 
     logger.info("phase 1: generating categories...");
