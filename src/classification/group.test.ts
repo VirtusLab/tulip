@@ -17,18 +17,20 @@ function change(id: string): ClassifiableChange {
 
 describe("groupChangesByCategory", () => {
   it("groups changes by category, in category presentation order, split by code type", () => {
+    // Category ids ("c1"/"c2") and change ids ("c1"/"c2"/"c3") happen to share the same string
+    // space here — coincidental, they're unrelated fields (`category` vs. map key).
     const c1 = change("c1");
     const c2 = change("c2");
     const c3 = change("c3");
     const result: ClassifyChangesResult = {
       categories: [
-        { name: "B", description: "second" },
-        { name: "A", description: "first" },
+        { id: "c1", name: "B", description: "second" },
+        { id: "c2", name: "A", description: "first" },
       ],
       assignments: new Map([
-        ["c1", [{ category: "A", codeType: "production" }]],
-        ["c2", [{ category: "A", codeType: "test" }]],
-        ["c3", [{ category: "B", codeType: "production" }]],
+        ["c1", [{ category: "c2", codeType: "production" }]],
+        ["c2", [{ category: "c2", codeType: "test" }]],
+        ["c3", [{ category: "c1", codeType: "production" }]],
       ]),
       ignoredChangeIds: new Set(),
       changesById: new Map([
@@ -45,11 +47,28 @@ describe("groupChangesByCategory", () => {
     expect(grouped[1]).toEqual({ category: result.categories[1], production: [c1], test: [c2] });
   });
 
-  it("matches category names case-insensitively and ignoring surrounding whitespace", () => {
+  it("matches category ids case-insensitively and ignoring surrounding whitespace", () => {
     const c1 = change("c1");
     const result: ClassifyChangesResult = {
-      categories: [{ name: "Retry logic", description: "" }],
-      assignments: new Map([["c1", [{ category: " retry LOGIC ", codeType: "production" }]]]),
+      categories: [{ id: "c1", name: "Retry logic", description: "" }],
+      assignments: new Map([["c1", [{ category: " C1 ", codeType: "production" }]]]),
+      ignoredChangeIds: new Set(),
+      changesById: new Map([["c1", c1]]),
+    };
+
+    const grouped = groupChangesByCategory(result);
+
+    expect(grouped[0]?.production).toEqual([c1]);
+  });
+
+  it("matches by id even when the category name is long and paraphrase-prone", () => {
+    // See docs/adr/0005 / coverage.test.ts's regression test: matching moved from name to id
+    // specifically because a classifier can't be trusted to echo a long name back verbatim.
+    const c1 = change("c1");
+    const result: ClassifyChangesResult = {
+      categories: [{ id: "c1", name: "Retry logic (backoff, jitter, tests)", description: "" }],
+      // The classifier replied with the id, not a paraphrase of the (long) name.
+      assignments: new Map([["c1", [{ category: "c1", codeType: "production" }]]]),
       ignoredChangeIds: new Set(),
       changesById: new Map([["c1", c1]]),
     };
@@ -63,15 +82,15 @@ describe("groupChangesByCategory", () => {
     const c1 = change("c1");
     const result: ClassifyChangesResult = {
       categories: [
-        { name: "A", description: "" },
-        { name: "B", description: "" },
+        { id: "c1", name: "A", description: "" },
+        { id: "c2", name: "B", description: "" },
       ],
       assignments: new Map([
         [
           "c1",
           [
-            { category: "A", codeType: "production" },
-            { category: "B", codeType: "production" },
+            { category: "c1", codeType: "production" },
+            { category: "c2", codeType: "production" },
           ],
         ],
       ]),

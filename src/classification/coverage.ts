@@ -2,7 +2,7 @@ import type { Category } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
-import { categoryNamesMatch } from "./category-name.js";
+import { categoryIdsMatch } from "./category-match.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
 import { type ClassificationState, resolveNoneClassifications } from "./escape-hatch.js";
 import { buildCoverageRepairPrompt } from "./prompt.js";
@@ -12,7 +12,7 @@ import {
   IGNORE_CATEGORY,
   NONE_CATEGORY,
 } from "./types.js";
-import { CLASSIFY_BATCH_SCHEMA, type ClassifyBatchResponse } from "./wire.js";
+import { buildClassifyBatchSchema, type ClassifyBatchResponse } from "./wire.js";
 
 /** Coverage repair attempts before giving up (see spec: "ask the classifying agent to classify
  * the missing changes"; the spec sets no cap, this bounds it to avoid an unbounded retry loop). */
@@ -37,9 +37,9 @@ export class IncompleteCoverageError extends Error {
 
 /**
  * Ids of every non-ignored change from `changes` not covered by >= 1 assignment naming a
- * category `categories` actually has (normalized: trimmed, case-insensitive) — an assignment
- * naming a category the classifier invented or misspelled doesn't count as coverage, since it
- * would otherwise silently vanish later in groupChangesByCategory's exact-name matching.
+ * category id `categories` actually has (normalized: trimmed, case-insensitive) — an assignment
+ * naming an id the classifier invented or misspelled doesn't count as coverage, since it
+ * would otherwise silently vanish later in groupChangesByCategory's exact-id matching.
  */
 export function findUncoveredChangeIds(
   changes: ClassifiableChange[],
@@ -67,14 +67,14 @@ function isUncovered(entry: ResolvedChange | undefined, categories: Category[]):
 }
 
 function hasKnownAssignment(assignments: CategoryAssignment[], categories: Category[]): boolean {
-  return assignments.some((assignment) => isKnownCategoryName(assignment.category, categories));
+  return assignments.some((assignment) => isKnownCategoryId(assignment.category, categories));
 }
 
-function isKnownCategoryName(name: string, categories: Category[]): boolean {
-  if (categoryNamesMatch(name, IGNORE_CATEGORY) || categoryNamesMatch(name, NONE_CATEGORY)) {
+function isKnownCategoryId(id: string, categories: Category[]): boolean {
+  if (categoryIdsMatch(id, IGNORE_CATEGORY) || categoryIdsMatch(id, NONE_CATEGORY)) {
     return true;
   }
-  return categories.some((category) => categoryNamesMatch(category.name, name));
+  return categories.some((category) => categoryIdsMatch(category.id, id));
 }
 
 /**
@@ -101,7 +101,7 @@ export async function verifyAndRepairCoverage(
     const response = await resumeSession<ClassifyBatchResponse>(
       {
         sessionId: state.classifierSessionId,
-        schema: CLASSIFY_BATCH_SCHEMA,
+        schema: buildClassifyBatchSchema(state.categories),
         prompt: buildCoverageRepairPrompt(state.categories, missing),
       },
       deps,

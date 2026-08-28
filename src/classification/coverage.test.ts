@@ -10,7 +10,9 @@ import {
 import type { ClassificationState } from "./escape-hatch.js";
 import type { ClassifiableChange } from "./types.js";
 
-const CATEGORIES: Category[] = [{ name: "Retry logic", description: "Adds backoff retries." }];
+const CATEGORIES: Category[] = [
+  { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
+];
 
 function change(id: string): ClassifiableChange {
   return {
@@ -49,10 +51,7 @@ describe("findUncoveredChangeIds", () => {
   it("flags changes missing from the map, and changes with an empty assignment list", () => {
     const changes = [change("c1"), change("c2"), change("c3")];
     const resolved = new Map<string, ResolvedChange>([
-      [
-        "c1",
-        { kind: "categorized", assignments: [{ category: "Retry logic", codeType: "production" }] },
-      ],
+      ["c1", { kind: "categorized", assignments: [{ category: "c1", codeType: "production" }] }],
       ["c2", { kind: "categorized", assignments: [] }],
       // c3 absent entirely
     ]);
@@ -67,14 +66,14 @@ describe("findUncoveredChangeIds", () => {
     expect(findUncoveredChangeIds(changes, resolved, CATEGORIES)).toEqual([]);
   });
 
-  it("matches category names case-insensitively and ignoring surrounding whitespace", () => {
+  it("matches category ids case-insensitively and ignoring surrounding whitespace", () => {
     const changes = [change("c1")];
     const resolved = new Map<string, ResolvedChange>([
       [
         "c1",
         {
           kind: "categorized",
-          assignments: [{ category: " retry LOGIC ", codeType: "production" }],
+          assignments: [{ category: " C1 ", codeType: "production" }],
         },
       ],
     ]);
@@ -82,19 +81,49 @@ describe("findUncoveredChangeIds", () => {
     expect(findUncoveredChangeIds(changes, resolved, CATEGORIES)).toEqual([]);
   });
 
-  it("flags a change assigned to a category name that doesn't exist as still uncovered", () => {
+  it("flags a change assigned to a category id that doesn't exist as still uncovered", () => {
     const changes = [change("c1")];
     const resolved = new Map<string, ResolvedChange>([
       [
         "c1",
         {
           kind: "categorized",
-          assignments: [{ category: "Made Up Category", codeType: "production" }],
+          assignments: [{ category: "c99", codeType: "production" }],
         },
       ],
     ]);
 
     expect(findUncoveredChangeIds(changes, resolved, CATEGORIES)).toEqual(["c1"]);
+  });
+
+  it("regression (docs/adr/0005): a change assigned by a slightly different NAME is NOT covered, but by the correct ID it IS", () => {
+    // The original bug: phase 1 can produce a long, paraphrase-prone name (e.g. "Tests and docs
+    // (JsonFlowTest.java, docs/json.md, README.md, ...)"). A classifier reply that echoes back
+    // even a close paraphrase of the name must NOT count as coverage — only the id does.
+    const longNameCategories = [
+      {
+        id: "c1",
+        name: "Tests and docs (JsonFlowTest.java, docs/json.md, README.md, ...)",
+        description: "Adds backoff retries.",
+      },
+    ];
+    const changes = [change("c1")];
+    const byParaphrasedName = new Map<string, ResolvedChange>([
+      [
+        "c1",
+        {
+          kind: "categorized",
+          // Close, but not exact — a plausible haiku paraphrase of the long name above.
+          assignments: [{ category: "Tests and docs", codeType: "production" }],
+        },
+      ],
+    ]);
+    const byCorrectId = new Map<string, ResolvedChange>([
+      ["c1", { kind: "categorized", assignments: [{ category: "c1", codeType: "production" }] }],
+    ]);
+
+    expect(findUncoveredChangeIds(changes, byParaphrasedName, longNameCategories)).toEqual(["c1"]);
+    expect(findUncoveredChangeIds(changes, byCorrectId, longNameCategories)).toEqual([]);
   });
 });
 
@@ -103,10 +132,7 @@ describe("verifyAndRepairCoverage", () => {
     const changes = [change("c1")];
     const changesById = new Map(changes.map((c) => [c.id, c]));
     const resolved = new Map<string, ResolvedChange>([
-      [
-        "c1",
-        { kind: "categorized", assignments: [{ category: "Retry logic", codeType: "production" }] },
-      ],
+      ["c1", { kind: "categorized", assignments: [{ category: "c1", codeType: "production" }] }],
     ]);
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
 
@@ -122,10 +148,7 @@ describe("verifyAndRepairCoverage", () => {
     const changes = [change("c1"), change("c2")];
     const changesById = new Map(changes.map((c) => [c.id, c]));
     const resolved = new Map<string, ResolvedChange>([
-      [
-        "c1",
-        { kind: "categorized", assignments: [{ category: "Retry logic", codeType: "production" }] },
-      ],
+      ["c1", { kind: "categorized", assignments: [{ category: "c1", codeType: "production" }] }],
       // c2 missing
     ]);
     const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
@@ -134,7 +157,7 @@ describe("verifyAndRepairCoverage", () => {
       return envelope(
         {
           classifications: [
-            { changeId: "c2", assignments: [{ category: "Retry logic", codeType: "test" }] },
+            { changeId: "c2", assignments: [{ category: "c1", codeType: "test" }] },
           ],
         },
         "classifier-session-2",
@@ -148,7 +171,7 @@ describe("verifyAndRepairCoverage", () => {
 
     expect(result.get("c2")).toEqual({
       kind: "categorized",
-      assignments: [{ category: "Retry logic", codeType: "test" }],
+      assignments: [{ category: "c1", codeType: "test" }],
     });
     expect(runClaudeProcess).toHaveBeenCalledTimes(1);
     expect(state.classifierSessionId).toBe("classifier-session-2");
@@ -158,16 +181,13 @@ describe("verifyAndRepairCoverage", () => {
     const changes = [change("c1")];
     const changesById = new Map(changes.map((c) => [c.id, c]));
     const resolved = new Map<string, ResolvedChange>([
-      [
-        "c1",
-        { kind: "categorized", assignments: [{ category: "Nonexistent", codeType: "production" }] },
-      ],
+      ["c1", { kind: "categorized", assignments: [{ category: "c99", codeType: "production" }] }],
     ]);
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope(
         {
           classifications: [
-            { changeId: "c1", assignments: [{ category: "Retry logic", codeType: "production" }] },
+            { changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] },
           ],
         },
         "classifier-session-2",
@@ -180,7 +200,7 @@ describe("verifyAndRepairCoverage", () => {
 
     expect(result.get("c1")).toEqual({
       kind: "categorized",
-      assignments: [{ category: "Retry logic", codeType: "production" }],
+      assignments: [{ category: "c1", codeType: "production" }],
     });
     expect(runClaudeProcess).toHaveBeenCalledTimes(1);
   });
