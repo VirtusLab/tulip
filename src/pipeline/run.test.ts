@@ -171,6 +171,8 @@ describe("run", () => {
         prTitle: "Add hello()",
         prDescription: "Adds a greeting helper.",
         diffThreshold: 400,
+        baseSha: "base-sha",
+        headSha: "head-sha",
         categorySets: [
           expect.objectContaining({
             category: { name: "Greeting", description: "Adds hello()." },
