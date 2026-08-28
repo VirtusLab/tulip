@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { config } from "../config.js";
 import { runCommand } from "./exec.js";
 import type { PrRef } from "./pr-url.js";
 
@@ -32,9 +33,12 @@ export interface CreateCheckoutOptions {
 }
 
 /**
- * Creates a bare-ish local checkout containing just enough history to read any file at
- * the PR's base or head revision. Fetches both commits shallowly (depth 1) by SHA, so it
- * works even when the base/head branches have since moved or been deleted.
+ * Creates a local checkout containing just enough history to read any file at the PR's base or
+ * head revision, with the head revision's working tree checked out (so a claude session's
+ * Read/Grep/Glob tools, and its allowlisted read-only git commands, see real files — see
+ * src/claude/runner.ts). Fetches both commits shallowly (depth {@link config}.limits
+ * .checkoutFetchDepth) by SHA, so it works even when the base/head branches have since moved or
+ * been deleted.
  */
 export async function createCheckout(
   pr: PrRef,
@@ -44,13 +48,15 @@ export async function createCheckout(
   const runGit = options.runGit ?? defaultRunGit;
   const removeDir = options.rm ?? defaultRm;
   const dir = await (options.mkdtemp ?? defaultMkdtemp)();
+  const depth = String(config.limits.checkoutFetchDepth);
 
   const remoteUrl = `https://github.com/${pr.owner}/${pr.repo}.git`;
   try {
     await runGit(["init"], dir);
     await runGit(["remote", "add", "origin", remoteUrl], dir);
-    await runGit(["fetch", "--depth", "1", "origin", revisions.base.sha], dir);
-    await runGit(["fetch", "--depth", "1", "origin", revisions.head.sha], dir);
+    await runGit(["fetch", "--depth", depth, "origin", revisions.base.sha], dir);
+    await runGit(["fetch", "--depth", depth, "origin", revisions.head.sha], dir);
+    await runGit(["checkout", revisions.head.sha], dir);
   } catch (error) {
     // None of the above succeeded enough to hand back a usable PrCheckout — the caller never
     // gets a `checkout` to call `.cleanup()` on, so this is the only chance to remove `dir`.
