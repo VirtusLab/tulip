@@ -31,7 +31,7 @@ const CALL_SITE_VARS: Record<string, string[]> = {
   "explain-markup-instructions": [],
   "explain-production-checklist": [],
   "explain-test-checklist": [],
-  "checkout-access": ["headSha", "baseSha"],
+  "explain-checkout-access": ["headSha", "baseSha"],
   explain: [
     "prTitle",
     "prDescription",
