@@ -4,6 +4,7 @@
 import { cp, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildHljsBundle } from "./build-hljs-bundle.mjs";
 
 const src = fileURLToPath(new URL("../src/rendering/assets", import.meta.url));
 const dest = fileURLToPath(new URL("../dist/rendering/assets", import.meta.url));
@@ -17,5 +18,10 @@ const mermaidSrc = fileURLToPath(
 const vendorDir = join(src, "vendor");
 await mkdir(vendorDir, { recursive: true });
 await cp(mermaidSrc, join(vendorDir, "mermaid.min.js"));
+
+// The vendored syntax-highlighting bundle isn't checked into git either (see .gitignore) — it's
+// built fresh from the `highlight.js` devDependency by ./build-hljs-bundle.mjs, since that
+// package (unlike mermaid) ships no prebuilt browser bundle to copy.
+await buildHljsBundle(join(vendorDir, "highlight.min.js"));
 
 await cp(src, dest, { recursive: true });

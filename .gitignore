@@ -5,3 +5,8 @@ dist/
 # Refreshed from node_modules/mermaid by scripts/copy-assets.mjs on every build — see that
 # script's comment. Not hand-maintained, so not checked in.
 /src/rendering/assets/vendor/mermaid.min.js
+
+# Built from scripts/hljs-entry.mjs by scripts/build-hljs-bundle.mjs on every build (and on
+# demand by tests that need it) — see those scripts' comments. Not hand-maintained, so not
+# checked in.
+/src/rendering/assets/vendor/highlight.min.js
