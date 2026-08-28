@@ -8,6 +8,16 @@
  * depend on it without risking a cycle.
  */
 export const config = {
+  /** Fixed CLI flags applied to every `claude` invocation, regardless of phase. */
+  claude: {
+    /** `--allowedTools` entries granting read-only git access via Bash, in addition to a
+     * session's default Read/Grep/Glob — so it can inspect history/diffs/blame beyond a single
+     * file without a blanket (and, headless, unapprovable) Bash grant — see src/claude/runner.ts.
+     * Syntax per `claude --help`'s own `--allowedTools` example ("Bash(git *) Edit"): a
+     * `Tool(prefix)` specifier, one per argv token. */
+    allowedTools: ["Bash(git diff:*)", "Bash(git show:*)", "Bash(git log:*)", "Bash(git blame:*)"],
+  },
+
   /** `claude --model` alias used to start each phase's fresh session. */
   models: {
     /** Phase 1: proposes the PR's category list — see src/categories/generate.ts. */
@@ -65,5 +75,9 @@ export const config = {
     /** Safety net against an unbounded pagination loop when fetching a PR's file list over the
      * GitHub REST API — see src/github/pr-fetcher.ts. */
     maxPrFilesSafetyNet: 3000,
+    /** Commit depth fetched for each of the checkout's base/head revisions — enough for `git
+     * log`/`git blame` in a claude session to see real history, not just the tip commit — see
+     * src/github/checkout.ts. */
+    checkoutFetchDepth: 50,
   },
 } as const;
