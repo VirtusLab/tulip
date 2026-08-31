@@ -99,9 +99,36 @@ const html = renderPage({
   prUrl: "https://github.com/example/repo/pull/42",
   fileDiffs,
   explanations: [
+    // Exercises all three attention badges (docs/adr/0010). renderPage renders sections in the
+    // given array order — the code that derives order from attention rank
+    // (assignCategoryIds, src/categories/types.ts) runs earlier, at category-generation time —
+    // so this sample lists them already in presentation order: close, then normal, then skim.
     {
-      category: { id: "c1", name: "Input validation", description: "Core parsing change." },
+      category: {
+        id: "c1",
+        name: "Input validation",
+        description: "Core parsing change.",
+        attention: "close",
+      },
       markdown,
+    },
+    {
+      category: {
+        id: "c2",
+        name: "Test coverage",
+        description: "Adds a test for the empty-input case.",
+        attention: "normal",
+      },
+      markdown: `## Test code\n\n${testRef}\n`,
+    },
+    {
+      category: {
+        id: "c3",
+        name: "Docs wording",
+        description: "Tightens a sentence in the README.",
+        attention: "skim",
+      },
+      markdown: `Minor doc wording tweak.\n\n${docsRef}\n`,
     },
   ],
 });

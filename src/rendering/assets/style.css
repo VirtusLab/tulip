@@ -307,6 +307,50 @@ main pre.mermaid {
   margin-top: var(--space-1);
 }
 
+/* Per-category attention badge (docs/adr/0010) — next to the name in a category's own h2
+   (./template.ts) and inline before its label in the TOC (./toc.ts). Never shown on a
+   Production/Test subsection. Three weights communicate the level without relying on color
+   alone (WCAG): "Read closely" is the strongest (warm accent + bolder), "Read through" is
+   plain/neutral (no special treatment needed — it's the default, unmarked case), and "Skim" is
+   muted/quiet. Sized down from the surrounding heading via its own font-size/weight rather than
+   inheriting h2's, so it reads as a label, not a second heading. */
+.attention-badge {
+  display: inline-block;
+  vertical-align: middle;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.attention-close {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  font-weight: 700;
+}
+
+.attention-normal {
+  color: var(--muted);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.attention-skim {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border);
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.toc a .attention-badge {
+  margin-right: 0.4rem;
+}
+
 .subsection {
   margin-top: var(--space-3);
 }

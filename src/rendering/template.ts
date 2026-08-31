@@ -1,4 +1,5 @@
 import type { CategoryExplanation } from "../explanations/types.js";
+import { renderAttentionBadge } from "./attention-badge.js";
 import { escapeHtml, escapeInlineScript } from "./escape.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { categoryId, PR_DESCRIPTION_ID, subsectionId } from "./ids.js";
@@ -99,7 +100,7 @@ function renderCategorySection(
   ctx: MarkdownRenderContext,
 ): string {
   const { category } = explanation;
-  const heading = `<h2>${escapeHtml(category.name)}</h2><p class="category-description">${escapeHtml(category.description)}</p>`;
+  const heading = `<h2>${escapeHtml(category.name)} ${renderAttentionBadge(category.attention)}</h2><p class="category-description">${escapeHtml(category.description)}</p>`;
 
   // The intro (anything before the first recognized subsection heading) must render
   // unconditionally, alongside any subsections — not only when there are no subsections.

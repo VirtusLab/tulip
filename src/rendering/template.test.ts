@@ -8,7 +8,12 @@ import { renderPage } from "./template.js";
 
 function explanation(overrides: Partial<CategoryExplanation> = {}): CategoryExplanation {
   return {
-    category: { id: "c1", name: "Auth", description: "Authentication changes" },
+    category: {
+      id: "c1",
+      name: "Auth",
+      description: "Authentication changes",
+      attention: "normal",
+    },
     markdown: "## Production code\n\nDoes the thing.\n\n## Test code\n\nTests the thing.\n",
     ...overrides,
   };
@@ -37,7 +42,9 @@ describe("renderPage", () => {
       prDescription: "Retries flaky requests.",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs: new Map(),
-      explanations: [explanation({ category: { id: "c1", name: "Auth", description: "" } })],
+      explanations: [
+        explanation({ category: { id: "c1", name: "Auth", description: "", attention: "normal" } }),
+      ],
     });
     const root = parse(html);
     const section = root.querySelector("#pr-description");
@@ -128,17 +135,60 @@ describe("renderPage", () => {
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs: new Map(),
       explanations: [
-        explanation({ category: { id: "c1", name: "First", description: "" } }),
-        explanation({ category: { id: "c2", name: "Second", description: "" } }),
+        explanation({
+          category: { id: "c1", name: "First", description: "", attention: "normal" },
+        }),
+        explanation({
+          category: { id: "c2", name: "Second", description: "", attention: "normal" },
+        }),
       ],
     });
     const root = parse(html);
     const sections = root.querySelectorAll(".category");
     expect(sections).toHaveLength(2);
-    expect(sections[0]?.querySelector("h2")?.text).toBe("First");
-    expect(sections[1]?.querySelector("h2")?.text).toBe("Second");
+    // The name is the h2's own text node — its attention badge is a separate child element
+    // (asserted by the attention-badge tests below), not part of the name text.
+    expect(sections[0]?.querySelector("h2")?.childNodes[0]?.rawText.trim()).toBe("First");
+    expect(sections[1]?.querySelector("h2")?.childNodes[0]?.rawText.trim()).toBe("Second");
     expect(sections[0]?.id).toBe("category-0");
     expect(sections[1]?.id).toBe("category-1");
+  });
+
+  it("renders each category's attention badge in its section heading, with the right label and weight class", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [
+        explanation({ category: { id: "c1", name: "Core", description: "", attention: "close" } }),
+        explanation({
+          category: { id: "c2", name: "Follow", description: "", attention: "normal" },
+        }),
+        explanation({ category: { id: "c3", name: "Wiring", description: "", attention: "skim" } }),
+      ],
+    });
+    const root = parse(html);
+    const sections = root.querySelectorAll(".category");
+    const badge = (index: number) => sections[index]?.querySelector("h2 .attention-badge");
+    expect(badge(0)?.text).toBe("Read closely");
+    expect(badge(0)?.classNames).toContain("attention-close");
+    expect(badge(1)?.text).toBe("Read through");
+    expect(badge(1)?.classNames).toContain("attention-normal");
+    expect(badge(2)?.text).toBe("Skim");
+    expect(badge(2)?.classNames).toContain("attention-skim");
+  });
+
+  it("renders no attention badge on a Production/Test subsection", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [explanation()],
+    });
+    const root = parse(html);
+    expect(root.querySelector(".subsection .attention-badge")).toBeNull();
   });
 
   it("splits a category into Production/Test subsections when the markdown has them", () => {
@@ -279,9 +329,9 @@ describe("renderPage", () => {
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs: new Map(),
       explanations: [
-        explanation({ category: { id: "c1", name: "Auth", description: "" } }),
+        explanation({ category: { id: "c1", name: "Auth", description: "", attention: "normal" } }),
         explanation({
-          category: { id: "c1", name: "Logging", description: "" },
+          category: { id: "c1", name: "Logging", description: "", attention: "normal" },
           markdown: "Just prose.",
         }),
       ],
@@ -455,6 +505,7 @@ describe("renderPage XSS safety", () => {
             id: "c1",
             name: "<script>alert(1)</script>",
             description: "<img src=x onerror=1>",
+            attention: "normal",
           },
           markdown: "Body.",
         }),
