@@ -66,6 +66,9 @@ export const config = {
     /** Explanation snippet-coverage amend attempts before giving up on the remaining changes —
      * see src/explanations/coverage.ts. */
     maxSnippetCoverageAttempts: 3,
+    /** Fix attempts per invalid mermaid diagram before giving up and omitting it from the page —
+     * see src/explanations/mermaid-verify.ts. */
+    maxMermaidFixAttempts: 2,
     /** Max changes per classification batch — see src/classification/batch.ts. */
     maxBatchSize: 20,
     /** Max total excerpt chars per classification batch, regardless of change count — see

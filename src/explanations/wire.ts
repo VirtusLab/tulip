@@ -41,3 +41,18 @@ export interface ReviewResponse {
   approved: boolean;
   issues: { description: string }[];
 }
+
+/** Shape the explaining session replies with when fixing one invalid mermaid diagram (task
+ * 6.6/docs/adr/0008) — just the corrected diagram source, not the full markdown, since only one
+ * fence needs to change. */
+export const MERMAID_FIX_SCHEMA: JsonSchema = {
+  type: "object",
+  required: ["source"],
+  properties: {
+    source: { type: "string" },
+  },
+};
+
+export interface MermaidFixResponse {
+  source: string;
+}

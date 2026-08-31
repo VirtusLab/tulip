@@ -4,6 +4,7 @@ import type { ClassifiableChange } from "../classification/types.js";
 import {
   buildCoverageAmendPrompt,
   buildExplainPrompt,
+  buildMermaidFixPrompt,
   buildReviewAmendPrompt,
   buildReviewPrompt,
 } from "./prompt.js";
@@ -98,5 +99,17 @@ describe("buildReviewAmendPrompt", () => {
     await expect(buildReviewAmendPrompt(issues)).toMatchFileSnapshot(
       "__snapshots__/review-amend.txt",
     );
+  });
+});
+
+// New prompt (docs/adr/0008) — no prior template-literal to byte-match, so this is a plain
+// content assertion rather than the migration-guard file-snapshot pattern used above.
+describe("buildMermaidFixPrompt", () => {
+  it("includes the invalid source and the parser's error", () => {
+    const prompt = buildMermaidFixPrompt("graph TD\nA[Bad", "Parse error on line 2");
+
+    expect(prompt).toContain("graph TD\nA[Bad");
+    expect(prompt).toContain("Parse error on line 2");
+    expect(prompt).toMatch(/corrected Mermaid diagram source/i);
   });
 });

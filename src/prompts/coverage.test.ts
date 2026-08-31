@@ -45,6 +45,7 @@ const CALL_SITE_VARS: Record<string, string[]> = {
     "testChecklist",
   ],
   "explain-coverage-amend": ["missing"],
+  "explain-mermaid-fix": ["source", "error"],
   review: [
     "prTitle",
     "prDescription",

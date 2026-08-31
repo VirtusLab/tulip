@@ -112,3 +112,14 @@ export function buildReviewAmendPrompt(issues: ReviewIssue[]): string {
     issues: issues.map((issue) => `- ${issue.description}`).join("\n"),
   });
 }
+
+/**
+ * Resumes the explaining session after mermaid diagram verification (see
+ * ./mermaid-verify.ts, docs/adr/0008) found one invalid diagram. Gives it the exact invalid
+ * source and the parser's own error, and asks for just the corrected diagram source — a small,
+ * targeted fix, not the full markdown, since only one fence needs to change. Text lives in
+ * src/prompts/explain-mermaid-fix.md (docs/adr/0006).
+ */
+export function buildMermaidFixPrompt(source: string, error: string): string {
+  return renderPrompt("explain-mermaid-fix", { source, error });
+}
