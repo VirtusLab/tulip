@@ -82,7 +82,7 @@ describe("explainCategory", () => {
     expect(prompt).toMatch(/doc files, comments, and doc-strings.*go under "## Documentation"/i);
   });
 
-  it("asks for a coverage strip followed by conditional sections, not a fixed two-way split", async () => {
+  it("asks for conditional sections, not a fixed two-way split or a coverage strip", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
@@ -90,15 +90,17 @@ describe("explainCategory", () => {
     await explainCategory(baseInput(), { runClaudeProcess });
 
     const prompt = runClaudeProcess.mock.calls[0]?.[1];
-    expect(prompt).toMatch(/coverage strip/i);
-    expect(prompt).toMatch(/Coverage — Tests: added · Docs: none/);
-    expect(prompt).toMatch(/covers tests and docs only/i);
     // The main section must be named for its content, not hardcoded as "production" — this is
     // what keeps a docs-only category from being mislabeled "## Production code".
     expect(prompt).toMatch(/name it for what it covers, not "production"/i);
     expect(prompt).toMatch(/## Documentation.*if any docs, comments, or doc-strings changed/i);
     expect(prompt).not.toMatch(/## Production code/);
     expect(prompt).not.toMatch(/omit whichever section has nothing to say/i);
+    // The per-category "Coverage — Tests: ... · Docs: ..." strip is gone (docs/adr/0009): a
+    // narrow category legitimately having no docs isn't a gap, and "Docs: none" read as one. The
+    // conditional "## ..." sections above already convey presence without a misleading "none".
+    expect(prompt).not.toMatch(/coverage strip/i);
+    expect(prompt).not.toMatch(/Coverage — /);
   });
 
   it("drops the redundant documentation bullet from the production checklist", async () => {

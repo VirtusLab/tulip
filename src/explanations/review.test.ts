@@ -112,7 +112,9 @@ describe("reviewAndAmend", () => {
     expect(prompt).toMatch(/match the changes/);
   });
 
-  it("asks the reviewer to check the coverage strip's honesty", async () => {
+  // The per-category "Coverage — Tests: ... · Docs: ..." strip is gone (docs/adr/0009), so the
+  // review checklist no longer asks about it.
+  it("doesn't ask the reviewer to check a coverage strip", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ approved: true, issues: [] }, "review-1"),
     );
@@ -120,8 +122,8 @@ describe("reviewAndAmend", () => {
     await reviewAndAmend(baseInput(), { runClaudeProcess });
 
     const prompt = runClaudeProcess.mock.calls[0]?.[1];
-    expect(prompt).toMatch(/coverage — is there a coverage strip/i);
-    expect(prompt).toMatch(/marked\s+"none" only when truly absent, not to skip work/i);
+    expect(prompt).not.toMatch(/coverage strip/i);
+    expect(prompt).not.toMatch(/Coverage — /);
   });
 
   it("amends via the explaining session, re-checks coverage, then re-reviews with a fresh session", async () => {

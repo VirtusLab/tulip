@@ -33,8 +33,6 @@ Review the explanation for:
 - conciseness — is anything unnecessary or repetitive?
 - correctness — does every claim actually match the changes above? Flag anything invented,
   mistaken, or unsupported by them.
-- coverage — is there a coverage strip, and does it match the changes (tests/docs marked
-  "none" only when truly absent, not to skip work)?
 
 Reply with approved: true if it's good as-is. Otherwise reply with approved: false and a list of
 specific issues to fix.

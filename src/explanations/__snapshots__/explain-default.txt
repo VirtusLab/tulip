@@ -57,21 +57,13 @@ Then write the explanation as markdown, interleaving prose with Mermaid diagrams
 ```mermaid) and snippet references. Use diagrams generously, including before/after
 call-sequence diagrams wherever the flow of calls changed.
 
-Start with a one-line coverage strip so the reviewer sees at a glance what this group
-ships, for example:
-
-Coverage — Tests: added · Docs: none
-
-(the strip covers tests and docs only — the main section always covers the code itself).
-Write "none" for a facet with nothing here; that absence is itself useful — it tells
-the reviewer whether the change shipped tested and documented.
-
-Then write "## ..." sections only for facets that have something to explain:
+Write "## ..." sections only for facets that have something to explain:
 - a section on the main change — name it for what it covers, not "production";
 - "## Tests" if tests changed — cover the testing strategy;
 - "## Documentation" if any docs, comments, or doc-strings changed — say what changed
   and whether it still matches the code.
-Skip a section that would only say "none"; the coverage strip already carries that.
+Skip a section that doesn't apply — its absence already tells the reviewer this group didn't
+touch that facet; don't call that out with a "none" of your own.
 
 For the production code, cover what's relevant — skip what doesn't apply:
 - how it relates to the PR's title and description
