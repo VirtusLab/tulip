@@ -12,7 +12,11 @@ export type Attention = "close" | "normal" | "skim";
  * both the schema enum and the sort/rank table below. */
 export const ATTENTION_LEVELS: readonly Attention[] = ["close", "normal", "skim"];
 
-const ATTENTION_RANK: Record<Attention, number> = { close: 0, normal: 1, skim: 2 };
+/** Derived from {@link ATTENTION_LEVELS}'s position, not hand-written — so a future level
+ * addition/reorder can't desync the rank table from the enum it's supposed to mirror. */
+const ATTENTION_RANK: Record<Attention, number> = Object.fromEntries(
+  ATTENTION_LEVELS.map((level, index) => [level, index]),
+) as Record<Attention, number>;
 
 /**
  * One group of cohesive, self-contained changes, as presented to the reviewer. Identified by a
@@ -54,15 +58,22 @@ export const CATEGORY_SCHEMA: JsonSchema = {
   },
 };
 
+/** Stable-sorts anything with an `attention` field by rank (`close` before `normal` before
+ * `skim` — docs/adr/0010); items tied on attention keep their relative order (`Array.prototype
+ * .sort` is spec-stable, ES2019+). Shared by {@link assignCategoryIds} (proposals, before ids
+ * are assigned) and by classification's final presentation-order sort
+ * (src/classification/orchestrate.ts, applied once after escape-hatch/coverage is done, not
+ * per-acceptance — see that module) — the one place order = attention is actually finalized. */
+export function sortByAttention<T extends { attention: Attention }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => ATTENTION_RANK[a.attention] - ATTENTION_RANK[b.attention]);
+}
+
 /** Assigns ids "c1", "c2", ... to a freshly generated category list, in presentation order:
- * proposals are stable-sorted by attention rank first (`close` before `normal` before `skim` —
- * see docs/adr/0010), so `c1` is always the first Read-closely group; `Array.prototype.sort` is
- * spec-stable (ES2019+), so proposals tied on attention keep the model's own emitted order as
- * the tiebreak. Ordering is no longer authored by the model (see src/prompts/category-generation.md). */
+ * proposals are stable-sorted by attention rank first (see {@link sortByAttention}), so `c1` is
+ * always the first Read-closely group. Ordering is no longer authored by the model (see
+ * src/prompts/category-generation.md). */
 export function assignCategoryIds(proposals: CategoryProposal[]): Category[] {
-  const ordered = [...proposals].sort(
-    (a, b) => ATTENTION_RANK[a.attention] - ATTENTION_RANK[b.attention],
-  );
+  const ordered = sortByAttention(proposals);
   // `id` spread last: a stray `id` key on a parsed proposal (CATEGORY_SCHEMA has no
   // additionalProperties:false, so nothing strips one) must never override the code-assigned id.
   return ordered.map((proposal, index) => ({ ...proposal, id: `c${index + 1}` }));
