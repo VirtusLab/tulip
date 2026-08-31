@@ -36,7 +36,7 @@ function renderIntoJsdom(): Document {
     fileDiffs,
     explanations: [
       {
-        category: { id: "c1", name: "Auth", description: "d" },
+        category: { id: "c1", name: "Auth", description: "d", attention: "normal" },
         markdown: `Intro prose.\n\n${snippetRef}\n\n\`\`\`ts\nconst x = 1;\n\`\`\`\n\n\`\`\`mermaid\ngraph TD\nA-->B\n\`\`\`\n\n## Production code\n\nBody.\n`,
       },
     ],

@@ -40,8 +40,18 @@ function refFor(c: ClassifiableChange): string {
 
 describe("explainCategories", () => {
   it("returns one reviewed, coverage-verified explanation per category, in order", async () => {
-    const categoryA: Category = { id: "c1", name: "A", description: "First category." };
-    const categoryB: Category = { id: "c2", name: "B", description: "Second category." };
+    const categoryA: Category = {
+      id: "c1",
+      name: "A",
+      description: "First category.",
+      attention: "normal",
+    };
+    const categoryB: Category = {
+      id: "c2",
+      name: "B",
+      description: "Second category.",
+      attention: "normal",
+    };
     const changeA = change("a1", "src/a.ts");
     const changeB = change("b1", "src/b.ts");
     const input: ExplainCategoriesInput = {
@@ -80,6 +90,7 @@ describe("explainCategories", () => {
       id: "c1",
       name: "Retry logic",
       description: "Adds backoff retries.",
+      attention: "normal",
     };
     const production = [change("c1", "src/fetch.ts", { start: 10, end: 12 })];
     const test = [change("c2", "src/fetch.test.ts", { start: 1, end: 2 })];
@@ -134,7 +145,12 @@ describe("explainCategories", () => {
   }
 
   it("wires mermaid verification into the flow: a fixable diagram ends up valid in the final markdown", async () => {
-    const category: Category = { id: "c1", name: "Diagrammed", description: "Has a diagram." };
+    const category: Category = {
+      id: "c1",
+      name: "Diagrammed",
+      description: "Has a diagram.",
+      attention: "normal",
+    };
     const production = [change("c1", "src/diagram.ts")];
     const input: ExplainCategoriesInput = {
       prTitle: "Add a diagram",
@@ -170,7 +186,12 @@ describe("explainCategories", () => {
   });
 
   it("wires mermaid verification into the flow: a diagram still invalid after every fix attempt is omitted, not shipped broken", async () => {
-    const category: Category = { id: "c1", name: "Diagrammed", description: "Has a diagram." };
+    const category: Category = {
+      id: "c1",
+      name: "Diagrammed",
+      description: "Has a diagram.",
+      attention: "normal",
+    };
     const production = [change("c1", "src/diagram.ts")];
     const input: ExplainCategoriesInput = {
       prTitle: "Add a diagram",
@@ -209,7 +230,7 @@ describe("explainCategories", () => {
   it("processes categories concurrently, capped by the shared claude process limiter", async () => {
     const categories: CategoryChangeSet[] = Array.from({ length: 5 }, (_, i) =>
       categorySet(
-        { id: "c1", name: `Category ${i}`, description: `Description ${i}` },
+        { id: "c1", name: `Category ${i}`, description: `Description ${i}`, attention: "normal" },
         [change(`c${i}`, `src/file${i}.ts`)],
         [],
       ),
@@ -252,8 +273,18 @@ describe("explainCategories", () => {
   });
 
   it("logs when each category's explanation starts and finishes", async () => {
-    const categoryA: Category = { id: "c1", name: "A", description: "First category." };
-    const categoryB: Category = { id: "c2", name: "B", description: "Second category." };
+    const categoryA: Category = {
+      id: "c1",
+      name: "A",
+      description: "First category.",
+      attention: "normal",
+    };
+    const categoryB: Category = {
+      id: "c2",
+      name: "B",
+      description: "Second category.",
+      attention: "normal",
+    };
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
@@ -289,8 +320,18 @@ describe("explainCategories", () => {
   });
 
   it("attributes a failure to its category and doesn't hide a concurrent failure in another", async () => {
-    const categoryA: Category = { id: "c1", name: "A", description: "First category." };
-    const categoryB: Category = { id: "c2", name: "B", description: "Second category." };
+    const categoryA: Category = {
+      id: "c1",
+      name: "A",
+      description: "First category.",
+      attention: "normal",
+    };
+    const categoryB: Category = {
+      id: "c2",
+      name: "B",
+      description: "Second category.",
+      attention: "normal",
+    };
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
@@ -327,8 +368,18 @@ describe("explainCategories", () => {
   });
 
   it("drops a category with no production and no test changes before phase 3, and logs it", async () => {
-    const categoryA: Category = { id: "c1", name: "A", description: "First category." };
-    const categoryEmpty: Category = { id: "c2", name: "Empty", description: "Nothing here." };
+    const categoryA: Category = {
+      id: "c1",
+      name: "A",
+      description: "First category.",
+      attention: "normal",
+    };
+    const categoryEmpty: Category = {
+      id: "c2",
+      name: "Empty",
+      description: "Nothing here.",
+      attention: "normal",
+    };
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
@@ -366,8 +417,18 @@ describe("explainCategories", () => {
   });
 
   it("only reports the failed category, not a category that succeeded", async () => {
-    const categoryA: Category = { id: "c1", name: "A", description: "First category." };
-    const categoryB: Category = { id: "c2", name: "B", description: "Second category." };
+    const categoryA: Category = {
+      id: "c1",
+      name: "A",
+      description: "First category.",
+      attention: "normal",
+    };
+    const categoryB: Category = {
+      id: "c2",
+      name: "B",
+      description: "Second category.",
+      attention: "normal",
+    };
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",

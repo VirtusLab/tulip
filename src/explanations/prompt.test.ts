@@ -10,7 +10,12 @@ import {
 } from "./prompt.js";
 import type { ExplainCategoryInput, ReviewIssue, ReviewPromptInput } from "./types.js";
 
-const CATEGORY: Category = { id: "c1", name: "Retry logic", description: "Adds backoff retries." };
+const CATEGORY: Category = {
+  id: "c1",
+  name: "Retry logic",
+  description: "Adds backoff retries.",
+  attention: "normal",
+};
 
 function change(overrides: Partial<ClassifiableChange> = {}): ClassifiableChange {
   return {

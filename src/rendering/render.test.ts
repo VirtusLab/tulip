@@ -4,7 +4,7 @@ import type { CategoryExplanation } from "../explanations/types.js";
 import { renderExplanations } from "./render.js";
 
 function explanation(markdown: string): CategoryExplanation {
-  return { category: { id: "c1", name: "Auth", description: "" }, markdown };
+  return { category: { id: "c1", name: "Auth", description: "", attention: "normal" }, markdown };
 }
 
 describe("renderExplanations", () => {

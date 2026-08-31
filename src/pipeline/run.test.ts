@@ -77,7 +77,7 @@ function fakeCheckout(): PrCheckout & { cleanup: ReturnType<typeof vi.fn> } {
 
 function classificationResult(): ClassifyChangesResult {
   return {
-    categories: [{ id: "c1", name: "Greeting", description: "Adds hello()." }],
+    categories: [{ id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" }],
     assignments: new Map([[CHANGE_ID, [{ category: "c1", codeType: "production" }]]]),
     ignoredChangeIds: new Set(),
     changesById: new Map([
@@ -114,7 +114,9 @@ function baseDeps(order: string[] = []) {
     generateCategories: vi.fn(async (): Promise<GenerateCategoriesResult> => {
       order.push("phase1");
       return {
-        categories: [{ id: "c1", name: "Greeting", description: "Adds hello()." }],
+        categories: [
+          { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" },
+        ],
         sessionId: "s1",
       };
     }),
@@ -126,7 +128,12 @@ function baseDeps(order: string[] = []) {
       order.push("phase3");
       return [
         {
-          category: { id: "c1", name: "Greeting", description: "Adds hello()." },
+          category: {
+            id: "c1",
+            name: "Greeting",
+            description: "Adds hello().",
+            attention: "normal",
+          },
           markdown: "prose",
         },
       ];
@@ -192,7 +199,9 @@ describe("run", () => {
     expect(deps.classifyChanges).toHaveBeenCalledWith(
       {
         diff: expect.anything(),
-        categories: [{ id: "c1", name: "Greeting", description: "Adds hello()." }],
+        categories: [
+          { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" },
+        ],
         phase1SessionId: "s1",
       },
       { cwd: "/tmp/tulip-checkout" },
@@ -206,7 +215,12 @@ describe("run", () => {
         headSha: "head-sha",
         categorySets: [
           expect.objectContaining({
-            category: { id: "c1", name: "Greeting", description: "Adds hello()." },
+            category: {
+              id: "c1",
+              name: "Greeting",
+              description: "Adds hello().",
+              attention: "normal",
+            },
           }),
         ],
       }),

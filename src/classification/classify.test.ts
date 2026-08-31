@@ -7,7 +7,7 @@ import type { ClassifiableChange } from "./types.js";
 import type { RawChangeClassification } from "./wire.js";
 
 const CATEGORIES: Category[] = [
-  { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
+  { id: "c1", name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
 ];
 
 /** A no-op afterBatch hook, for tests that don't exercise the escape hatch. */
@@ -61,7 +61,7 @@ describe("classifyInBatches", () => {
   it("builds the classify schema's category enum from the current category ids plus none/ignore", async () => {
     const twoCategories: Category[] = [
       ...CATEGORIES,
-      { id: "c2", name: "Logging", description: "Adds structured logs." },
+      { id: "c2", name: "Logging", description: "Adds structured logs.", attention: "normal" },
     ];
     const changes = [change("c1")];
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
@@ -125,6 +125,7 @@ describe("classifyInBatches", () => {
       id: "c2",
       name: "New area",
       description: "Escape-hatch addition.",
+      attention: "normal",
     };
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
@@ -174,7 +175,7 @@ describe("classifyInBatches", () => {
   it("keeps multiple assignments for a change that belongs to more than one category", async () => {
     const twoCategories: Category[] = [
       ...CATEGORIES,
-      { id: "c2", name: "Logging", description: "Adds structured logs." },
+      { id: "c2", name: "Logging", description: "Adds structured logs.", attention: "normal" },
     ];
     const changes = [change("c1")];
     const runClaudeProcess = vi.fn(async () =>
@@ -246,14 +247,22 @@ describe("resolveRawClassification", () => {
         {
           category: "none",
           codeType: "production",
-          suggestedCategory: { name: "New area", description: "Doesn't fit elsewhere." },
+          suggestedCategory: {
+            name: "New area",
+            description: "Doesn't fit elsewhere.",
+            attention: "normal",
+          },
         },
       ],
     };
 
     expect(resolveRawClassification(entry)).toEqual({
       kind: "none",
-      suggestedCategory: { name: "New area", description: "Doesn't fit elsewhere." },
+      suggestedCategory: {
+        name: "New area",
+        description: "Doesn't fit elsewhere.",
+        attention: "normal",
+      },
       existingAssignments: [],
     });
   });
@@ -266,14 +275,22 @@ describe("resolveRawClassification", () => {
         {
           category: "none",
           codeType: "production",
-          suggestedCategory: { name: "New area", description: "Doesn't fit elsewhere." },
+          suggestedCategory: {
+            name: "New area",
+            description: "Doesn't fit elsewhere.",
+            attention: "normal",
+          },
         },
       ],
     };
 
     expect(resolveRawClassification(entry)).toEqual({
       kind: "none",
-      suggestedCategory: { name: "New area", description: "Doesn't fit elsewhere." },
+      suggestedCategory: {
+        name: "New area",
+        description: "Doesn't fit elsewhere.",
+        attention: "normal",
+      },
       existingAssignments: [{ category: "c1", codeType: "production" }],
     });
   });

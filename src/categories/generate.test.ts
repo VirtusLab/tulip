@@ -24,9 +24,13 @@ function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudePro
 }
 
 describe("generateCategories", () => {
-  it("requests a schema shaped as { categories: [{ name, description }] }", async () => {
+  it("requests a schema shaped as { categories: [{ name, description, attention }] }, attention a hard-constrained enum", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
     );
 
     await generateCategories(INPUT, { runClaudeProcess });
@@ -41,8 +45,12 @@ describe("generateCategories", () => {
           type: "array",
           items: {
             type: "object",
-            required: ["name", "description"],
-            properties: { name: { type: "string" }, description: { type: "string" } },
+            required: ["name", "description", "attention"],
+            properties: {
+              name: { type: "string" },
+              description: { type: "string" },
+              attention: { type: "string", enum: ["close", "normal", "skim"] },
+            },
           },
         },
       },
@@ -51,7 +59,11 @@ describe("generateCategories", () => {
 
   it("sends a prompt containing the title, description, files, and category guidance", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
     );
 
     await generateCategories(INPUT, { runClaudeProcess });
@@ -68,7 +80,11 @@ describe("generateCategories", () => {
 
   it("groups by functionality/concern, never by file type", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
     );
 
     await generateCategories(INPUT, { runClaudeProcess });
@@ -81,7 +97,11 @@ describe("generateCategories", () => {
 
   it("bans a standalone tests or documentation group and requires tests/docs to ride along", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
     );
 
     await generateCategories(INPUT, { runClaudeProcess });
@@ -93,7 +113,11 @@ describe("generateCategories", () => {
 
   it("allows a coherent boilerplate group without licensing a tests/docs split", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
     );
 
     await generateCategories(INPUT, { runClaudeProcess });
@@ -105,7 +129,11 @@ describe("generateCategories", () => {
 
   it("orders groups by attention and asks for a read-carefully/skim label per group", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
     );
 
     await generateCategories(INPUT, { runClaudeProcess });
@@ -118,7 +146,11 @@ describe("generateCategories", () => {
 
   it("asks for short names, with file lists/qualifiers/parentheticals kept out of the name", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
     );
 
     await generateCategories(INPUT, { runClaudeProcess });
@@ -128,38 +160,86 @@ describe("generateCategories", () => {
     expect(prompt).toMatch(/never a file list,\s+method-name qualifiers, or a parenthetical/i);
   });
 
-  it("assigns ids 'c1', 'c2', ... in presentation order, on top of the model's name+description", async () => {
+  it("assigns ids 'c1', 'c2', ... in the model's own order when attention ties", async () => {
     const proposals = [
-      { name: "Retry logic", description: "Adds backoff retries." },
-      { name: "Backoff tests", description: "Covers the new retry behavior." },
+      { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+      { name: "Backoff tests", description: "Covers the new retry behavior.", attention: "normal" },
     ];
     const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
 
     const result = await generateCategories(INPUT, { runClaudeProcess });
 
     expect(result.categories).toEqual([
-      { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
-      { id: "c2", name: "Backoff tests", description: "Covers the new retry behavior." },
+      { id: "c1", name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+      {
+        id: "c2",
+        name: "Backoff tests",
+        description: "Covers the new retry behavior.",
+        attention: "normal",
+      },
     ]);
     expect(result.sessionId).toBe("abc");
+  });
+
+  it("stable-sorts proposals by attention rank (close, then normal, then skim) before assigning ids", async () => {
+    // The model returns skim, close, normal, in that order — presentation order must derive
+    // from attention rank (docs/adr/0010), not the model's emitted order, so c1 is the Read
+    // closely group even though it came out of the model's reply last.
+    const proposals = [
+      { name: "Wiring", description: "Plumbs the new config through.", attention: "skim" },
+      { name: "Retry logic", description: "Adds backoff retries.", attention: "close" },
+      { name: "Docs", description: "Updates the README.", attention: "normal" },
+    ];
+    const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
+
+    const result = await generateCategories(INPUT, { runClaudeProcess });
+
+    expect(result.categories.map((c) => [c.id, c.name, c.attention])).toEqual([
+      ["c1", "Retry logic", "close"],
+      ["c2", "Docs", "normal"],
+      ["c3", "Wiring", "skim"],
+    ]);
+  });
+
+  it("keeps the model's own emitted order as the tiebreak within one attention level (stable sort)", async () => {
+    const proposals = [
+      { name: "B", description: "Second in the model's reply.", attention: "skim" },
+      { name: "A", description: "First in the model's reply.", attention: "skim" },
+    ];
+    const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
+
+    const result = await generateCategories(INPUT, { runClaudeProcess });
+
+    expect(result.categories.map((c) => c.name)).toEqual(["B", "A"]);
   });
 
   it("keeps the code-assigned id even if a parsed proposal carries a stray 'id' field", async () => {
     // CATEGORY_SCHEMA has no additionalProperties:false, so an extra "id" key on the model's
     // reply isn't rejected — assignCategoryIds must still win, not silently adopt it.
-    const proposals = [{ id: "not-a-real-id", name: "Retry logic", description: "Adds retries." }];
+    const proposals = [
+      {
+        id: "not-a-real-id",
+        name: "Retry logic",
+        description: "Adds retries.",
+        attention: "normal",
+      },
+    ];
     const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
 
     const result = await generateCategories(INPUT, { runClaudeProcess });
 
     expect(result.categories).toEqual([
-      { id: "c1", name: "Retry logic", description: "Adds retries." },
+      { id: "c1", name: "Retry logic", description: "Adds retries.", attention: "normal" },
     ]);
   });
 
   it("renders byte-identical prompt output (regression guard for wording changes)", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
     );
 
     await generateCategories(INPUT, { runClaudeProcess });
@@ -171,7 +251,11 @@ describe("generateCategories", () => {
 
   it("renders byte-identical prompt output for an empty/whitespace description", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
-      envelope({ categories: [{ name: "Retry logic", description: "Adds backoff retries." }] }),
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
     );
 
     await generateCategories(

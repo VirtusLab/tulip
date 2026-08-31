@@ -41,8 +41,12 @@ describe("consultOnCategory", () => {
         accept: { type: "boolean" },
         category: {
           type: "object",
-          required: ["name", "description"],
-          properties: { name: { type: "string" }, description: { type: "string" } },
+          required: ["name", "description", "attention"],
+          properties: {
+            name: { type: "string" },
+            description: { type: "string" },
+            attention: { type: "string", enum: ["close", "normal", "skim"] },
+          },
         },
       },
     });
@@ -65,7 +69,11 @@ describe("consultOnCategory", () => {
   });
 
   it("returns accept: true with the (possibly refined) category", async () => {
-    const category = { name: "Config parsing", description: "Parses the config file." };
+    const category = {
+      name: "Config parsing",
+      description: "Parses the config file.",
+      attention: "normal",
+    };
     const runClaudeProcess = vi.fn(async () => envelope({ accept: true, category }, "session-1"));
 
     const result = await consultOnCategory(INPUT, { runClaudeProcess });

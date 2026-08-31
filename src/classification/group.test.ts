@@ -24,8 +24,8 @@ describe("groupChangesByCategory", () => {
     const c3 = change("c3");
     const result: ClassifyChangesResult = {
       categories: [
-        { id: "c1", name: "B", description: "second" },
-        { id: "c2", name: "A", description: "first" },
+        { id: "c1", name: "B", description: "second", attention: "normal" },
+        { id: "c2", name: "A", description: "first", attention: "normal" },
       ],
       assignments: new Map([
         ["c1", [{ category: "c2", codeType: "production" }]],
@@ -53,7 +53,7 @@ describe("groupChangesByCategory", () => {
     // normalized, so it (correctly) doesn't land in the group.
     const c1 = change("c1");
     const result: ClassifyChangesResult = {
-      categories: [{ id: "c1", name: "Retry logic", description: "" }],
+      categories: [{ id: "c1", name: "Retry logic", description: "", attention: "normal" }],
       assignments: new Map([["c1", [{ category: " C1 ", codeType: "production" }]]]),
       ignoredChangeIds: new Set(),
       changesById: new Map([["c1", c1]]),
@@ -69,7 +69,14 @@ describe("groupChangesByCategory", () => {
     // specifically because a classifier can't be trusted to echo a long name back verbatim.
     const c1 = change("c1");
     const result: ClassifyChangesResult = {
-      categories: [{ id: "c1", name: "Retry logic (backoff, jitter, tests)", description: "" }],
+      categories: [
+        {
+          id: "c1",
+          name: "Retry logic (backoff, jitter, tests)",
+          description: "",
+          attention: "normal",
+        },
+      ],
       // The classifier replied with the id, not a paraphrase of the (long) name.
       assignments: new Map([["c1", [{ category: "c1", codeType: "production" }]]]),
       ignoredChangeIds: new Set(),
@@ -85,8 +92,8 @@ describe("groupChangesByCategory", () => {
     const c1 = change("c1");
     const result: ClassifyChangesResult = {
       categories: [
-        { id: "c1", name: "A", description: "" },
-        { id: "c2", name: "B", description: "" },
+        { id: "c1", name: "A", description: "", attention: "normal" },
+        { id: "c2", name: "B", description: "", attention: "normal" },
       ],
       assignments: new Map([
         [

@@ -11,7 +11,7 @@ import type { ClassificationState } from "./escape-hatch.js";
 import type { ClassifiableChange } from "./types.js";
 
 const CATEGORIES: Category[] = [
-  { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
+  { id: "c1", name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
 ];
 
 function change(id: string): ClassifiableChange {
@@ -108,6 +108,7 @@ describe("findUncoveredChangeIds", () => {
         id: "c1",
         name: "Tests and docs (JsonFlowTest.java, docs/json.md, README.md, ...)",
         description: "Adds backoff retries.",
+        attention: "normal" as const,
       },
     ];
     const changes = [change("c1")];

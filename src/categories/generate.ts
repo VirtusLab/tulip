@@ -26,7 +26,8 @@ export interface GenerateCategoriesInput {
 }
 
 export interface GenerateCategoriesResult {
-  /** In presentation order: most important / highest-impact first. */
+  /** In presentation order: sorted by attention rank, Read-closely first, Skim last (see
+   * {@link import("./types.js").assignCategoryIds} and docs/adr/0010). */
   categories: Category[];
   /** Kept for phase 2's escape-hatch consultation (see ./consult.js). */
   sessionId: string;
@@ -53,7 +54,9 @@ function buildPrompt(input: GenerateCategoriesInput): string {
 
 /**
  * Phase 1: primes a fresh sonnet session with the PR's title, description and file list, and
- * asks it to propose an ordered list of categories to group the PR's changes by. The returned
+ * asks it to propose a list of categories, each rated for attention, to group the PR's changes
+ * by (code then derives presentation order from the rating — see {@link GenerateCategoriesResult}).
+ * The returned
  * sessionId is later used by {@link import("./consult.js").consultOnCategory} when phase 2 wants
  * to add a category it didn't originally propose.
  */

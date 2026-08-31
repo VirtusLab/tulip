@@ -10,8 +10,8 @@ import {
 import type { ClassifiableChange } from "./types.js";
 
 const CATEGORIES: Category[] = [
-  { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
-  { id: "c2", name: "Logging", description: "Adds structured logs." },
+  { id: "c1", name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+  { id: "c2", name: "Logging", description: "Adds structured logs.", attention: "normal" },
 ];
 
 function change(id: string, excerpt = "+line1\n+line2"): ClassifiableChange {
@@ -54,7 +54,12 @@ describe("buildEscapeHatchResumePrompt", () => {
       {
         change: change("ch1"),
         accepted: true,
-        category: { id: "c3", name: "New area", description: "Escape-hatch addition." },
+        category: {
+          id: "c3",
+          name: "New area",
+          description: "Escape-hatch addition.",
+          attention: "normal",
+        },
       },
       {
         change: change("ch2"),

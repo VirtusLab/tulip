@@ -26,7 +26,7 @@ function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessRe
   };
 }
 
-const CATEGORIES: Category[] = [{ id: "c1", name: "A", description: "first" }];
+const CATEGORIES: Category[] = [{ id: "c1", name: "A", description: "first", attention: "normal" }];
 
 describe("classifyChanges", () => {
   it("runs classification, escape hatch and coverage repair end to end", async () => {
@@ -57,7 +57,7 @@ describe("classifyChanges", () => {
                   {
                     category: "none",
                     codeType: "production",
-                    suggestedCategory: { name: "B", description: "proposed" },
+                    suggestedCategory: { name: "B", description: "proposed", attention: "normal" },
                   },
                 ],
               },
@@ -75,7 +75,7 @@ describe("classifyChanges", () => {
         // only — it never assigns an id (see docs/adr/0005); escape-hatch.ts assigns "c2" itself.
         expect(input).toContain("B");
         return envelope(
-          { accept: true, category: { name: "B", description: "refined" } },
+          { accept: true, category: { name: "B", description: "refined", attention: "normal" } },
           "phase1-1",
         );
       }
@@ -112,8 +112,8 @@ describe("classifyChanges", () => {
     );
 
     expect(result.categories).toEqual([
-      { id: "c1", name: "A", description: "first" },
-      { id: "c2", name: "B", description: "refined" },
+      { id: "c1", name: "A", description: "first", attention: "normal" },
+      { id: "c2", name: "B", description: "refined", attention: "normal" },
     ]);
     expect(result.assignments.get("c1")).toEqual([{ category: "c1", codeType: "production" }]);
     expect(result.assignments.get("c2")).toEqual([{ category: "c2", codeType: "test" }]);
@@ -146,7 +146,7 @@ describe("classifyChanges", () => {
                   {
                     category: "none",
                     codeType: "production",
-                    suggestedCategory: { name: "B", description: "proposed" },
+                    suggestedCategory: { name: "B", description: "proposed", attention: "normal" },
                   },
                 ],
               }
@@ -157,7 +157,7 @@ describe("classifyChanges", () => {
       if (call === 2) {
         // consultOnCategory, resuming the phase-1 session — accept, refining the description.
         return envelope(
-          { accept: true, category: { name: "B", description: "refined" } },
+          { accept: true, category: { name: "B", description: "refined", attention: "normal" } },
           "phase1-1",
         );
       }
@@ -191,8 +191,8 @@ describe("classifyChanges", () => {
 
     expect(runClaudeProcess).toHaveBeenCalledTimes(4);
     expect(result.categories).toEqual([
-      { id: "c1", name: "A", description: "first" },
-      { id: "c2", name: "B", description: "refined" },
+      { id: "c1", name: "A", description: "first", attention: "normal" },
+      { id: "c2", name: "B", description: "refined", attention: "normal" },
     ]);
     expect(result.assignments.get("b1-0")).toEqual([{ category: "c2", codeType: "production" }]);
   });

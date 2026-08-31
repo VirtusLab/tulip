@@ -9,7 +9,12 @@ import { type ReviewLoopInput, reviewAndAmend } from "./review.js";
 
 const MAX_REVIEW_ROUNDS = config.limits.maxReviewRounds;
 
-const CATEGORY: Category = { id: "c1", name: "Retry logic", description: "Adds backoff retries." };
+const CATEGORY: Category = {
+  id: "c1",
+  name: "Retry logic",
+  description: "Adds backoff retries.",
+  attention: "normal",
+};
 
 const CHANGE: ClassifiableChange = {
   id: "c1",
