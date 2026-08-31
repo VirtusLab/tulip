@@ -432,21 +432,36 @@ main img {
   opacity: 0.7;
 }
 
+/* Explicit add/remove gutter marker ("-"/"+"), in addition to the background-color classes
+   below — color alone is easy to miss (task: diffs don't show which lines changed at a
+   glance). Narrow and non-selectable so copy-pasting a row's code doesn't pick up the marker. */
+.snippet-marker {
+  width: 1.25rem;
+  padding: 0.05rem 0;
+  text-align: center;
+  color: var(--muted);
+  user-select: none;
+}
+
 .snippet-cell-base.type-remove,
-.snippet-line-no.side-base.type-remove {
+.snippet-line-no.side-base.type-remove,
+.snippet-marker.side-base.type-remove {
   background: var(--remove-bg);
 }
 
-.snippet-cell-base.type-remove {
+.snippet-cell-base.type-remove,
+.snippet-marker.side-base.type-remove {
   color: var(--remove-fg);
 }
 
 .snippet-cell-head.type-add,
-.snippet-line-no.side-head.type-add {
+.snippet-line-no.side-head.type-add,
+.snippet-marker.side-head.type-add {
   background: var(--add-bg);
 }
 
-.snippet-cell-head.type-add {
+.snippet-cell-head.type-add,
+.snippet-marker.side-head.type-add {
   color: var(--add-fg);
 }
 

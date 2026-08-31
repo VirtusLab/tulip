@@ -66,6 +66,18 @@ describe("renderSnippetBlock", () => {
     expect(details?.querySelector("summary")?.text).toContain("1 line");
   });
 
+  it("renders an explicit +/- gutter marker alongside the existing color, blank for context rows", () => {
+    const rows = buildAlignedDiff("a\nb\nc\n", "a\nB\nc\n");
+    const html = renderSnippetBlock(ref({ lines: { start: 1, end: 2 } }), fileDiffs(rows));
+    const root = parse(html);
+    const trs = root.querySelectorAll("tr");
+    // Row 0 ("a") is unchanged context — blank markers both sides.
+    expect(trs[0]?.querySelectorAll(".snippet-marker").map((td) => td.text)).toEqual(["", ""]);
+    // Row 1 ("b" -> "B") is a remove/add pair — "-" on the base side, "+" on the head side.
+    expect(trs[1]?.querySelector(".snippet-marker.side-base")?.text).toBe("-");
+    expect(trs[1]?.querySelector(".snippet-marker.side-head")?.text).toBe("+");
+  });
+
   it("shows expand buttons only when the file is embeddable and more context exists", () => {
     const rows = buildAlignedDiff("a\nb\nc\n", "a\nb\nc\n");
     const embeddableHtml = renderSnippetBlock(

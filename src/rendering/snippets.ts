@@ -66,13 +66,19 @@ function renderFallback(ref: SnippetRef, message: string): string {
  * round-trip — see setupSnippetExpansion there) — the two must stay byte-identical; keep them
  * in sync by hand and see snippets.test.ts's "byte-identical" parity test, which evaluates
  * app.js's copy in Node and asserts it matches this one on the same input.
+ *
+ * Each side also gets a narrow marker cell ("-"/"+"/blank) alongside the existing
+ * background-color class (`cellTypeClass`) — an explicit add/remove signal that doesn't rely on
+ * color alone (task: diffs are easy to miss with color-only distinction).
  */
 export function renderSnippetRow(row: AlignedRow): string {
   return (
     "<tr>" +
     `<td class="snippet-line-no side-base${cellTypeClass(row.baseType)}">${row.baseLine ?? ""}</td>` +
+    `<td class="snippet-marker side-base${cellTypeClass(row.baseType)}">${row.baseType === "remove" ? "-" : ""}</td>` +
     `<td class="snippet-cell-base${cellTypeClass(row.baseType)}"><code>${row.baseText !== null ? escapeHtml(row.baseText) : ""}</code></td>` +
     `<td class="snippet-line-no side-head${cellTypeClass(row.headType)}">${row.headLine ?? ""}</td>` +
+    `<td class="snippet-marker side-head${cellTypeClass(row.headType)}">${row.headType === "add" ? "+" : ""}</td>` +
     `<td class="snippet-cell-head${cellTypeClass(row.headType)}"><code>${row.headText !== null ? escapeHtml(row.headText) : ""}</code></td>` +
     "</tr>"
   );

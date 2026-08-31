@@ -187,6 +187,11 @@
       '">' +
       (row.baseLine == null ? "" : row.baseLine) +
       "</td>" +
+      '<td class="snippet-marker side-base' +
+      cellTypeClass(row.baseType) +
+      '">' +
+      (row.baseType === "remove" ? "-" : "") +
+      "</td>" +
       '<td class="snippet-cell-base' +
       cellTypeClass(row.baseType) +
       '"><code>' +
@@ -196,6 +201,11 @@
       cellTypeClass(row.headType) +
       '">' +
       (row.headLine == null ? "" : row.headLine) +
+      "</td>" +
+      '<td class="snippet-marker side-head' +
+      cellTypeClass(row.headType) +
+      '">' +
+      (row.headType === "add" ? "+" : "") +
       "</td>" +
       '<td class="snippet-cell-head' +
       cellTypeClass(row.headType) +
