@@ -44,10 +44,7 @@ const testRows = buildAlignedDiff(
 );
 const longLine =
   "This paragraph documents the new validation path in detail, covering the empty-input case, the malformed-JSON case, and how each is surfaced to the caller so reviewers reading this diff on a normal-width screen never have to scroll sideways to read a single sentence.\n";
-const docsRows = buildAlignedDiff(
-  "# README\n\nParses input.\n",
-  `# README\n\n${longLine}`,
-);
+const docsRows = buildAlignedDiff("# README\n\nParses input.\n", `# README\n\n${longLine}`);
 
 const fileDiffs = new Map([
   ["src/parse.ts", { rows: codeRows, embeddable: true }],
