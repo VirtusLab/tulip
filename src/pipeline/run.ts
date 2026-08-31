@@ -12,6 +12,7 @@ import { fetchPrMetadata, type PrMetadata } from "../github/pr-fetcher.js";
 import type { PrRef } from "../github/pr-url.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
+import { formatVersion } from "../version.js";
 
 /** Input the pipeline needs to process a PR. Constructed by callers (e.g. the CLI). */
 export interface PipelineOptions {
@@ -64,9 +65,12 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doExplainCategories = deps.explainCategories ?? explainCategories;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
 
-  logger.debug(`options: ${JSON.stringify(options)}`);
   const { owner, repo, number } = options.pr;
   const prUrl = `https://github.com/${owner}/${repo}/pull/${number}`;
+
+  logger.info(formatVersion());
+  logger.info(`Processing PR ${prUrl}`);
+  logger.debug(`options: ${JSON.stringify(options)}`);
 
   let checkout: PrCheckout | undefined;
   try {

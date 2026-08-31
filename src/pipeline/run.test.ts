@@ -11,6 +11,12 @@ import type { PrRef } from "../github/pr-url.js";
 import type { AssembleResult } from "../rendering/assemble.js";
 import { type PipelineDeps, type PipelineOptions, run } from "./run.js";
 
+// Stubbed so the welcome-message test below asserts on a fixed string, independent of whether
+// dist/build-info.json happens to exist when the test suite runs.
+vi.mock("../version.js", () => ({
+  formatVersion: vi.fn(() => "Tulip 9.9.9 (test123, built now)"),
+}));
+
 const PR: PrRef = { owner: "octo", repo: "widgets", number: 42 };
 
 const ADDED_FILE_DIFF = [
@@ -218,6 +224,17 @@ describe("run", () => {
     const checkout = await deps.createCheckout.mock.results[0]?.value;
     expect(checkout.cleanup).toHaveBeenCalledTimes(1);
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it("logs the welcome message and what it will process, before fetching", async () => {
+    const deps = baseDeps();
+
+    await run(options(), deps);
+
+    const lines = infoLines(deps);
+    expect(lines[0]).toBe("Tulip 9.9.9 (test123, built now)");
+    expect(lines[1]).toBe("Processing PR https://github.com/octo/widgets/pull/42");
+    expect(lines[2]).toBe("fetching octo/widgets#42...");
   });
 
   it("exits cleanly with no LLM calls when the PR has no classifiable changes", async () => {
