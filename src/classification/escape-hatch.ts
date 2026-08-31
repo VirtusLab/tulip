@@ -123,11 +123,18 @@ async function consultOnEach(
       if (existing) {
         outcomes.push({ change, accepted: true, category: existing });
       } else {
-        // Fresh id, never invented by the model — see docs/adr/0005. `id` spread last: a stray
-        // `id` key on the parsed proposal must never override the code-assigned one.
+        // Fresh id, never invented by the model — see docs/adr/0005. `attention` is forced to
+        // "normal" ("Read through") too, not taken from the proposal: the consult prompt
+        // (src/prompts/category-consult.md) is never told the attention rubric — asking the
+        // cheap per-change consult model for a scrutiny judgment would reintroduce exactly the
+        // diff-level call ADR 0003 kept off the classifier — so any attention value CATEGORY_SCHEMA
+        // forced it to fill in is untrustworthy and must not survive. `id`/`attention` spread
+        // last: stray values on the parsed proposal must never override these code-assigned ones
+        // (docs/adr/0010).
         const acceptedCategory: Category = {
           ...proposedCategory,
           id: nextCategoryId(state.categories),
+          attention: "normal",
         };
         state.categories = [...state.categories, acceptedCategory];
         state.acceptedNewCategories++;

@@ -32,7 +32,9 @@ function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessRe
 
 function baseState(overrides: Partial<ClassificationState> = {}): ClassificationState {
   return {
-    categories: [{ id: "c1", name: "Retry logic", description: "Adds backoff retries." }],
+    categories: [
+      { id: "c1", name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+    ],
     phase1SessionId: "phase1-session",
     classifierSessionId: "classifier-session",
     acceptedNewCategories: 0,
@@ -68,7 +70,11 @@ describe("resolveNoneClassifications", () => {
         "c1",
         {
           kind: "none",
-          suggestedCategory: { name: "Metrics", description: "Adds counters." },
+          suggestedCategory: {
+            name: "Metrics",
+            description: "Adds counters.",
+            attention: "normal",
+          },
           existingAssignments: [],
         },
       ],
@@ -80,7 +86,14 @@ describe("resolveNoneClassifications", () => {
         // consultOnCategory (resumes the phase-1 session)
         expect(input).toContain("Metrics");
         return envelope(
-          { accept: true, category: { name: "Metrics", description: "Adds counters (refined)." } },
+          {
+            accept: true,
+            category: {
+              name: "Metrics",
+              description: "Adds counters (refined).",
+              attention: "close",
+            },
+          },
           "phase1-session-2",
         );
       }
@@ -110,14 +123,65 @@ describe("resolveNoneClassifications", () => {
       kind: "categorized",
       assignments: [{ category: "c2", codeType: "production" }],
     });
+    // Defaults to "normal" ("Read through") even though the mocked phase-1 reply said "close" —
+    // the consult prompt never explains the attention rubric, so escape-hatch.ts always
+    // overrides rather than trusting whatever value CATEGORY_SCHEMA forced the model to fill in
+    // (docs/adr/0010).
     expect(state.categories).toContainEqual({
       id: "c2",
       name: "Metrics",
       description: "Adds counters (refined).",
+      attention: "normal",
     });
     expect(state.acceptedNewCategories).toBe(1);
     expect(state.phase1SessionId).toBe("phase1-session-2");
     expect(state.classifierSessionId).toBe("classifier-session-2");
+  });
+
+  it("defaults a newly accepted category's attention to 'normal', regardless of what the phase-1 reply says", async () => {
+    const resolved = new Map<string, ResolvedChange>([
+      [
+        "c1",
+        {
+          kind: "none",
+          suggestedCategory: {
+            name: "Metrics",
+            description: "Adds counters.",
+            attention: "normal",
+          },
+          existingAssignments: [],
+        },
+      ],
+    ]);
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+      call++;
+      if (call === 1) {
+        // The mocked phase-1 reply says "skim" — escape-hatch.ts must still force "normal".
+        return envelope(
+          {
+            accept: true,
+            category: { name: "Metrics", description: "Adds counters.", attention: "skim" },
+          },
+          "phase1-session-2",
+        );
+      }
+      return envelope(
+        {
+          classifications: [
+            { changeId: "c1", assignments: [{ category: "c2", codeType: "production" }] },
+          ],
+        },
+        "classifier-session-2",
+      );
+    });
+
+    const state = baseState();
+    await resolveNoneClassifications(resolved, new Map([["c1", change("c1")]]), state, {
+      runClaudeProcess,
+    });
+
+    expect(state.categories.find((c) => c.id === "c2")?.attention).toBe("normal");
   });
 
   it("keeps the code-assigned id even if the phase-1 reply carries a stray 'id' field", async () => {
@@ -128,7 +192,11 @@ describe("resolveNoneClassifications", () => {
         "c1",
         {
           kind: "none",
-          suggestedCategory: { name: "Metrics", description: "Adds counters." },
+          suggestedCategory: {
+            name: "Metrics",
+            description: "Adds counters.",
+            attention: "normal",
+          },
           existingAssignments: [],
         },
       ],
@@ -140,7 +208,12 @@ describe("resolveNoneClassifications", () => {
         return envelope(
           {
             accept: true,
-            category: { id: "not-a-real-id", name: "Metrics", description: "Adds counters." },
+            category: {
+              id: "not-a-real-id",
+              name: "Metrics",
+              description: "Adds counters.",
+              attention: "normal",
+            },
           },
           "phase1-session-2",
         );
@@ -164,6 +237,7 @@ describe("resolveNoneClassifications", () => {
       id: "c2",
       name: "Metrics",
       description: "Adds counters.",
+      attention: "normal",
     });
   });
 
@@ -173,7 +247,7 @@ describe("resolveNoneClassifications", () => {
         "c1",
         {
           kind: "none",
-          suggestedCategory: { name: "Misc", description: "Doesn't fit." },
+          suggestedCategory: { name: "Misc", description: "Doesn't fit.", attention: "normal" },
           existingAssignments: [],
         },
       ],
@@ -210,7 +284,7 @@ describe("resolveNoneClassifications", () => {
     });
     expect(state.acceptedNewCategories).toBe(0);
     expect(state.categories).toEqual([
-      { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
+      { id: "c1", name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
     ]);
   });
 
@@ -220,7 +294,7 @@ describe("resolveNoneClassifications", () => {
         "c1",
         {
           kind: "none",
-          suggestedCategory: { name: "Extra", description: "One more." },
+          suggestedCategory: { name: "Extra", description: "One more.", attention: "normal" },
           existingAssignments: [],
         },
       ],
@@ -253,7 +327,7 @@ describe("resolveNoneClassifications", () => {
         "c1",
         {
           kind: "none",
-          suggestedCategory: { name: "One", description: "First extra." },
+          suggestedCategory: { name: "One", description: "First extra.", attention: "normal" },
           existingAssignments: [],
         },
       ],
@@ -261,7 +335,7 @@ describe("resolveNoneClassifications", () => {
         "c2",
         {
           kind: "none",
-          suggestedCategory: { name: "Two", description: "Second extra." },
+          suggestedCategory: { name: "Two", description: "Second extra.", attention: "normal" },
           existingAssignments: [],
         },
       ],
@@ -271,7 +345,10 @@ describe("resolveNoneClassifications", () => {
       if (!args.includes("--resume") || args[args.indexOf("--resume") + 1] === "phase1-session") {
         consultCalls++;
         return envelope(
-          { accept: true, category: { name: "One", description: "First extra." } },
+          {
+            accept: true,
+            category: { name: "One", description: "First extra.", attention: "normal" },
+          },
           "phase1-session",
         );
       }
@@ -305,7 +382,11 @@ describe("resolveNoneClassifications", () => {
   });
 
   it("does not re-consult a change already consulted in an earlier call, even if it's still 'none'", async () => {
-    const suggestedCategory = { name: "Extra", description: "One more." };
+    const suggestedCategory = {
+      name: "Extra",
+      description: "One more.",
+      attention: "normal" as const,
+    };
     let consultCalls = 0;
     const runClaudeProcess = vi.fn(async (args: string[], _input: string) => {
       if (!args.includes("--resume") || args[args.indexOf("--resume") + 1] === "phase1-session") {
@@ -355,7 +436,7 @@ describe("resolveNoneClassifications", () => {
         "c1",
         {
           kind: "none",
-          suggestedCategory: { name: "Retry Logic", description: "Dup." },
+          suggestedCategory: { name: "Retry Logic", description: "Dup.", attention: "normal" },
           existingAssignments: [],
         },
       ],
@@ -367,7 +448,11 @@ describe("resolveNoneClassifications", () => {
         return envelope(
           {
             accept: true,
-            category: { name: " retry logic ", description: "Adds backoff retries (refined)." },
+            category: {
+              name: " retry logic ",
+              description: "Adds backoff retries (refined).",
+              attention: "normal",
+            },
           },
           "phase1-session-2",
         );
@@ -391,7 +476,7 @@ describe("resolveNoneClassifications", () => {
     );
 
     expect(state.categories).toEqual([
-      { id: "c1", name: "Retry logic", description: "Adds backoff retries." },
+      { id: "c1", name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
     ]);
     expect(state.acceptedNewCategories).toBe(0);
     expect(result.get("c1")).toEqual({
@@ -406,7 +491,7 @@ describe("resolveNoneClassifications", () => {
         "c1",
         {
           kind: "none",
-          suggestedCategory: { name: "Extra", description: "One more." },
+          suggestedCategory: { name: "Extra", description: "One more.", attention: "normal" },
           existingAssignments: [],
         },
       ],
@@ -421,7 +506,11 @@ describe("resolveNoneClassifications", () => {
                 {
                   category: "none",
                   codeType: "production",
-                  suggestedCategory: { name: "Extra", description: "One more." },
+                  suggestedCategory: {
+                    name: "Extra",
+                    description: "One more.",
+                    attention: "normal",
+                  },
                 },
               ],
             },
