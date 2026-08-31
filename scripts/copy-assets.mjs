@@ -5,6 +5,7 @@ import { cp, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHljsBundle } from "./build-hljs-bundle.mjs";
+import { genBuildInfo } from "./gen-build-info.mjs";
 
 const src = fileURLToPath(new URL("../src/rendering/assets", import.meta.url));
 const dest = fileURLToPath(new URL("../dist/rendering/assets", import.meta.url));
@@ -57,3 +58,7 @@ const promptsDest = fileURLToPath(new URL("../dist/prompts", import.meta.url));
 await mkdir(promptsDest, { recursive: true });
 const promptFiles = (await readdir(promptsSrc)).filter((name) => name.endsWith(".md"));
 await Promise.all(promptFiles.map((name) => cp(join(promptsSrc, name), join(promptsDest, name))));
+
+// Build-time version info (see scripts/gen-build-info.mjs and src/version.ts): captured now,
+// while a real git checkout and clock are available, since dist/ ships without either.
+await genBuildInfo();
