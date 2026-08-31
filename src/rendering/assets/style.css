@@ -282,7 +282,15 @@ main img {
   column-gap: 0;
 }
 
-:is(#pr-header, .page-section, .subsection) > * {
+/* `:where(...)` — NOT `:is(...)` — is load-bearing here: `:is()` takes its highest-specificity
+   argument, so pairing it with the `#pr-header` id would give this default-column rule ID-level
+   specificity (1,0,0) EVERYWHERE it matches (every `.page-section`/`.subsection` child too),
+   beating the two-class full-bleed override rules below (0,2,0) and silently pinning every
+   `.snippet`/`pre`/`.subsection` to the 72ch center column instead of the full grid span.
+   `:where()` always contributes zero specificity, so the class-level overrides win regardless of
+   `#pr-header` being in this selector list. Regression-guarded by a computed-style test in
+   layout.test.ts (jsdom) — a regex/text CSS check can't catch a specificity bug like this one. */
+:where(#pr-header, .page-section, .subsection) > * {
   grid-column: 2;
 }
 
