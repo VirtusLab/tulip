@@ -31,7 +31,7 @@ function renderIntoJsdom(): Document {
 
   const html = renderPage({
     prTitle: "t",
-    prDescription: "PR description prose.",
+    prDescription: `PR description prose.\n\n> A blockquote in the PR description.\n\n${snippetRef}\n`,
     prUrl: "https://github.com/a/b/pull/1",
     fileDiffs,
     explanations: [
@@ -42,6 +42,23 @@ function renderIntoJsdom(): Document {
     ],
   });
 
+  return loadIntoJsdom(html);
+}
+
+/** Renders a page with no category explanations at all — just the PR description — to check
+ * the last-section-loses-its-border rule (see docs/adr/0007's amendment) in that edge case too. */
+function renderIntoJsdomNoCategories(): Document {
+  const html = renderPage({
+    prTitle: "t",
+    prDescription: "PR description prose.",
+    prUrl: "https://github.com/a/b/pull/1",
+    fileDiffs: new Map(),
+    explanations: [],
+  });
+  return loadIntoJsdom(html);
+}
+
+function loadIntoJsdom(html: string): Document {
   const bodyMatch = /<body>([\s\S]*)<\/body>/.exec(html);
   if (!bodyMatch?.[1]) {
     throw new Error("renderPage output has no <body> — test needs updating");
@@ -73,6 +90,12 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
     expect(gridColumn(snippet)).toBe("1 / -1");
   });
 
+  it("gives a nested .snippet the full-width span, inside the PR description", () => {
+    const doc = renderIntoJsdom();
+    const snippet = doc.querySelector("#pr-description > .snippet");
+    expect(gridColumn(snippet)).toBe("1 / -1");
+  });
+
   it("gives a nested <pre> (fenced code) the full-width span", () => {
     const doc = renderIntoJsdom();
     const pre = doc.querySelector("#category-0 > pre");
@@ -83,5 +106,53 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
     const doc = renderIntoJsdom();
     const subsection = doc.querySelector(".subsection");
     expect(gridColumn(subsection)).toBe("1 / -1");
+  });
+});
+
+describe("style.css layout — spacing/alignment fixes (real CSS, real DOM)", () => {
+  it("zeroes a blockquote's inline margin so it shares the same left edge as a paragraph", () => {
+    const doc = renderIntoJsdom();
+    const blockquote = doc.querySelector("blockquote");
+    if (!blockquote) {
+      throw new Error("expected a blockquote in the PR description fixture");
+    }
+    const style = getComputedStyle(blockquote);
+    // jsdom (no real layout engine) reports an unresolved zero length as "0" rather than "0px".
+    expect(style.marginLeft).toMatch(/^0(px)?$/);
+    expect(style.marginRight).toMatch(/^0(px)?$/);
+  });
+
+  it("doesn't double a section heading's top gap against its .page-section's own padding", () => {
+    const doc = renderIntoJsdom();
+    const heading = doc.querySelector("#pr-description > h2");
+    const section = doc.querySelector("#pr-description");
+    if (!heading || !section) {
+      throw new Error("expected #pr-description and its heading");
+    }
+    // Grid items never margin-collapse with their container's padding (unlike normal block
+    // flow) — h2's own margin-top must be zeroed so the only gap above it is the section's own
+    // padding-top, not padding-top *plus* h2's margin-top stacked on top of it.
+    expect(getComputedStyle(heading).marginTop).toBe("0px");
+    expect(getComputedStyle(section).paddingTop).not.toBe("0px");
+  });
+
+  it("drops the trailing border from the last section, even when it's the PR description with no categories", () => {
+    const withCategory = renderIntoJsdom();
+    const prDescription = withCategory.querySelector("#pr-description");
+    const category = withCategory.querySelector("#category-0");
+    if (!prDescription || !category) {
+      throw new Error("expected both #pr-description and #category-0");
+    }
+    // Not last (a category follows it) — still matches `.page-section` but not `:last-of-type`.
+    expect(prDescription.matches(".page-section:last-of-type")).toBe(false);
+    expect(category.matches(".page-section:last-of-type")).toBe(true);
+
+    const noCategories = renderIntoJsdomNoCategories();
+    const onlySection = noCategories.querySelector("#pr-description");
+    if (!onlySection) {
+      throw new Error("expected #pr-description");
+    }
+    // With zero categories, the PR description is itself the last (and only) section.
+    expect(onlySection.matches(".page-section:last-of-type")).toBe(true);
   });
 });

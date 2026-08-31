@@ -25,7 +25,7 @@ export function buildToc(
 ): TocEntry[] {
   const prDescriptionEntry: TocEntry = {
     id: PR_DESCRIPTION_ID,
-    label: "PR description",
+    label: "Original PR description",
     children: [],
   };
   const categoryEntries = categories.map((category, index) => ({

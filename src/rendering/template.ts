@@ -63,7 +63,7 @@ ${renderTocHtml(toc)}
 <section id="${PR_DESCRIPTION_ID}" class="page-section">
 <h2>Original PR description</h2>
 <p class="section-note">Written by the PR author — not part of Tulip's analysis below.</p>
-<div class="pr-description">${description}</div>
+${description}
 </section>
 ${sections}
 </main>

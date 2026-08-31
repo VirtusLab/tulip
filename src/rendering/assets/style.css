@@ -177,6 +177,7 @@ h4 {
 blockquote {
   border-left: 3px solid var(--border);
   padding-left: 1rem;
+  margin-inline: 0;
   color: var(--muted);
 }
 
@@ -255,7 +256,7 @@ main img {
   border-bottom: 1px solid var(--border);
 }
 
-.category:last-of-type {
+.page-section:last-of-type {
   border-bottom: none;
 }
 
@@ -297,6 +298,17 @@ main img {
 :is(.page-section, .subsection) > :is(.snippet, pre),
 .page-section > .subsection {
   grid-column: 1 / -1;
+}
+
+/* Every section heading (h2) is the first child of a `.page-section`, which already has its own
+   `padding: 2rem 0` (above) — since grid items never margin-collapse with their container's
+   padding/edge (unlike normal block flow), h2's own `margin-top: 2.5rem` (below) stacked on top
+   of that padding instead of collapsing into it, doubling the gap to ~4.5rem above every heading
+   and ~6.5rem between sections. Zeroing it here leaves exactly the intended gap: `.page-section`'s
+   own 2rem padding-top. (`.category-description`'s `-0.25rem` hack, just below, tightens the
+   *following* paragraph against h2's own margin-bottom — a separate relationship, still needed.) */
+.page-section > h2:first-child {
+  margin-top: 0;
 }
 
 #theme-toggle {

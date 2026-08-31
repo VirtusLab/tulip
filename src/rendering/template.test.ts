@@ -25,7 +25,7 @@ describe("renderPage", () => {
     });
     const root = parse(html);
     expect(root.querySelector("h1")?.text).toBe("Add retry logic");
-    expect(root.querySelector(".pr-description")?.text).toContain("Retries flaky requests.");
+    expect(root.querySelector("#pr-description")?.text).toContain("Retries flaky requests.");
     expect(root.querySelector(".pr-link a")?.getAttribute("href")).toBe(
       "https://github.com/acme/widgets/pull/7",
     );
@@ -43,16 +43,42 @@ describe("renderPage", () => {
     const section = root.querySelector("#pr-description");
     expect(section).not.toBeNull();
     expect(section?.querySelector("h2")?.text).toBe("Original PR description");
-    expect(section?.querySelector(".pr-description")?.text).toContain("Retries flaky requests.");
-    // No longer nested inside the PR header — it's its own section now.
-    expect(root.querySelector("#pr-header .pr-description")).toBeNull();
+    expect(section?.text).toContain("Retries flaky requests.");
+    // No longer nested inside the PR header — it's its own section now, and its body renders
+    // as direct section children (like a category's does), not wrapped in an extra div — see
+    // style.css's breakout selector, which only targets direct children.
+    expect(root.querySelector("#pr-header")?.text).not.toContain("Retries flaky requests.");
     // Comes before the first category section in document order.
     const sectionsInOrder = root.querySelectorAll("#pr-description, .category");
     expect(sectionsInOrder[0]?.id).toBe("pr-description");
     // First entry in the floating TOC, ahead of the category entries.
     const tocLinks = root.querySelector("#toc")?.querySelectorAll("a") ?? [];
     expect(tocLinks[0]?.getAttribute("href")).toBe("#pr-description");
-    expect(tocLinks[0]?.text).toBe("PR description");
+    expect(tocLinks[0]?.text).toBe("Original PR description");
+  });
+
+  it("renders the PR description's body as direct section children, like a category's, not wrapped in an extra div", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: `Some prose.\n\n${ref}\n`,
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [],
+    });
+    const root = parse(html);
+    const section = root.querySelector("#pr-description");
+    const snippet = section?.querySelector(".snippet");
+    // A grandchild (nested inside a wrapper div) would be invisible to style.css's breakout
+    // selector, which only targets direct children — see docs/adr/0007's amendment.
+    expect(snippet?.parentNode).toBe(section);
   });
 
   it("keeps headings and body content as direct children of their section, sharing the CSS grid's centered column", () => {

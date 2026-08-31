@@ -4,13 +4,17 @@ import { buildToc, renderTocHtml } from "./toc.js";
 describe("buildToc", () => {
   it("always prepends the PR description as the first entry, ahead of every category", () => {
     const toc = buildToc([{ name: "Auth" }, { name: "Logging" }], [[], []]);
-    expect(toc[0]).toEqual({ id: "pr-description", label: "PR description", children: [] });
+    expect(toc[0]).toEqual({
+      id: "pr-description",
+      label: "Original PR description",
+      children: [],
+    });
     expect(toc.slice(1).map((entry) => entry.label)).toEqual(["Auth", "Logging"]);
   });
 
   it("prepends the PR description entry even with no categories", () => {
     const toc = buildToc([], []);
-    expect(toc).toEqual([{ id: "pr-description", label: "PR description", children: [] }]);
+    expect(toc).toEqual([{ id: "pr-description", label: "Original PR description", children: [] }]);
   });
 });
 

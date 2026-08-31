@@ -46,6 +46,13 @@ const longLine =
   "This paragraph documents the new validation path in detail, covering the empty-input case, the malformed-JSON case, and how each is surfaced to the caller so reviewers reading this diff on a normal-width screen never have to scroll sideways to read a single sentence.\n";
 const docsRows = buildAlignedDiff("# README\n\nParses input.\n", `# README\n\n${longLine}`);
 
+const prDescriptionRef = serializeSnippetRef({
+  path: "src/parse.ts",
+  side: "head",
+  lines: { start: 1, end: 2 },
+  unfold: true,
+});
+
 const fileDiffs = new Map([
   ["src/parse.ts", { rows: codeRows, embeddable: true }],
   ["src/parse.test.ts", { rows: testRows, embeddable: true }],
@@ -54,10 +61,14 @@ const fileDiffs = new Map([
 
 const markdown = `A short intro paragraph, followed by a list:\n\n- validates empty input\n- validates malformed JSON\n\n## Production code\n\n${codeRef}\n\n## Test code\n\n${testRef}\n\nDocs were also updated:\n\n${docsRef}\n`;
 
+// The PR description also exercises: a blockquote (left-edge alignment), and a snippet (full-
+// width breakout must reach it too — it renders as a direct section child, not nested in a
+// wrapper div; see docs/adr/0007's amendment).
+const prDescription = `This PR adds validation to \`parse()\` so empty or malformed input fails fast with a clear error, instead of letting \`JSON.parse\` throw an opaque \`SyntaxError\` further down the call stack.\n\n> Follow-up to the incident where a malformed webhook payload crashed the ingest worker.\n\n${prDescriptionRef}\n`;
+
 const html = renderPage({
   prTitle: "Add input validation to parse()",
-  prDescription:
-    "This PR adds validation to `parse()` so empty or malformed input fails fast with a clear error, instead of letting `JSON.parse` throw an opaque `SyntaxError` further down the call stack.",
+  prDescription,
   prUrl: "https://github.com/example/repo/pull/42",
   fileDiffs,
   explanations: [

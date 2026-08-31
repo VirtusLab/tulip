@@ -48,7 +48,7 @@ analysis.
 labeled `<h2>Original PR description</h2>` followed by a one-line note
 (`.section-note`, styled like `.category-description`) that it's the PR author's own
 text, not Tulip's analysis. `buildToc` (`toc.ts`) now always prepends a fixed
-`{ id: "pr-description", label: "PR description" }` entry before the per-category
+`{ id: "pr-description", label: "Original PR description" }` entry before the per-category
 entries, so it's the first thing in the floating TOC — the reader item sees this before
 the (Tulip-generated) analysis sections. The section shares `.category`'s grid/padding/
 border styling via a new `.page-section` class (kept separate from `.category` itself
@@ -116,6 +116,125 @@ snippets keep honoring `unfold` exactly as before. The category intro and the PR
 description path don't pass the option (default `false`), since neither is
 attributable to a "test" subsection.
 
+## Amendment: layout review findings
+
+A review of the initial implementation above found the full-width breakout (item 1)
+was silently inert, plus four smaller layout findings. Fixed all; details below.
+
+### 1 (critical) — the full-width breakout never actually applied
+
+**Problem:** the default-column rule was `:is(#pr-header, .page-section, .subsection) >
+* { grid-column: 2; }`. `:is()` takes its *highest-specificity argument* for the whole
+selector — pairing a class-only selector list with the `#pr-header` id gave this rule ID
+specificity (1,0,0) **everywhere it matched**, not just on `#pr-header`'s own children.
+That beat both full-bleed override rules (`.page-section > .subsection` and
+`:is(.page-section, .subsection) > :is(.snippet, pre)`, each (0,2,0)) on every category
+and subsection too. Every `.snippet`, `pre`, and `.subsection` silently resolved to the
+72ch center column instead of the full span — diffs were never actually full width,
+despite every text-based CSS assertion passing (a regex/DOM-parentage check can't see a
+specificity outcome).
+
+**Fix:** `:where(#pr-header, .page-section, .subsection) > * { grid-column: 2; }`.
+`:where()` is specificity-identical to `:is()` in every other respect (same matching
+logic) but always contributes **zero** specificity, so the id no longer poisons the
+rule's weight and the two-class overrides win as intended.
+
+**New guard:** a regex/text check on the CSS source can't catch this class of bug — it
+only proves the override rule's *text* exists, not that it *wins* the cascade. Added
+`src/rendering/layout.test.ts` (`@vitest-environment jsdom`): renders a real page,
+loads the real `style.css` into a jsdom document, and asserts `getComputedStyle(...)
+.gridColumn` directly — `1 / -1` for a nested `.snippet`/`pre`/`.subsection`, `2` for a
+prose `<p>`. Verified this test fails (4 of 5 cases) against the old `:is()` version and
+passes against the `:where()` fix.
+
+### 2 — blockquote indented off the shared left edge
+
+**Problem:** the per-element centering rule removed in item 1 used to zero
+`blockquote`'s UA-default `margin-inline` as a side effect; once removed, blockquotes
+kept the browser's default ~40px inline margin, breaking the "one left edge" goal for
+exactly the element meant to demonstrate it.
+
+**Fix:** `blockquote` now sets `margin-inline: 0` explicitly.
+
+### 3 — PR-description snippet/pre missed the breakout (grandchild, not direct child)
+
+**Problem:** the PR description's body was wrapped in `<div class="pr-description">
+${description}</div>` — an extra layer categories don't have (a category's body HTML is
+spliced directly into the section). The breakout selectors are direct-child-only by
+design (see item 1), so a `.snippet` or `pre` inside the PR description was a
+*grandchild* of the section and matched neither the center-column nor the full-span
+rule — it fell back to `auto` layout (undefined placement) rather than either.
+
+**Fix:** dropped the wrapper div; the PR-description body now renders directly as
+section children, exactly like a category's does. No selector changes needed — the
+existing breakout rules already cover it once the DOM shape matches.
+
+### 4 — doubled gap above every section heading
+
+**Problem:** `h2 { margin-top: 2.5rem }` is unconditional, and every section `h2` is the
+first child of a `.page-section` that already has `padding: 2rem 0`. Grid items never
+margin-collapse with their container's padding/edge (unlike normal block flow), so the
+two stacked instead of collapsing — ~4.5rem above every heading, ~6.5rem between
+sections.
+
+**Fix:** `.page-section > h2:first-child { margin-top: 0; }`, leaving exactly the
+section's own 2rem padding-top as the gap. Checked whether this made
+`.category-description`'s `-0.25rem` hack redundant: it doesn't — that hack tightens
+the *following* paragraph against h2's own margin-*bottom*, an unrelated relationship —
+so it stays.
+
+### 5 — TOC label didn't match the on-page heading
+
+**Problem:** the TOC entry read "PR description" while the section heading reads
+"Original PR description".
+
+**Fix:** `buildToc` (`toc.ts`) now uses "Original PR description", matching the
+heading.
+
+### 6 — trailing border survived a categories-less page
+
+**Problem:** `.category:last-of-type { border-bottom: none; }` matches on tag type
+(`:last-of-type` is positional, scoped to same-tag siblings) *and* the `.category`
+class. With zero category explanations, the PR-description section is the only
+`<section>` on the page but never carries `.category`, so this rule never matched it —
+it kept a trailing border with nothing after it.
+
+**Fix:** `.page-section:last-of-type` — every section (PR description and every
+category) carries `.page-section`, so this reliably matches whichever `<section>` is
+actually last, categories or not.
+
+### Regenerated sample, re-verified
+
+`scripts/gen-sample.ts`'s PR description now also includes a blockquote and a
+`{{snippet}}` reference (previously plain prose only), so the regenerated sample
+exercises items 1-3 together. Loaded the regenerated `index.html` into jsdom with the
+real `style.css` and confirmed: the PR-description snippet and a category's
+snippet/subsection all compute `grid-column: 1 / -1`; the blockquote's inline margins
+compute to zero; `h2`'s margin-top computes to zero with the section's own 2rem
+padding-top intact; and `.page-section:last-of-type` selector-matches only the true
+last section in both the with-categories and PR-description-only cases (`Element.
+matches(...)`, not a jsdom-computed border color/width — jsdom doesn't resolve `var()`
+inside the `border` shorthand into a real computed color, so that specific check isn't
+meaningful there; selector matching is the part that actually determines which section
+loses its border, and it's confirmed correct).
+
+### Acknowledged tradeoffs — not fixed
+
+Flagged in review, intentionally left as-is (out of this amendment's scope):
+
+- **Wrapped continuation lines have no hanging indent** in a `.snippet-wrap` cell — a
+  wrapped line's second+ visual row starts flush left rather than indented under the
+  first, unlike most code editors' soft-wrap. Cosmetic; revisit if it reads badly on a
+  real long-line prose diff.
+- **The gutter marker/line-number columns don't shrink on a narrow viewport** — they
+  keep their fixed rem widths, so a very narrow window gives proportionally less room
+  to code content. No reported case where this broke layout (no horizontal scroll,
+  columns just tighten) — a fluid-width gutter would add complexity for a cosmetic gain.
+- **`color-mix()` has no fallback** for a browser too old to support it (link underline
+  tint, TOC hover tint, highlight.js hover tint) — this page's stated audience is a
+  reviewer opening a locally-generated `file://` page in a current browser, so graceful
+  degradation for a legacy engine wasn't judged worth the added complexity.
+
 ## Consequences
 
 - `style.css`'s prose-centering rule became container-level (grid) instead of
@@ -127,7 +246,7 @@ attributable to a "test" subsection.
   use class selectors) would need updating.
 - `renderCategoryMarkdown`'s signature grew an options parameter; every call site now
   explicit about whether it's rendering a test subsection.
-- The floating TOC always shows a "PR description" entry, even when there are no
+- The floating TOC always shows an "Original PR description" entry, even when there are no
   category explanations yet.
 
 ## Regenerating a sample page for visual inspection
