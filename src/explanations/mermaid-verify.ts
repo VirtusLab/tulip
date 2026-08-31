@@ -39,28 +39,31 @@ export async function verifyMermaidDiagrams(
 
   let currentMarkdown = markdown;
   let currentSessionId = sessionId;
-  let cursor = 0;
+  // Character offset to resume the *next* search from — not an array index into
+  // findMermaidFences' result. A degraded fence is replaced by plain text (no fence markers at
+  // all), so the fence count shrinks by one; an index-based "cursor" would then skip whichever
+  // fence slid into the vacated slot, shipping it as a raw, unvalidated (possibly still invalid)
+  // fence — exactly the "Syntax error" box this whole feature exists to prevent. Resuming by
+  // offset is immune to a replacement changing length in either direction (shrink on degrade,
+  // grow or shrink on a fix), since fences are re-found fresh from `currentMarkdown` every
+  // iteration and matched by position, not by list index.
+  let searchFrom = 0;
 
-  // Fences are re-found after every fix (rather than tracking offsets manually) so a
-  // replacement's different length can never desync a stale position — cheap, since a category's
-  // explanation has only a handful of diagrams. `cursor` tracks how many leading fences (in
-  // document order) are already known-valid or resolved, so a re-find always resumes at the
-  // right one.
   while (true) {
     const fences = findMermaidFences(currentMarkdown);
-    if (cursor >= fences.length) {
+    const fence = fences.find((candidate) => candidate.start >= searchFrom);
+    if (!fence) {
       break;
     }
-    const fence = fences[cursor] as MermaidFenceMatch;
 
     const validation = await validateMermaidDiagram(fence.source);
     if (validation.valid) {
-      cursor++;
+      searchFrom = fence.end;
       continue;
     }
 
     logger.debug(
-      `category "${categoryName}": mermaid diagram ${cursor + 1} failed to validate: ${validation.error}`,
+      `category "${categoryName}": a mermaid diagram failed to validate: ${validation.error}`,
     );
     const fixed = await fixMermaidFence(
       fence,
@@ -72,7 +75,9 @@ export async function verifyMermaidDiagrams(
     );
     currentMarkdown = spliceFence(currentMarkdown, fence, fixed.replacement);
     currentSessionId = fixed.sessionId;
-    cursor++;
+    // Resume right after whatever was just written, whatever its length — never the original
+    // fence's (possibly now-wrong) end offset.
+    searchFrom = fence.start + fixed.replacement.length;
   }
 
   return { markdown: currentMarkdown, sessionId: currentSessionId };
@@ -80,7 +85,9 @@ export async function verifyMermaidDiagrams(
 
 /** Resumes the explaining session up to {@link MAX_MERMAID_FIX_ATTEMPTS} times to fix one
  * invalid diagram. Returns the fenced, corrected diagram on success, or the degradation note if
- * every attempt is still invalid. */
+ * every attempt is still invalid (including one that's syntactically valid mermaid but doesn't
+ * round-trip through fence-wrapping — see {@link roundTripsThroughFence} — since that would ship
+ * something other than what was validated). */
 async function fixMermaidFence(
   fence: MermaidFenceMatch,
   initialError: string,
@@ -108,15 +115,26 @@ async function fixMermaidFence(
       deps,
     );
     currentSessionId = response.sessionId;
+    const candidate = response.result.source;
 
-    const validation = await validateMermaidDiagram(response.result.source);
-    if (validation.valid) {
-      return {
-        replacement: renderMermaidFence(response.result.source),
-        sessionId: currentSessionId,
-      };
+    if (!roundTripsThroughFence(candidate)) {
+      // A ``` line inside `candidate` would be read back as the fence's *closing* delimiter
+      // (see ../rendering/mermaid.ts's fence pattern), so what actually renders would be a
+      // truncated prefix of what was just validated — never accept this, no matter how the
+      // parser feels about `candidate` on its own.
+      source = candidate;
+      error =
+        "the corrected source must not contain a line that is just ``` — that breaks how the " +
+        "diagram is embedded in the page (it would be read as the fence's closing delimiter, " +
+        "truncating everything after it)";
+      continue;
     }
-    source = response.result.source;
+
+    const validation = await validateMermaidDiagram(candidate);
+    if (validation.valid) {
+      return { replacement: renderMermaidFence(candidate), sessionId: currentSessionId };
+    }
+    source = candidate;
     error = validation.error ?? "unknown parse error";
   }
 
@@ -129,6 +147,15 @@ async function fixMermaidFence(
 
 function renderMermaidFence(source: string): string {
   return `\`\`\`mermaid\n${source}\n\`\`\``;
+}
+
+/** True only if wrapping `source` in a mermaid fence and reading it back with the exact same
+ * fence parser the renderer uses (`findMermaidFences`) yields `source` unchanged — i.e. splicing
+ * `renderMermaidFence(source)` into the markdown is guaranteed to validate and render the same
+ * text. Guards against a fix response that itself contains a ``` line, which would otherwise be
+ * mistaken for the fence's closing delimiter on the next parse. */
+function roundTripsThroughFence(source: string): boolean {
+  return findMermaidFences(renderMermaidFence(source))[0]?.source === source;
 }
 
 function spliceFence(markdown: string, fence: MermaidFenceMatch, replacement: string): string {
