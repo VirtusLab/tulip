@@ -138,6 +138,62 @@ that facet" without an explicit "none" needing to say so.
 
 Out of scope here (the author said "maybe"): a page-level/overall coverage summary. Not added.
 
+## Amendment: CSS review found item 2 didn't fully land
+
+A follow-up CSS review found the whitespace fix (item 2) missed the exact spot the author's
+screenshot flagged, plus two smaller cracks in the "margin-top only" invariant item 2 claims.
+Fixed all three; details below. **This also corrects item 2's own overclaim** ("there's never a
+reason for margin-bottom to carry weight too" / "no top-level child ever carries a
+margin-bottom") — both were true of the categories/subsections the initial pass tested against,
+but not of the page as a whole, for the reasons below.
+
+### 1 (the one that mattered) — the header→"Original PR description" gap was still ~3.5rem
+
+**Problem:** `#pr-header` sits *outside* the three grid containers item 2's margin-top-only
+rhythm covers (`#pr-header` is one of those three containers, not a child of one) — its own
+`margin-bottom: 2rem` was untouched by the item 2 pass entirely, and was never on the spacing
+scale to begin with (2rem matches none of `--space-1`…`--space-4`). Combined with
+`.page-section`'s own `padding-top: 1.5rem`, the gap between the header's bottom border and the
+"Original PR description" heading was `2rem + 1.5rem = 3.5rem` — the single largest gap on the
+page, and exactly what the author's screenshot showed.
+
+**Fix:** `#pr-header { margin-bottom: var(--space-2); }` (was the off-scale `2rem`). The gap is
+now `1rem + 1.5rem = 2.5rem` — a 29% reduction, and no longer an outlier (`main`'s own top/bottom
+padding is 2.5rem too).
+
+### 2 — `h1`/`.subsection h3` each carried their own margin-bottom, contradicting the rhythm rule
+
+**Problem:** `#pr-header h1 { margin-bottom: 0.5rem; }` and `.subsection h3 { margin-bottom:
+0.5rem; }` both predate item 2's `:where(...) > * { margin-bottom: 0; }` reset and won against it
+on selector specificity, quietly reintroducing the exact "two independently-sized declarations
+control one gap" bug item 2 otherwise eliminated (grid items don't collapse, so a real
+`margin-bottom` here added directly to the next sibling's own `margin-top`).
+
+**Fix:** deleted both — the next sibling's `margin-top` (already `var(--space-2)` via the
+`:where(...) > * + *` rhythm rule) now governs each gap alone, same as everywhere else. The
+`h1`→`.pr-link` and `h3`→body gaps both tighten slightly (1.5rem → 1rem) as a result — reasonable
+for a title-to-byline gap and a subsection-heading-to-body gap, and consistent with the general
+paragraph rhythm rather than a bespoke value.
+
+### 3 — `h4` had no heading-jump margin-top
+
+**Problem:** `h4` shares `h1`-`h3`'s heading typography (line-height/weight/letter-spacing) but,
+unlike `h2`/`h3`, never got a `margin-top` in the original item 2 pass — a markdown `####`
+subheading read with only the general paragraph rhythm above it, under-weighted relative to its
+own visual size.
+
+**Fix:** `h4 { margin-top: var(--space-3); }`, matching `h3`. No `:first-child` zeroing needed —
+unlike `h2`/`h3`, `template.ts` never emits a literal `h4` as a container's own heading, so a
+markdown-produced `h4` is never a top-level grid container's first child.
+
+**Verification:** `layout.test.ts` gained a case asserting `#pr-header`'s `margin-bottom` is
+`var(--space-2)` (not the old `2rem`) and `.page-section`'s `padding-top` computes to `24px`
+(1.5rem) — the 2.5rem combined gap — plus extended the existing "no top-level child carries a
+margin-bottom" case to `#pr-header > h1` and `.subsection > h3`. Confirmed against a regenerated
+sample (`scripts/gen-sample.ts`): the assembled page's copied `assets/style.css` shows
+`#pr-header { margin-bottom: var(--space-2); }` and no `#pr-header h1`/`.subsection h3` rules at
+all.
+
 ## Consequences
 
 - `style.css` gains a documented 4-step spacing scale (0.5/1/1.5/2.5rem); a future top-level

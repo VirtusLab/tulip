@@ -199,7 +199,26 @@ describe("style.css layout — vertical rhythm (real CSS, real DOM)", () => {
   it("never gives a top-level section/category/subsection child a margin-bottom (rhythm is margin-top only)", () => {
     const doc = renderIntoJsdom();
     const description = mustQuery(doc, "#category-0 > .category-description");
+    const h1 = mustQuery(doc, "#pr-header > h1");
+    const subsectionHeading = mustQuery(doc, ".subsection > h3");
     expect(getComputedStyle(description).marginBottom).toBe("0px");
+    // These two used to carry their own margin-bottom (0.5rem each), coupled with the next
+    // sibling's own margin-top into a doubled gap (grid items don't collapse) — docs/adr/0009's
+    // fix-up dropped both so the next sibling's margin-top is the only thing governing the gap,
+    // same as every other top-level child.
+    expect(getComputedStyle(h1).marginBottom).toBe("0px");
+    expect(getComputedStyle(subsectionHeading).marginBottom).toBe("0px");
+  });
+
+  it("keeps the header->PR-description gap on-scale and visibly tighter than before", () => {
+    const doc = renderIntoJsdom();
+    const prHeader = mustQuery(doc, "#pr-header");
+    const prDescriptionSection = mustQuery(doc, "#pr-description");
+    // Was an off-scale 2rem (docs/adr/0009's fix-up) — now the --space-2 rhythm step. Combined
+    // with .page-section's own 1.5rem padding-top (a literal — see that rule's own comment for
+    // why), the border->heading gap drops from ~3.5rem to ~2.5rem.
+    expect(getComputedStyle(prHeader).marginBottom).toBe("var(--space-2)");
+    expect(getComputedStyle(prDescriptionSection).paddingTop).toBe("24px"); // 1.5rem
   });
 });
 

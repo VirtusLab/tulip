@@ -45,9 +45,14 @@
 
   /* Small, shared vertical-rhythm scale (docs/adr/0009: the page read as too airy — main's own
      padding, .page-section's padding and h2's margin-top all stacked on top of each other, plus
-     ad-hoc values like the old -0.25rem "pull the description up" hack). Every top-level gap on
-     the page (section padding, heading margins, paragraph/list/snippet rhythm) now comes from
-     one of these four steps instead of an independently-chosen value. */
+     ad-hoc off-scale values like the old -0.25rem "pull the description up" hack and
+     #pr-header's own 2rem margin-bottom, which alone produced the single largest gap on the
+     page). Every top-level gap (section/header padding, heading margins, paragraph/list/snippet
+     rhythm) now comes from one of these four steps instead of an independently-chosen value —
+     as a `margin-top` alone wherever the gap is between two grid-item siblings (see the
+     `:where(...)` rules below): grid items never margin-collapse, so a second, independently
+     -sized `margin-bottom` on the earlier sibling would silently double the gap instead of
+     setting it. */
   --space-1: 0.5rem; /* a caption tucked directly under its heading */
   --space-2: 1rem; /* rhythm between ordinary paragraphs/lists/snippets */
   --space-3: 1.5rem; /* a heading-level jump, or a section's own padding */
@@ -188,6 +193,7 @@ h3 {
 h4 {
   font-size: 0.9375rem;
   color: var(--muted);
+  margin-top: var(--space-3);
 }
 
 blockquote {
@@ -260,14 +266,16 @@ main pre.mermaid {
   text-align: center;
 }
 
+/* margin-bottom is the only place a top-level child of one of the shared grid containers (see
+   the `:where(...)` reset below) is a section boundary, not a grid item, so a genuine
+   margin-bottom belongs here — but it's still a scale step, not an independently-chosen value:
+   this used to be an off-scale 2rem, which combined with `.page-section`'s own 1.5rem
+   padding-top into a ~3.5rem gap before "Original PR description" — the single largest gap on
+   the page, and exactly where the author flagged too much whitespace (docs/adr/0009). */
 #pr-header {
   border-bottom: 1px solid var(--border);
   padding-bottom: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-#pr-header h1 {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-2);
 }
 
 .pr-link a {
@@ -303,13 +311,9 @@ main pre.mermaid {
   margin-top: var(--space-3);
 }
 
-.subsection h3 {
-  margin-bottom: 0.5rem;
-}
-
 /* The shared centered-content grid (see the "Full-width layout" comment above) — placed after
-   the plain `.subsection`/`.subsection h3` rules above so selector specificity only increases
-   from here down (`noDescendingSpecificity`). */
+   the plain `.subsection` rule above so selector specificity only increases from here down
+   (`noDescendingSpecificity`). */
 :is(#pr-header, .page-section, .subsection) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) min(var(--prose-measure), 100%) minmax(0, 1fr);
