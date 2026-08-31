@@ -179,9 +179,8 @@
   // server-rendered rows are. The two must stay byte-identical; keep them in sync by hand and
   // see snippets.test.ts's "byte-identical" parity test, which evaluates this copy in Node
   // (no browser) and asserts it matches the TS one on the same input.
-  function renderSnippetRow(row) {
+  function baseCells(row) {
     return (
-      "<tr>" +
       '<td class="snippet-line-no side-base' +
       cellTypeClass(row.baseType) +
       '">' +
@@ -196,7 +195,12 @@
       cellTypeClass(row.baseType) +
       '"><code>' +
       (row.baseText == null ? "" : escapeHtml(row.baseText)) +
-      "</code></td>" +
+      "</code></td>"
+    );
+  }
+
+  function headCells(row) {
+    return (
       '<td class="snippet-line-no side-head' +
       cellTypeClass(row.headType) +
       '">' +
@@ -211,9 +215,17 @@
       cellTypeClass(row.headType) +
       '"><code>' +
       (row.headText == null ? "" : escapeHtml(row.headText)) +
-      "</code></td>" +
-      "</tr>"
+      "</code></td>"
     );
+  }
+
+  // `paneMode` (default "split") mirrors ./snippets.ts's own parameter — "head-only"/"base-only"
+  // for an added/removed file's single-pane rows (see the container's `data-pane-mode`, read by
+  // setupSnippetExpansion below), "split" (or omitted) for the two-pane default.
+  function renderSnippetRow(row, paneMode) {
+    var base = paneMode !== "head-only" ? baseCells(row) : "";
+    var head = paneMode !== "base-only" ? headCells(row) : "";
+    return `<tr>${base}${head}</tr>`;
   }
 
   function loadFileData() {
@@ -230,11 +242,11 @@
 
   var CONTEXT_STEP = 20;
 
-  function expandUp(container, rows, currentStart) {
+  function expandUp(container, rows, currentStart, paneMode) {
     var newStart = Math.max(0, currentStart - CONTEXT_STEP);
     var html = "";
     for (let i = newStart; i < currentStart; i++) {
-      html += renderSnippetRow(rows[i]);
+      html += renderSnippetRow(rows[i], paneMode);
     }
     var tbody = container.querySelector(".snippet-table tbody");
     if (tbody) {
@@ -244,11 +256,11 @@
     return newStart === 0;
   }
 
-  function expandDown(container, rows, currentEnd) {
+  function expandDown(container, rows, currentEnd, paneMode) {
     var newEnd = Math.min(rows.length - 1, currentEnd + CONTEXT_STEP);
     var html = "";
     for (let i = currentEnd + 1; i <= newEnd; i++) {
-      html += renderSnippetRow(rows[i]);
+      html += renderSnippetRow(rows[i], paneMode);
     }
     var tbody = container.querySelector(".snippet-table tbody");
     if (tbody) {
@@ -275,10 +287,21 @@
           return;
         }
         var dir = button.getAttribute("data-dir");
+        var paneMode = container.getAttribute("data-pane-mode") || "split";
         var reachedEnd =
           dir === "up"
-            ? expandUp(container, rows, Number(container.getAttribute("data-start-index")))
-            : expandDown(container, rows, Number(container.getAttribute("data-end-index")));
+            ? expandUp(
+                container,
+                rows,
+                Number(container.getAttribute("data-start-index")),
+                paneMode,
+              )
+            : expandDown(
+                container,
+                rows,
+                Number(container.getAttribute("data-end-index")),
+                paneMode,
+              );
         if (reachedEnd) {
           button.remove();
         }

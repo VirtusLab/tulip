@@ -81,6 +81,43 @@ describe("renderExplanations", () => {
     expect(checkout.getFileAtHead).toHaveBeenCalledWith("new/name.ts");
   });
 
+  it("renders a single head-only pane for an added file, per the fileStatuses map", async () => {
+    const ref = serializeSnippetRef({
+      path: "src/new.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const checkout = {
+      getFileAtBase: vi.fn(async () => undefined),
+      getFileAtHead: vi.fn(async () => "line\n"),
+    };
+    let capturedPage = "";
+
+    await renderExplanations(
+      {
+        prTitle: "t",
+        prDescription: "d",
+        prUrl: "https://github.com/a/b/pull/1",
+        explanations: [explanation(`## Production code\n\n${ref}\n`)],
+        fileStatuses: new Map([["src/new.ts", "added"]]),
+      },
+      {
+        checkout,
+        mkdtemp: async () => "/tmp/tulip-render-added",
+        writeFile: async (_path, content) => {
+          capturedPage = content;
+        },
+        copyDir: async () => {},
+        assetsDir: "/fake/assets",
+        logger: { info: vi.fn(), debug: vi.fn() },
+      },
+    );
+
+    expect(capturedPage).toContain('data-pane-mode="head-only"');
+    expect(capturedPage).not.toContain("snippet-cell-base");
+  });
+
   it("dedupes repeated references to the same file into a single checkout read", async () => {
     const refA = serializeSnippetRef({
       path: "src/a.ts",

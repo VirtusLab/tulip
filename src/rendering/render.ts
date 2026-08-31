@@ -1,3 +1,4 @@
+import type { FileStatus } from "../diff/change.js";
 import { parseSnippetRefs } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import type { PrCheckout } from "../github/checkout.js";
@@ -17,6 +18,10 @@ export interface RenderInput {
    * `FileDiff.previousPath`) — lets snippet base content be fetched from the right revision path
    * for a renamed-with-changes file. Defaults to no renames. */
   renamedFrom?: Map<string, string>;
+  /** Maps a referenced path to its `FileDiff.status` (see src/diff/change.ts) — lets an
+   * added/removed file render as a single pane instead of a two-pane split with one side always
+   * blank (see ./snippets.ts). A path missing from it defaults to "modified" (two-pane). */
+  fileStatuses?: Map<string, FileStatus>;
 }
 
 export interface RenderDeps extends AssembleDeps {
@@ -40,7 +45,12 @@ export async function renderExplanations(
   const referencedPaths = input.explanations.flatMap((explanation) =>
     parseSnippetRefs(explanation.markdown).map((match) => match.ref.path),
   );
-  const fileDiffs = await loadFileDiffs(referencedPaths, deps.checkout, input.renamedFrom);
+  const fileDiffs = await loadFileDiffs(
+    referencedPaths,
+    deps.checkout,
+    input.renamedFrom,
+    input.fileStatuses,
+  );
 
   const page = renderPage({
     prTitle: input.prTitle,

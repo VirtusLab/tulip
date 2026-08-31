@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import type { FileStatus } from "../diff/change.js";
 import type { PrCheckout } from "../github/checkout.js";
 import { type AlignedRow, buildAlignedDiff } from "./line-diff.js";
 
@@ -12,6 +13,12 @@ export interface FileDiffData {
   rows: AlignedRow[];
   /** False when either side's content exceeds {@link EMBED_SIZE_CAP_BYTES}. */
   embeddable: boolean;
+  /** How the file was touched by the PR (see src/diff/change.ts) — lets ./snippets.ts choose a
+   * single-pane render for an added/removed file instead of a two-pane split with one side
+   * always blank. Optional and treated as "modified" (two-pane, the pre-existing behavior) when
+   * absent, so callers that don't know it (e.g. a hand-built test fixture) don't need updating.
+   * `loadFileDiffs` below always sets it from the real parsed diff. */
+  status?: FileStatus;
 }
 
 /**
@@ -25,11 +32,15 @@ export interface FileDiffData {
  * (see `FileDiff.previousPath` in src/diff/parse-diff.ts) — without it, a renamed-with-changes
  * file's base content would be looked up under its *new* path, which doesn't exist at the base
  * revision.
+ *
+ * `fileStatuses` maps a referenced path to its `FileDiff.status` (see src/diff/change.ts) — a
+ * path missing from it defaults to "modified" (the pre-existing two-pane rendering).
  */
 export async function loadFileDiffs(
   paths: Iterable<string>,
   checkout: Pick<PrCheckout, "getFileAtBase" | "getFileAtHead">,
   renamedFrom: Map<string, string> = new Map(),
+  fileStatuses: Map<string, FileStatus> = new Map(),
 ): Promise<Map<string, FileDiffData>> {
   const result = new Map<string, FileDiffData>();
   const uniquePaths = [...new Set(paths)];
@@ -49,7 +60,8 @@ export async function loadFileDiffs(
       const embeddable =
         byteLength(baseContent) <= EMBED_SIZE_CAP_BYTES &&
         byteLength(headContent) <= EMBED_SIZE_CAP_BYTES;
-      result.set(path, { rows: buildAlignedDiff(baseContent, headContent), embeddable });
+      const status = fileStatuses.get(path) ?? "modified";
+      result.set(path, { rows: buildAlignedDiff(baseContent, headContent), embeddable, status });
     }),
   );
 

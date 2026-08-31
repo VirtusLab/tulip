@@ -5,12 +5,36 @@ import { isProseLanguage, languageForPath } from "./language.js";
 import type { AlignedRow } from "./line-diff.js";
 
 /**
- * Renders one `{{snippet}}` marker as a github-style split diff block (task 7.3): a collapsible
- * `<details>` — open when `ref.unfold` (and not `forceCollapsed`), otherwise collapsed behind a
- * "N lines — click to expand" summary — containing the referenced range's rows, with
- * expand-up/down buttons when `data.embeddable` (see ./assets/app.js for the client-side
- * expansion). Falls back to a plain notice if the file has no diff data (not in `fileDiffs`) or
- * the range isn't found in it — both should be rare (an LLM-hallucinated path/range), never a
+ * Which side(s) of a diff row {@link renderSnippetRow} draws: `"split"` (the default) renders
+ * both base and head cells, github split-diff style. `"head-only"`/`"base-only"` render just one
+ * side's three cells — used for an added/removed file (see {@link paneModeForStatus}), whose
+ * other side has no content at all, so a two-pane split would always leave one pane blank.
+ */
+export type SnippetPaneMode = "split" | "head-only" | "base-only";
+
+/** The pane mode a file's diff status calls for (see ./file-diffs.ts's `FileDiffData.status`):
+ * an added file has no base content to show, so it renders head-only (all "+"); a removed file
+ * has no head content, so it renders base-only (all "-"); a modified or renamed file has real
+ * content on both sides, so it keeps the two-pane split. */
+export function paneModeForStatus(status: FileDiffData["status"]): SnippetPaneMode {
+  if (status === "added") {
+    return "head-only";
+  }
+  if (status === "removed") {
+    return "base-only";
+  }
+  return "split";
+}
+
+/**
+ * Renders one `{{snippet}}` marker as a diff block (task 7.3): a collapsible `<details>` — open
+ * when `ref.unfold` (and not `forceCollapsed`), otherwise collapsed behind a "N lines — click to
+ * expand" summary — containing the referenced range's rows, with expand-up/down buttons when
+ * `data.embeddable` (see ./assets/app.js for the client-side expansion). A modified/renamed
+ * file renders github split-diff style (both sides); an added/removed file renders a single
+ * pane, since its other side has no content at all (see {@link paneModeForStatus}, docs/adr
+ * /0009). Falls back to a plain notice if the file has no diff data (not in `fileDiffs`) or the
+ * range isn't found in it — both should be rare (an LLM-hallucinated path/range), never a
  * crash.
  *
  * `forceCollapsed` overrides `ref.unfold` to always-collapsed — set by ./markdown.ts for a
@@ -38,9 +62,10 @@ export function renderSnippetBlock(
   const canExpandUp = data.embeddable && range.first > 0;
   const canExpandDown = data.embeddable && range.last < data.rows.length - 1;
 
+  const paneMode = paneModeForStatus(data.status);
   const rowsHtml = data.rows
     .slice(range.first, range.last + 1)
-    .map(renderSnippetRow)
+    .map((row) => renderSnippetRow(row, paneMode))
     .join("");
 
   // Language is guessed from the path only (a small, fixed lookup table — see ./language.ts),
@@ -58,7 +83,7 @@ export function renderSnippetBlock(
 
   const open = ref.unfold && !forceCollapsed;
 
-  return `<div class="snippet" data-path="${escapeHtml(ref.path)}" data-start-index="${range.first}" data-end-index="${range.last}"${langAttr}>
+  return `<div class="snippet" data-path="${escapeHtml(ref.path)}" data-start-index="${range.first}" data-end-index="${range.last}" data-pane-mode="${paneMode}"${langAttr}>
 <details${open ? " open" : ""}>
 <summary>${summary}</summary>
 ${canExpandUp ? '<button type="button" class="snippet-expand" data-dir="up">↑ expand context</button>' : ""}
@@ -83,20 +108,32 @@ function renderFallback(ref: SnippetRef, message: string): string {
  * in sync by hand and see snippets.test.ts's "byte-identical" parity test, which evaluates
  * app.js's copy in Node and asserts it matches this one on the same input.
  *
- * Each side also gets a narrow marker cell ("-"/"+"/blank) alongside the existing
+ * `paneMode` (default `"split"`) picks which side(s) get cells — `"head-only"`/`"base-only"`
+ * render just one side's three cells, for an added/removed file whose other side has no content
+ * at all (see {@link paneModeForStatus}); a two-pane split there would always show one pane
+ * blank. Each rendered side also gets a narrow marker cell ("-"/"+"/blank) alongside the existing
  * background-color class (`cellTypeClass`) — an explicit add/remove signal that doesn't rely on
  * color alone (task: diffs are easy to miss with color-only distinction).
  */
-export function renderSnippetRow(row: AlignedRow): string {
+export function renderSnippetRow(row: AlignedRow, paneMode: SnippetPaneMode = "split"): string {
+  const base = paneMode !== "head-only" ? baseCells(row) : "";
+  const head = paneMode !== "base-only" ? headCells(row) : "";
+  return `<tr>${base}${head}</tr>`;
+}
+
+function baseCells(row: AlignedRow): string {
   return (
-    "<tr>" +
     `<td class="snippet-line-no side-base${cellTypeClass(row.baseType)}">${row.baseLine ?? ""}</td>` +
     `<td class="snippet-marker side-base${cellTypeClass(row.baseType)}">${row.baseType === "remove" ? "-" : ""}</td>` +
-    `<td class="snippet-cell-base${cellTypeClass(row.baseType)}"><code>${row.baseText !== null ? escapeHtml(row.baseText) : ""}</code></td>` +
+    `<td class="snippet-cell-base${cellTypeClass(row.baseType)}"><code>${row.baseText !== null ? escapeHtml(row.baseText) : ""}</code></td>`
+  );
+}
+
+function headCells(row: AlignedRow): string {
+  return (
     `<td class="snippet-line-no side-head${cellTypeClass(row.headType)}">${row.headLine ?? ""}</td>` +
     `<td class="snippet-marker side-head${cellTypeClass(row.headType)}">${row.headType === "add" ? "+" : ""}</td>` +
-    `<td class="snippet-cell-head${cellTypeClass(row.headType)}"><code>${row.headText !== null ? escapeHtml(row.headText) : ""}</code></td>` +
-    "</tr>"
+    `<td class="snippet-cell-head${cellTypeClass(row.headType)}"><code>${row.headText !== null ? escapeHtml(row.headText) : ""}</code></td>`
   );
 }
 

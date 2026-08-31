@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { SnippetRef } from "../explanations/markup.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { type AlignedRow, buildAlignedDiff } from "./line-diff.js";
-import { renderSnippetBlock, renderSnippetRow } from "./snippets.js";
+import { renderSnippetBlock, renderSnippetRow, type SnippetPaneMode } from "./snippets.js";
 
 function ref(overrides: Partial<SnippetRef> = {}): SnippetRef {
   return {
@@ -17,8 +17,12 @@ function ref(overrides: Partial<SnippetRef> = {}): SnippetRef {
   };
 }
 
-function fileDiffs(rows: FileDiffData["rows"], embeddable = true): Map<string, FileDiffData> {
-  return new Map([["src/a.ts", { rows, embeddable }]]);
+function fileDiffs(
+  rows: FileDiffData["rows"],
+  embeddable = true,
+  status?: FileDiffData["status"],
+): Map<string, FileDiffData> {
+  return new Map([["src/a.ts", { rows, embeddable, ...(status ? { status } : {}) }]]);
 }
 
 describe("renderSnippetBlock", () => {
@@ -197,6 +201,74 @@ describe("renderSnippetBlock", () => {
   });
 });
 
+// task: a new/deleted file shouldn't render a two-pane split with one side always blank (see
+// ./file-diffs.ts's `FileDiffData.status` and `paneModeForStatus`).
+describe("renderSnippetBlock — pane mode by file status", () => {
+  it("renders an added file as a single head-only pane, all '+'", () => {
+    const rows = buildAlignedDiff("", "line1\nline2\n");
+    const html = renderSnippetBlock(
+      ref({ side: "head", lines: { start: 1, end: 2 } }),
+      fileDiffs(rows, true, "added"),
+    );
+    const root = parse(html);
+    expect(root.querySelector(".snippet")?.getAttribute("data-pane-mode")).toBe("head-only");
+    const trs = root.querySelectorAll("tr");
+    expect(trs).toHaveLength(2);
+    for (const tr of trs) {
+      // Only the head side's 3 cells — no base-side cells at all, not even blank ones.
+      expect(tr.querySelectorAll("td")).toHaveLength(3);
+      expect(tr.querySelector(".snippet-cell-base")).toBeNull();
+      expect(tr.querySelector(".snippet-marker")?.text).toBe("+");
+    }
+  });
+
+  it("renders a deleted file as a single base-only pane, all '-'", () => {
+    const rows = buildAlignedDiff("line1\nline2\n", "");
+    const html = renderSnippetBlock(
+      ref({ side: "base", lines: { start: 1, end: 2 } }),
+      fileDiffs(rows, true, "removed"),
+    );
+    const root = parse(html);
+    expect(root.querySelector(".snippet")?.getAttribute("data-pane-mode")).toBe("base-only");
+    const trs = root.querySelectorAll("tr");
+    expect(trs).toHaveLength(2);
+    for (const tr of trs) {
+      // Only the base side's 3 cells — no head-side cells at all, not even blank ones.
+      expect(tr.querySelectorAll("td")).toHaveLength(3);
+      expect(tr.querySelector(".snippet-cell-head")).toBeNull();
+      expect(tr.querySelector(".snippet-marker")?.text).toBe("-");
+    }
+  });
+
+  it("keeps the two-pane split for a modified file", () => {
+    const rows = buildAlignedDiff("a\n", "A\n");
+    const html = renderSnippetBlock(
+      ref({ lines: { start: 1, end: 1 } }),
+      fileDiffs(rows, true, "modified"),
+    );
+    const root = parse(html);
+    expect(root.querySelector(".snippet")?.getAttribute("data-pane-mode")).toBe("split");
+    expect(root.querySelector("tr")?.querySelectorAll("td")).toHaveLength(6);
+  });
+
+  it("keeps the two-pane split for a renamed-with-changes file", () => {
+    const rows = buildAlignedDiff("a\n", "A\n");
+    const html = renderSnippetBlock(
+      ref({ lines: { start: 1, end: 1 } }),
+      fileDiffs(rows, true, "renamed"),
+    );
+    const root = parse(html);
+    expect(root.querySelector(".snippet")?.getAttribute("data-pane-mode")).toBe("split");
+    expect(root.querySelector("tr")?.querySelectorAll("td")).toHaveLength(6);
+  });
+
+  it("defaults to the two-pane split when the status is unknown (pre-existing behavior)", () => {
+    const rows = buildAlignedDiff("a\n", "A\n");
+    const html = renderSnippetBlock(ref({ lines: { start: 1, end: 1 } }), fileDiffs(rows));
+    expect(parse(html).querySelector(".snippet")?.getAttribute("data-pane-mode")).toBe("split");
+  });
+});
+
 // ./assets/app.js's `renderSnippetRow` is a hand-maintained mirror of `renderSnippetRow`
 // exported from this module (used client-side to insert context rows without a server
 // round-trip — see setupSnippetExpansion in app.js). Nothing in the type system enforces the
@@ -204,7 +276,7 @@ describe("renderSnippetBlock", () => {
 // block in Node (no browser/DOM needed — `escapeHtml`/`cellTypeClass`/`renderSnippetRow` don't
 // touch `document`/`window`), and asserts both implementations produce the same HTML for the
 // same input.
-function loadClientRenderSnippetRow(): (row: AlignedRow) => string {
+function loadClientRenderSnippetRow(): (row: AlignedRow, paneMode?: SnippetPaneMode) => string {
   const appJsPath = fileURLToPath(new URL("./assets/app.js", import.meta.url));
   const source = readFileSync(appJsPath, "utf8");
 
@@ -217,7 +289,7 @@ function loadClientRenderSnippetRow(): (row: AlignedRow) => string {
   }
 
   const factory = new Function(`${source.slice(start, end)}\nreturn renderSnippetRow;`);
-  return factory() as (row: AlignedRow) => string;
+  return factory() as (row: AlignedRow, paneMode?: SnippetPaneMode) => string;
 }
 
 describe("renderSnippetRow / assets/app.js parity", () => {
@@ -258,7 +330,12 @@ describe("renderSnippetRow / assets/app.js parity", () => {
       },
     ];
 
+    const paneModes: SnippetPaneMode[] = ["split", "head-only", "base-only"];
     for (const row of rows) {
+      for (const paneMode of paneModes) {
+        expect(clientRenderSnippetRow(row, paneMode)).toBe(renderSnippetRow(row, paneMode));
+      }
+      // Default parameter (no explicit paneMode) must also match, on both sides.
       expect(clientRenderSnippetRow(row)).toBe(renderSnippetRow(row));
     }
   });

@@ -272,6 +272,20 @@ describe("run", () => {
     );
   });
 
+  it("passes a file-status map to rendering, built from the parsed diff", async () => {
+    const deps = baseDeps();
+
+    await run(options(), deps);
+
+    // Default metadata() uses ADDED_FILE_DIFF (src/new.ts, added).
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileStatuses: new Map([["src/new.ts", "added"]]),
+      }),
+      expect.anything(),
+    );
+  });
+
   it("logs the generated category names and phase progress", async () => {
     const deps = baseDeps();
 
