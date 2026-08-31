@@ -23,6 +23,10 @@ export class CliUsageError extends Error {}
 /** Thrown when `--help`/`-h` is given: not an error, just a request to print usage and exit 0. */
 export class HelpRequestedError extends Error {}
 
+/** Thrown when `--version`/`-v` is given: not an error, just a request to print the version and
+ * exit 0. */
+export class VersionRequestedError extends Error {}
+
 /** Multi-line usage text shown on `--help` or invalid invocation. */
 export function usage(): string {
   return [
@@ -38,6 +42,7 @@ export function usage(): string {
     `                        passed as file+line-range references (default: ${DEFAULT_DIFF_THRESHOLD})`,
     "  --verbose             Show debug-level progress logging",
     "  -h, --help            Show this help and exit",
+    "  -v, --version         Show version information and exit",
   ].join("\n");
 }
 
@@ -46,7 +51,12 @@ export function usage(): string {
  * Throws {@link CliUsageError} with a user-facing message on any invalid input.
  */
 export function parseCliArgs(argv: string[]): RunOptions {
-  let values: { "diff-threshold"?: string; verbose?: boolean; help?: boolean };
+  let values: {
+    "diff-threshold"?: string;
+    verbose?: boolean;
+    help?: boolean;
+    version?: boolean;
+  };
   let positionals: string[];
   try {
     ({ values, positionals } = parseArgs({
@@ -55,6 +65,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
         "diff-threshold": { type: "string" },
         verbose: { type: "boolean" },
         help: { type: "boolean", short: "h" },
+        version: { type: "boolean", short: "v" },
       },
       allowPositionals: true,
     }));
@@ -64,6 +75,9 @@ export function parseCliArgs(argv: string[]): RunOptions {
 
   if (values.help) {
     throw new HelpRequestedError();
+  }
+  if (values.version) {
+    throw new VersionRequestedError();
   }
 
   if (positionals.length === 0) {

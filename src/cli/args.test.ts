@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { config } from "../config.js";
-import { CliUsageError, HelpRequestedError, parseCliArgs, usage } from "./args.js";
+import {
+  CliUsageError,
+  HelpRequestedError,
+  parseCliArgs,
+  usage,
+  VersionRequestedError,
+} from "./args.js";
 
 const VALID_URL = "https://github.com/owner/repo/pull/123";
 const VALID_PR = { owner: "owner", repo: "repo", number: 123 };
@@ -69,6 +75,14 @@ describe("parseCliArgs", () => {
 
   it("throws HelpRequestedError for -h", () => {
     expect(() => parseCliArgs([VALID_URL, "-h"])).toThrow(HelpRequestedError);
+  });
+
+  it("throws VersionRequestedError (not CliUsageError) for --version, even with no PR URL", () => {
+    expect(() => parseCliArgs(["--version"])).toThrow(VersionRequestedError);
+  });
+
+  it("throws VersionRequestedError for -v", () => {
+    expect(() => parseCliArgs([VALID_URL, "-v"])).toThrow(VersionRequestedError);
   });
 
   it("aligns the --verbose and --diff-threshold usage columns", () => {

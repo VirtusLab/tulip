@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 
 import { run } from "../pipeline/run.js";
-import { CliUsageError, HelpRequestedError, parseCliArgs, usage } from "./args.js";
+import { formatVersion } from "../version.js";
+import {
+  CliUsageError,
+  HelpRequestedError,
+  parseCliArgs,
+  usage,
+  VersionRequestedError,
+} from "./args.js";
 
 async function main(): Promise<void> {
   let options: ReturnType<typeof parseCliArgs>;
@@ -10,6 +17,11 @@ async function main(): Promise<void> {
   } catch (error) {
     if (error instanceof HelpRequestedError) {
       console.log(usage());
+      process.exitCode = 0;
+      return;
+    }
+    if (error instanceof VersionRequestedError) {
+      console.log(formatVersion());
       process.exitCode = 0;
       return;
     }
