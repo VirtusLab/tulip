@@ -79,6 +79,19 @@ export const SUPPORTED_LANGUAGES: ReadonlySet<string> = new Set([
   ...Object.values(FILENAME_LANGUAGE),
 ]);
 
+/** Prose/doc languages (as opposed to code) among {@link SUPPORTED_LANGUAGES} — currently just
+ * markdown. Used by ./snippets.ts to decide whether a `{{snippet}}` diff should wrap long lines
+ * (prose) or scroll horizontally (code, where alignment matters — see style.css's
+ * `.snippet-wrap`). */
+const PROSE_LANGUAGES: ReadonlySet<string> = new Set(["markdown"]);
+
+/** Whether `lang` (as returned by {@link languageForPath}) is prose/doc-like rather than code —
+ * true for markdown, and for `undefined` (no recognized extension, e.g. `.txt`/`.rst`/`.adoc`,
+ * covers most non-code text files as well as truly unknown ones). */
+export function isProseLanguage(lang: string | undefined): boolean {
+  return lang === undefined || PROSE_LANGUAGES.has(lang);
+}
+
 /** Guesses a highlight.js language name from `path`'s filename, or `undefined` for an unknown
  * or absent extension — the caller (./snippets.ts) then skips highlighting rather than
  * guessing. */

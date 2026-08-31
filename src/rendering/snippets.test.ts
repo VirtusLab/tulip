@@ -78,6 +78,46 @@ describe("renderSnippetBlock", () => {
     expect(trs[1]?.querySelector(".snippet-marker.side-head")?.text).toBe("+");
   });
 
+  it("forces the details closed when forceCollapsed is set, even with unfold=yes", () => {
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const html = renderSnippetBlock(
+      ref({ unfold: true, lines: { start: 1, end: 1 } }),
+      fileDiffs(rows),
+      true,
+    );
+    expect(parse(html).querySelector("details")?.hasAttribute("open")).toBe(false);
+  });
+
+  it("still honors unfold=yes when forceCollapsed is false (the default)", () => {
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const html = renderSnippetBlock(
+      ref({ unfold: true, lines: { start: 1, end: 1 } }),
+      fileDiffs(rows),
+    );
+    expect(parse(html).querySelector("details")?.hasAttribute("open")).toBe(true);
+  });
+
+  it("wraps long lines for a prose/doc file instead of scrolling", () => {
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const proseFileDiffs = new Map([["docs/readme.md", { rows, embeddable: true }]]);
+    const html = renderSnippetBlock(
+      ref({ path: "docs/readme.md", lines: { start: 1, end: 1 } }),
+      proseFileDiffs,
+    );
+    const scrollDiv = parse(html).querySelector(".snippet-scroll");
+    expect(scrollDiv?.classList.contains("snippet-wrap")).toBe(true);
+  });
+
+  it("keeps the scrolling (no-wrap) behavior for a code file", () => {
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const html = renderSnippetBlock(
+      ref({ path: "src/a.ts", lines: { start: 1, end: 1 } }),
+      fileDiffs(rows),
+    );
+    const scrollDiv = parse(html).querySelector(".snippet-scroll");
+    expect(scrollDiv?.classList.contains("snippet-wrap")).toBe(false);
+  });
+
   it("shows expand buttons only when the file is embeddable and more context exists", () => {
     const rows = buildAlignedDiff("a\nb\nc\n", "a\nb\nc\n");
     const embeddableHtml = renderSnippetBlock(

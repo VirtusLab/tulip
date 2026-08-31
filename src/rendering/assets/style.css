@@ -400,7 +400,8 @@ main img {
 }
 
 /* Only this wrapper scrolls horizontally — never the page body — when a line is too long for
-   the viewport (task: only diff/code containers may scroll-x). */
+   the viewport (task: only diff/code containers may scroll-x). `.snippet-wrap` (prose/doc files
+   — see ./snippets.ts's `isProseLanguage`) opts out below: those wrap instead of scrolling. */
 .snippet-scroll {
   overflow-x: auto;
 }
@@ -412,6 +413,20 @@ main img {
   width: 100%;
   min-width: 100%;
   border-collapse: collapse;
+}
+
+/* Prose/doc files (task: wrap long lines instead of forcing horizontal scroll — alignment only
+   matters for code). `table-layout: fixed` is required for `pre-wrap` to actually constrain a
+   cell's width instead of growing to fit its longest word; the gutter columns keep their
+   explicit widths (below), so the two code columns split the remaining space evenly. */
+.snippet-wrap .snippet-table {
+  table-layout: fixed;
+  min-width: 0;
+}
+
+.snippet-wrap .snippet-table :is(.snippet-cell-base, .snippet-cell-head) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .snippet-table td {

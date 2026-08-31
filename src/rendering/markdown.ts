@@ -18,12 +18,24 @@ export interface MarkdownRenderContext {
   fileDiffs: Map<string, FileDiffData>;
 }
 
+export interface RenderCategoryMarkdownOptions {
+  /** Forces every `{{snippet}}` in `markdown` to render collapsed regardless of its own
+   * `unfold` flag — set by ./template.ts for a "## Test code" subsection (see ./sections.ts's
+   * `SubsectionKind`), so test snippets stay out of the way by default. Defaults to `false`
+   * (honor each ref's own `unfold` flag, as before). */
+  forceSnippetsCollapsed?: boolean;
+}
+
 /**
  * Converts one category (sub)section's markdown to HTML: prose via {@link renderProseMarkdown},
  * ```mermaid fences into client-rendered diagram placeholders (task 7.2), and `{{snippet}}`
  * markers into side-by-side diff blocks (task 7.3, see ./snippets.ts).
  */
-export function renderCategoryMarkdown(markdown: string, ctx: MarkdownRenderContext): string {
+export function renderCategoryMarkdown(
+  markdown: string,
+  ctx: MarkdownRenderContext,
+  options: RenderCategoryMarkdownOptions = {},
+): string {
   const mermaidSegments: Segment[] = findMermaidFences(markdown).map((fence) => ({
     start: fence.start,
     end: fence.end,
@@ -36,7 +48,8 @@ export function renderCategoryMarkdown(markdown: string, ctx: MarkdownRenderCont
   const snippetSegments: Segment[] = parseSnippetRefs(markdown).map((match) => ({
     start: match.start,
     end: match.end,
-    render: () => renderSnippetBlock(match.ref, ctx.fileDiffs),
+    render: () =>
+      renderSnippetBlock(match.ref, ctx.fileDiffs, options.forceSnippetsCollapsed ?? false),
   }));
 
   return renderWithSegments(markdown, [...mermaidSegments, ...snippetSegments]);

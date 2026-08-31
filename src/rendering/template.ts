@@ -122,8 +122,12 @@ function renderSubsection(
   subsectionIndex: number,
   ctx: MarkdownRenderContext,
 ): string {
+  // Test-code snippets default to folded regardless of their own unfold flag (task: keep test
+  // code out of the way until the reader chooses to look) — production subsections keep
+  // honoring `unfold` exactly as before. See ./sections.ts for how "test" is recognized.
+  const markdownOptions = { forceSnippetsCollapsed: subsection.kind === "test" };
   return `<div id="${subsectionId(categoryIndex, subsection.kind, subsectionIndex)}" class="subsection subsection-${subsection.kind}">
 <h3>${escapeHtml(subsection.heading)}</h3>
-${renderCategoryMarkdown(subsection.markdown, ctx)}
+${renderCategoryMarkdown(subsection.markdown, ctx, markdownOptions)}
 </div>`;
 }

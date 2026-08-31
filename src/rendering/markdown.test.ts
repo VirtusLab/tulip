@@ -139,4 +139,35 @@ describe("renderCategoryMarkdown", () => {
     expect(html).toContain('class="snippet"');
     expect(html).not.toContain("{{snippet");
   });
+
+  it("forces a {{snippet}}'s details closed when forceSnippetsCollapsed is set, even with unfold=yes", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const fileDiffs = new Map<string, FileDiffData>([
+      [
+        "src/a.ts",
+        {
+          embeddable: true,
+          rows: [
+            {
+              baseLine: 1,
+              baseText: "x",
+              baseType: "context",
+              headLine: 1,
+              headText: "x",
+              headType: "context",
+            },
+          ],
+        },
+      ],
+    ]);
+    const html = renderCategoryMarkdown(ref, context(fileDiffs), {
+      forceSnippetsCollapsed: true,
+    });
+    expect(html).not.toContain("<details open>");
+  });
 });

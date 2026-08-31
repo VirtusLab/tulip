@@ -1,18 +1,27 @@
 import type { SnippetRef } from "../explanations/markup.js";
 import { escapeHtml } from "./escape.js";
 import type { FileDiffData } from "./file-diffs.js";
-import { languageForPath } from "./language.js";
+import { isProseLanguage, languageForPath } from "./language.js";
 import type { AlignedRow } from "./line-diff.js";
 
 /**
  * Renders one `{{snippet}}` marker as a github-style split diff block (task 7.3): a collapsible
- * `<details>` — open when `ref.unfold`, otherwise collapsed behind a "N lines — click to
- * expand" summary — containing the referenced range's rows, with expand-up/down buttons when
- * `data.embeddable` (see ./assets/app.js for the client-side expansion). Falls back to a plain
- * notice if the file has no diff data (not in `fileDiffs`) or the range isn't found in it —
- * both should be rare (an LLM-hallucinated path/range), never a crash.
+ * `<details>` — open when `ref.unfold` (and not `forceCollapsed`), otherwise collapsed behind a
+ * "N lines — click to expand" summary — containing the referenced range's rows, with
+ * expand-up/down buttons when `data.embeddable` (see ./assets/app.js for the client-side
+ * expansion). Falls back to a plain notice if the file has no diff data (not in `fileDiffs`) or
+ * the range isn't found in it — both should be rare (an LLM-hallucinated path/range), never a
+ * crash.
+ *
+ * `forceCollapsed` overrides `ref.unfold` to always-collapsed — set by ./markdown.ts for a
+ * "## Test code" subsection (see ./sections.ts), so test snippets default folded regardless of
+ * their own unfold flag.
  */
-export function renderSnippetBlock(ref: SnippetRef, fileDiffs: Map<string, FileDiffData>): string {
+export function renderSnippetBlock(
+  ref: SnippetRef,
+  fileDiffs: Map<string, FileDiffData>,
+  forceCollapsed = false,
+): string {
   const data = fileDiffs.get(ref.path);
   if (!data) {
     return renderFallback(ref, `${escapeHtml(ref.path)} could not be loaded.`);
@@ -42,11 +51,18 @@ export function renderSnippetBlock(ref: SnippetRef, fileDiffs: Map<string, FileD
   const lang = languageForPath(ref.path);
   const langAttr = lang ? ` data-lang="${escapeHtml(lang)}"` : "";
 
+  // Prose/doc files (markdown, or no recognized code language) wrap long lines instead of
+  // scrolling horizontally — code files keep the scrolling behavior, where alignment matters
+  // (see style.css's `.snippet-wrap`).
+  const scrollClass = isProseLanguage(lang) ? "snippet-scroll snippet-wrap" : "snippet-scroll";
+
+  const open = ref.unfold && !forceCollapsed;
+
   return `<div class="snippet" data-path="${escapeHtml(ref.path)}" data-start-index="${range.first}" data-end-index="${range.last}"${langAttr}>
-<details${ref.unfold ? " open" : ""}>
+<details${open ? " open" : ""}>
 <summary>${summary}</summary>
 ${canExpandUp ? '<button type="button" class="snippet-expand" data-dir="up">↑ expand context</button>' : ""}
-<div class="snippet-scroll">
+<div class="${scrollClass}">
 <table class="snippet-table"><tbody>
 ${rowsHtml}
 </tbody></table>

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { languageForPath, SUPPORTED_LANGUAGES } from "./language.js";
+import { isProseLanguage, languageForPath, SUPPORTED_LANGUAGES } from "./language.js";
 
 const HLJS_ENTRY_PATH = join(import.meta.dirname, "../../scripts/hljs-entry.mjs");
 
@@ -74,6 +74,23 @@ describe("languageForPath", () => {
   it("does not mistake a dotfile's leading dot for an extension separator", () => {
     expect(languageForPath(".gitignore")).toBeUndefined();
   });
+});
+
+describe("isProseLanguage", () => {
+  it("treats markdown as prose", () => {
+    expect(isProseLanguage("markdown")).toBe(true);
+  });
+
+  it("treats an unrecognized/absent language as prose (no code language to preserve alignment for)", () => {
+    expect(isProseLanguage(undefined)).toBe(true);
+  });
+
+  it.each(["typescript", "javascript", "python", "java", "css", "json"])(
+    "treats %s as code, not prose",
+    (lang) => {
+      expect(isProseLanguage(lang)).toBe(false);
+    },
+  );
 });
 
 describe("SUPPORTED_LANGUAGES / scripts/hljs-entry.mjs drift guard", () => {

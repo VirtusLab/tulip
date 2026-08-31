@@ -132,6 +132,42 @@ describe("renderPage", () => {
     expect(test?.text).toContain("Tests the thing.");
   });
 
+  it("defaults a test-subsection snippet to collapsed even when unfold=yes, but keeps a production one honoring unfold=yes", () => {
+    const prodRef = serializeSnippetRef({
+      path: "src/a.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const testRef = serializeSnippetRef({
+      path: "src/a.test.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const fileDiffs = new Map<string, FileDiffData>([
+      ["src/a.ts", { rows, embeddable: true }],
+      ["src/a.test.ts", { rows, embeddable: true }],
+    ]);
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [
+        explanation({
+          markdown: `## Production code\n\n${prodRef}\n\n## Test code\n\n${testRef}\n`,
+        }),
+      ],
+    });
+    const root = parse(html);
+    const production = root.querySelector("#category-0-production-0");
+    const test = root.querySelector("#category-0-test-1");
+    expect(production?.querySelector("details")?.hasAttribute("open")).toBe(true);
+    expect(test?.querySelector("details")?.hasAttribute("open")).toBe(false);
+  });
+
   it("gives duplicate same-kind subsections distinct ids instead of colliding", () => {
     const html = renderPage({
       prTitle: "t",
