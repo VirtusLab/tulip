@@ -1,4 +1,4 @@
-import type { Category } from "../categories/types.js";
+import { type Category, sortByAttention } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { type AfterBatchHook, classifyInBatches, type ResolvedChange } from "./classify.js";
@@ -17,8 +17,15 @@ export interface ClassifyChangesInput {
 }
 
 export interface ClassifyChangesResult {
-  /** Final ordered category list: phase-1 categories, then any accepted escape-hatch
-   * categories appended in acceptance order. */
+  /** Final presentation-ordered category list: phase-1 categories plus any escape-hatch
+   * accepted mid-run, stable-sorted by attention rank (close/normal/skim — docs/adr/0010) so
+   * the badge shown for a category always matches its position. Escape-hatch categories are
+   * appended to the working list during classification (./escape-hatch.ts) but not sorted
+   * there — this sort runs once, here, after classification/escape-hatch/coverage are all
+   * done, so a mid-run "normal" category doesn't get stranded after phase-1 "skim" ones.
+   * `id`s are unchanged (not renumbered) and so may be non-monotonic with array position —
+   * classification already matches by id regardless of order, and rendering derives each
+   * section's anchor from this array's index, which is safe to reorder freely. */
   categories: Category[];
   /** changeId -> resolved assignments. Changes classified "ignore" are omitted — see
    * `ignoredChangeIds`. Changes still missing a verdict (not yet an error) simply aren't a key. */
@@ -74,7 +81,7 @@ export async function classifyChanges(
   );
 
   return {
-    categories: state.categories,
+    categories: sortByAttention(state.categories),
     ...splitAssignments(resolved),
     changesById,
   };

@@ -196,4 +196,75 @@ describe("classifyChanges", () => {
     ]);
     expect(result.assignments.get("b1-0")).toEqual([{ category: "c2", codeType: "production" }]);
   });
+
+  it("sorts the final category list by attention rank, even though escape-hatch categories are appended at the tail mid-run (docs/adr/0010)", async () => {
+    // Phase 1 hands in [close, normal, skim], already in presentation order. Escape-hatch.ts
+    // appends its accepted category to the tail of the working list without re-sorting (it only
+    // sorts once, here, in classifyChanges's final return) — so before this sort, the raw list
+    // would be [close, normal, skim, normal(new)], stranding the new "normal" category after
+    // "skim". The final result must instead read [close, normal, normal(new), skim]: the badge
+    // shown for each category must never disagree with its position.
+    const categories: Category[] = [
+      { id: "c1", name: "Core", description: "close", attention: "close" },
+      { id: "c2", name: "Follow", description: "normal", attention: "normal" },
+      { id: "c3", name: "Wiring", description: "skim", attention: "skim" },
+    ];
+    const diff: ParsedDiff = { files: [fileWithChange("c1")] };
+
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+      call++;
+      if (call === 1) {
+        return envelope(
+          {
+            classifications: [
+              {
+                changeId: "c1",
+                assignments: [
+                  {
+                    category: "none",
+                    codeType: "production",
+                    suggestedCategory: { name: "D", description: "proposed", attention: "normal" },
+                  },
+                ],
+              },
+            ],
+          },
+          "classifier-1",
+        );
+      }
+      if (call === 2) {
+        // consultOnCategory, resuming the phase-1 session — accepted as-is.
+        expect(input).toContain("D");
+        return envelope(
+          { accept: true, category: { name: "D", description: "proposed", attention: "normal" } },
+          "phase1-1",
+        );
+      }
+      // Escape-hatch reclassify, using the freshly assigned id "c4".
+      expect(input).toContain("c4");
+      return envelope(
+        {
+          classifications: [
+            { changeId: "c1", assignments: [{ category: "c4", codeType: "production" }] },
+          ],
+        },
+        "classifier-2",
+      );
+    });
+
+    const result = await classifyChanges(
+      { diff, categories, phase1SessionId: "phase1-0" },
+      { runClaudeProcess },
+    );
+
+    // Ids stay code-assigned and intact (c4, not renumbered) even though it now sits third —
+    // between c2 (normal) and c3 (skim) — rather than at the tail where it was appended.
+    expect(result.categories.map((c) => [c.id, c.attention])).toEqual([
+      ["c1", "close"],
+      ["c2", "normal"],
+      ["c4", "normal"],
+      ["c3", "skim"],
+    ]);
+  });
 });
