@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -109,11 +110,15 @@ const MERMAID_VALIDATE_TS = join(import.meta.dirname, "mermaid-validate.ts");
  * capturing whatever `window` exists *at that moment*) run before anything else in the importing
  * module — see docs/adr/0008's amendment for the bug this guards against.
  */
-async function runInChildProcess(cases: string[]): Promise<{ valid: boolean; error?: string }[]> {
+async function runValidateInChildProcess(
+  bin: string,
+  modulePath: string,
+  cases: string[],
+): Promise<{ valid: boolean; error?: string }[]> {
   const dir = await mkdtemp(join(tmpdir(), "tulip-mermaid-validate-"));
   const scriptPath = join(dir, "check.mjs");
   const script = `
-    import { validateMermaidDiagram } from ${JSON.stringify(MERMAID_VALIDATE_TS)};
+    import { validateMermaidDiagram } from ${JSON.stringify(modulePath)};
     const cases = ${JSON.stringify(cases)};
     const results = [];
     for (const source of cases) {
@@ -123,7 +128,7 @@ async function runInChildProcess(cases: string[]): Promise<{ valid: boolean; err
   `;
   try {
     await writeFile(scriptPath, script, "utf8");
-    const { stdout } = await execFileAsync(TSX_BIN, [scriptPath], {
+    const { stdout } = await execFileAsync(bin, [scriptPath], {
       cwd: PROJECT_ROOT,
       timeout: 30_000,
     });
@@ -131,6 +136,10 @@ async function runInChildProcess(cases: string[]): Promise<{ valid: boolean; err
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+function runInChildProcess(cases: string[]): Promise<{ valid: boolean; error?: string }[]> {
+  return runValidateInChildProcess(TSX_BIN, MERMAID_VALIDATE_TS, cases);
 }
 
 describe("validateMermaidDiagram, in a real child process (no vitest/vite module transform)", () => {
@@ -157,3 +166,42 @@ describe("validateMermaidDiagram, in a real child process (no vitest/vite module
     expect(results[5]?.error).toMatch(/parse error/i);
   }, 30_000);
 });
+
+// Dual-mode check, mirroring ../prompts/dist.test.ts's pattern: the child-process test above
+// proves the *source* is fixed, but only running the file that actually ships — the compiled
+// dist/rendering/mermaid-validate.js scripts/copy-assets.mjs and `pnpm build`'s tsc step produce
+// — closes the gap between "the TypeScript is right" and "what a real `tulip` run from dist/
+// does". Skipped when dist/ doesn't exist (e.g. running tests without building first); the
+// repo's required flow is `pnpm build && pnpm test`, so this normally runs for real.
+const DIST_MERMAID_VALIDATE_JS = join(PROJECT_ROOT, "dist/rendering/mermaid-validate.js");
+const builtDist = existsSync(DIST_MERMAID_VALIDATE_JS);
+
+describe.runIf(builtDist)(
+  "validateMermaidDiagram, against the built dist/ output (after pnpm build)",
+  () => {
+    it("accepts a labeled flowchart from the real shipped file — the exact false-reject this guards against", async () => {
+      const results = await runValidateInChildProcess("node", DIST_MERMAID_VALIDATE_JS, [
+        "graph TD\nA[Start] --> B{Decision}\nB -->|Yes| C[End]",
+      ]);
+
+      expect(results).toEqual([{ valid: true }]);
+    }, 30_000);
+
+    it("still rejects a genuinely broken diagram from the shipped file", async () => {
+      const results = await runValidateInChildProcess("node", DIST_MERMAID_VALIDATE_JS, [
+        "graph TD\nA[Start --> B{Decision\nB -->|Yes] C[End]",
+      ]);
+
+      expect(results[0]?.valid).toBe(false);
+    }, 30_000);
+  },
+);
+
+describe.runIf(!builtDist)(
+  "validateMermaidDiagram, against the built dist/ output (skipped — no build found)",
+  () => {
+    it("run `pnpm build` first to exercise the dist/ checks above", () => {
+      expect(builtDist).toBe(false);
+    });
+  },
+);
