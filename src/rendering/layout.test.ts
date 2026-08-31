@@ -37,7 +37,7 @@ function renderIntoJsdom(): Document {
     explanations: [
       {
         category: { id: "c1", name: "Auth", description: "d" },
-        markdown: `Intro prose.\n\n${snippetRef}\n\n\`\`\`ts\nconst x = 1;\n\`\`\`\n\n## Production code\n\nBody.\n`,
+        markdown: `Intro prose.\n\n${snippetRef}\n\n\`\`\`ts\nconst x = 1;\n\`\`\`\n\n\`\`\`mermaid\ngraph TD\nA-->B\n\`\`\`\n\n## Production code\n\nBody.\n`,
       },
     ],
   });
@@ -75,6 +75,14 @@ function gridColumn(el: Element | null): string {
     throw new Error("element not found");
   }
   return getComputedStyle(el).gridColumn;
+}
+
+function mustQuery(doc: Document, selector: string): Element {
+  const el = doc.querySelector(selector);
+  if (!el) {
+    throw new Error(`element not found: ${selector}`);
+  }
+  return el;
 }
 
 describe("style.css layout — computed grid-column (real CSS, real DOM)", () => {
@@ -154,5 +162,90 @@ describe("style.css layout — spacing/alignment fixes (real CSS, real DOM)", ()
     }
     // With zero categories, the PR description is itself the last (and only) section.
     expect(onlySection.matches(".page-section:last-of-type")).toBe(true);
+  });
+});
+
+describe("style.css layout — vertical rhythm (real CSS, real DOM)", () => {
+  // jsdom's CSS engine resolves a `var(...)` reference for a longhand property like
+  // `margin-top` to the literal, unresolved token (never a computed px value) — good enough to
+  // distinguish which spacing-scale step a rule applies (or that a rule was zeroed to "0px"),
+  // which is all these checks need.
+  it("zeroes a section/category heading's own margin so it doesn't double the section's padding", () => {
+    const doc = renderIntoJsdom();
+    const categoryHeading = mustQuery(doc, "#category-0 > h2");
+    expect(getComputedStyle(categoryHeading).marginTop).toBe("0px");
+  });
+
+  it("gives a category's description a tighter caption gap than the general paragraph rhythm", () => {
+    const doc = renderIntoJsdom();
+    const description = mustQuery(doc, "#category-0 > .category-description");
+    const introParagraph = mustQuery(doc, "#category-0 > p:not(.category-description)");
+    expect(getComputedStyle(description).marginTop).toBe("var(--space-1)");
+    expect(getComputedStyle(introParagraph).marginTop).toBe("var(--space-2)");
+  });
+
+  it("gives a subsection a bigger jump than the general paragraph rhythm", () => {
+    const doc = renderIntoJsdom();
+    const subsection = mustQuery(doc, ".subsection");
+    expect(getComputedStyle(subsection).marginTop).toBe("var(--space-3)");
+  });
+
+  it("zeroes a subsection's own h3 margin so it doesn't double the subsection's own margin-top", () => {
+    const doc = renderIntoJsdom();
+    const subsectionHeading = mustQuery(doc, ".subsection > h3");
+    expect(getComputedStyle(subsectionHeading).marginTop).toBe("0px");
+  });
+
+  it("never gives a top-level section/category/subsection child a margin-bottom (rhythm is margin-top only)", () => {
+    const doc = renderIntoJsdom();
+    const description = mustQuery(doc, "#category-0 > .category-description");
+    expect(getComputedStyle(description).marginBottom).toBe("0px");
+  });
+});
+
+describe("style.css layout — mermaid diagram centering (real CSS, real DOM)", () => {
+  // jsdom has no real layout engine, so it can't report an svg's actual rendered pixel
+  // position — these tests instead confirm the CSS *mechanism* (mirroring how this file
+  // already checks grid-column/margin outcomes rather than pixel geometry).
+  it("center-aligns the mermaid diagram's container", () => {
+    const doc = renderIntoJsdom();
+    const pre = doc.querySelector("pre.mermaid");
+    if (!pre) {
+      throw new Error("expected a pre.mermaid placeholder in the fixture");
+    }
+    expect(getComputedStyle(pre).textAlign).toBe("center");
+  });
+
+  it("centers regardless of theme", () => {
+    document.documentElement.setAttribute("data-theme", "dark");
+    try {
+      const doc = renderIntoJsdom();
+      const pre = doc.querySelector("pre.mermaid");
+      if (!pre) {
+        throw new Error("expected a pre.mermaid placeholder in the fixture");
+      }
+      expect(getComputedStyle(pre).textAlign).toBe("center");
+    } finally {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  });
+
+  it("doesn't override mermaid's own inline max-width on a large diagram's rendered svg", () => {
+    const doc = renderIntoJsdom();
+    const pre = doc.querySelector("pre.mermaid");
+    if (!pre) {
+      throw new Error("expected a pre.mermaid placeholder in the fixture");
+    }
+    // Simulates what assets/app.js's setupMermaid does at runtime: mermaid replaces the
+    // placeholder's text content with a rendered <svg width="100%" style="max-width: ...px">
+    // (see mermaid's `useMaxWidth` config, default on) — a diagram whose natural size exceeds
+    // the container should keep growing to the container's width, capped only by that inline
+    // style, never by a competing rule from this stylesheet.
+    pre.innerHTML = '<svg width="100%" style="max-width: 900px;" height="200"></svg>';
+    const svg = pre.querySelector("svg");
+    if (!svg) {
+      throw new Error("expected the inserted svg");
+    }
+    expect(getComputedStyle(svg).maxWidth).toBe("900px");
   });
 });

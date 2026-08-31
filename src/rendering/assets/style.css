@@ -42,6 +42,16 @@
      kept as its own variable so every code surface (snippet cells, prose fences, summaries)
      agrees on it. */
   --code-font-size: 0.8125rem;
+
+  /* Small, shared vertical-rhythm scale (docs/adr/0009: the page read as too airy — main's own
+     padding, .page-section's padding and h2's margin-top all stacked on top of each other, plus
+     ad-hoc values like the old -0.25rem "pull the description up" hack). Every top-level gap on
+     the page (section padding, heading margins, paragraph/list/snippet rhythm) now comes from
+     one of these four steps instead of an independently-chosen value. */
+  --space-1: 0.5rem; /* a caption tucked directly under its heading */
+  --space-2: 1rem; /* rhythm between ordinary paragraphs/lists/snippets */
+  --space-3: 1.5rem; /* a heading-level jump, or a section's own padding */
+  --space-4: 2.5rem; /* the page's own top/bottom padding */
 }
 
 /* Self-hosted webfonts (docs/adr/0004): Inter for prose, JetBrains Mono for code, both SIL OFL
@@ -136,10 +146,15 @@ body {
    `.snippet`/`pre` for the actual full-bleed breakout. Since none of these containers constrain
    their own width, every grid's center track computes to the same pixel offset, so headings,
    paragraphs and lists all share one left edge. */
+/* Top/bottom padding matches --space-4 — written as a literal rather than `var(--space-4)`
+   because jsdom's CSS engine (layout.test.ts) doesn't resolve a custom property inside the
+   `padding` shorthand (unlike a plain `margin-top: var(...)` elsewhere in this file, which it
+   does preserve/compare correctly); keeping this one testable/verifiable outweighs the
+   duplication. */
 main {
   max-width: var(--page-max-width);
   margin: 0 auto;
-  padding: 2.5rem clamp(1rem, 4vw, 3rem) 6rem;
+  padding: 2.5rem clamp(1rem, 4vw, 3rem) 2.5rem;
 }
 
 main :is(ul, ol) {
@@ -161,12 +176,13 @@ h1 {
 
 h2 {
   font-size: 1.375rem;
-  margin-top: 2.5rem;
+  margin-top: var(--space-3);
 }
 
 h3 {
   font-size: 1.0625rem;
   color: var(--accent);
+  margin-top: var(--space-3);
 }
 
 h4 {
@@ -232,6 +248,18 @@ main img {
   height: auto;
 }
 
+/* Mermaid diagrams (./mermaid.ts, ./assets/app.js): the rendered <svg> mermaid inserts already
+   scales up to its own natural size on its own — mermaid sets the svg's width to 100% plus an
+   inline `max-width` cap (its "useMaxWidth" default), so a diagram larger than the container
+   already grows to fill it. The remaining defect: an svg is an inline-level replaced element, so
+   once its natural size is narrower than the container it sits flush left instead of centered.
+   `text-align: center` on the container is the standard fix for a narrower-than-container
+   replaced element and, unlike a CSS width override, doesn't fight mermaid's own inline
+   max-width style. */
+main pre.mermaid {
+  text-align: center;
+}
+
 #pr-header {
   border-bottom: 1px solid var(--border);
   padding-bottom: 1.5rem;
@@ -251,8 +279,10 @@ main img {
 
 /* Shared by the PR-description section and every category (task: PR description reads as its
    own clearly-labeled section, styled consistently with the category sections that follow it). */
+/* Matches --space-3 — see main's own padding comment above for why this is a literal instead of
+   `var(--space-3)`. */
 .page-section {
-  padding: 2rem 0;
+  padding: 1.5rem 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -260,14 +290,17 @@ main img {
   border-bottom: none;
 }
 
+/* A tight caption directly under its section/category heading — deliberately smaller than the
+   general paragraph rhythm (--space-2) below, rather than the old negative-margin hack that
+   pulled it up to cancel h2's margin-bottom. */
 .category-description,
 .section-note {
   color: var(--muted);
-  margin-top: -0.25rem;
+  margin-top: var(--space-1);
 }
 
 .subsection {
-  margin-top: 1.25rem;
+  margin-top: var(--space-3);
 }
 
 .subsection h3 {
@@ -291,8 +324,20 @@ main img {
    `:where()` always contributes zero specificity, so the class-level overrides win regardless of
    `#pr-header` being in this selector list. Regression-guarded by a computed-style test in
    layout.test.ts (jsdom) — a regex/text CSS check can't catch a specificity bug like this one. */
+/* Grid items never margin-collapse with each other (unlike normal block flow), so every
+   top-level child's UA/default margin would otherwise stack fully against its neighbor's,
+   compounding into the excessive whitespace docs/adr/0009 fixes. Zeroing both margins here and
+   re-adding only `margin-top` on non-first children (below) gives one predictable, additive
+   rhythm instead — a heading/`.snippet`/etc. below then raises its own margin-top with real
+   specificity (e.g. `h2`, `.subsection`) when it needs a bigger jump than the default. */
 :where(#pr-header, .page-section, .subsection) > * {
   grid-column: 2;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+:where(#pr-header, .page-section, .subsection) > * + * {
+  margin-top: var(--space-2);
 }
 
 :is(.page-section, .subsection) > :is(.snippet, pre),
@@ -300,14 +345,13 @@ main img {
   grid-column: 1 / -1;
 }
 
-/* Every section heading (h2) is the first child of a `.page-section`, which already has its own
-   `padding: 2rem 0` (above) — since grid items never margin-collapse with their container's
-   padding/edge (unlike normal block flow), h2's own `margin-top: 2.5rem` (below) stacked on top
-   of that padding instead of collapsing into it, doubling the gap to ~4.5rem above every heading
-   and ~6.5rem between sections. Zeroing it here leaves exactly the intended gap: `.page-section`'s
-   own 2rem padding-top. (`.category-description`'s `-0.25rem` hack, just below, tightens the
-   *following* paragraph against h2's own margin-bottom — a separate relationship, still needed.) */
-.page-section > h2:first-child {
+/* A section's own `h2` and a subsection's own `h3` are always their container's first child —
+   since grid items never margin-collapse with their container's padding/edge (unlike normal
+   block flow), the plain `h2`/`h3` rules' own `margin-top` (above) would otherwise stack on top
+   of `.page-section`'s padding-top / `.subsection`'s own margin-top instead of collapsing into
+   it. Zeroing it here leaves exactly the intended single gap. */
+.page-section > h2:first-child,
+.subsection > h3:first-child {
   margin-top: 0;
 }
 
@@ -398,8 +442,9 @@ main img {
 
 /* Snippet diff blocks (see ./snippets.ts) — full width up to `main`'s own cap (task: diffs take
    the whole width, unlike prose). */
+/* No margin here — it's a grid item inside the shared centered-content grid, so it already
+   gets its vertical rhythm (margin-top only) from that grid's own rules above. */
 .snippet {
-  margin: 1.25rem 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
@@ -438,7 +483,8 @@ main img {
 /* Prose/doc files (task: wrap long lines instead of forcing horizontal scroll — alignment only
    matters for code). `table-layout: fixed` is required for `pre-wrap` to actually constrain a
    cell's width instead of growing to fit its longest word; the gutter columns keep their
-   explicit widths (below), so the two code columns split the remaining space evenly. */
+   explicit widths (below), so the remaining code column(s) split whatever space is left evenly
+   — one column for a single-pane added/removed file (docs/adr/0009), two for a split diff. */
 .snippet-wrap .snippet-table {
   table-layout: fixed;
   min-width: 0;
