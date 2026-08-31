@@ -28,13 +28,29 @@ each part still stands alone — don't cut one feature into "the hard part" and 
 wiring", since neither makes sense without the other. Keep any one group from covering
 too much.
 
-Order the groups by how much attention they need, most important first: new or tricky
-logic, where a mistake would hurt most, before routine wiring or boilerplate. In each
-description, say what the group covers and how closely to read it — for example "core
-logic, read carefully" or "routine, skim". With no clear tricky-vs-routine split, just
-order by impact.
+For each group, say how closely the reviewer should read it — one of:
+- **Read closely** — genuinely tricky or subtle logic, or a change where a
+  mistake would really hurt. The heart of the PR.
+- **Read through** — real changes to follow, but nothing subtle. Read the whole
+  thing at normal pace; you don't need to pick it apart.
+- **Skim** — routine, mechanical, or boilerplate: wiring, renames, generated or
+  repetitive code, and tests that mirror simple code. A quick pass is enough.
 
-For each group, give a short name and a one- or two-sentence description. Keep the name to a
+Start every group at **Read through**. Promote to **Read closely** only for
+genuinely tricky or high-impact work — usually a minority, often a single group.
+Demote to **Skim** for mechanical or boilerplate work. Judge each group on its
+own; don't force a spread. If nearly everything came out **Read closely**, you've
+over-rated it — re-check.
+
+Assign attention to whole groups after you've formed them; it never changes how
+you split. Never separate a feature's tricky core from its wiring to give them
+different levels.
+
+You don't need to order the groups — the reader sees them ordered by attention
+(Read closely first, Skim last). Just form the groups and rate each.
+
+For each group, give a short name and a one- or two-sentence description saying what the
+group covers (and why it's tricky, when that helps). Keep the name to a
 few words naming the concern (e.g. "Retry logic", "JSON flow parsing") — never a file list,
 method-name qualifiers, or a parenthetical aside; that level of detail belongs in the
 description, not the name. As above, tests and docs for a group ride inside that group's own

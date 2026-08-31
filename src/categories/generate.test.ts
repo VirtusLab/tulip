@@ -127,7 +127,7 @@ describe("generateCategories", () => {
     expect(prompt).toMatch(/this never means a tests or docs group/i);
   });
 
-  it("orders groups by attention and asks for a read-carefully/skim label per group", async () => {
+  it("asks for a per-group attention rating with the default-to-middle rubric and the anti-partition line", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
@@ -139,9 +139,33 @@ describe("generateCategories", () => {
     await generateCategories(INPUT, { runClaudeProcess });
 
     const prompt = runClaudeProcess.mock.calls[0]?.[1];
-    expect(prompt).toMatch(/order the groups by how much attention they need/i);
-    expect(prompt).toMatch(/read carefully/i);
+    expect(prompt).toMatch(/read closely/i);
+    expect(prompt).toMatch(/read through/i);
     expect(prompt).toMatch(/skim/i);
+    // Default-to-middle framing (docs/adr/0010): resists top-inflation better than a symmetric
+    // anchor between the three levels.
+    expect(prompt).toMatch(/start every group at\s+\*\*read through\*\*/i);
+    // Anti-partition invariant (ADR 0003): attention rates an already-formed group, never a
+    // second cutting axis.
+    expect(prompt).toMatch(/it never changes how\s+you split/i);
+    expect(prompt).toMatch(/never separate a feature's tricky core from its wiring/i);
+  });
+
+  it("no longer asks the model to order the groups — ordering is derived from attention, in code", async () => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({
+        categories: [
+          { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+        ],
+      }),
+    );
+
+    await generateCategories(INPUT, { runClaudeProcess });
+
+    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    expect(prompt).not.toMatch(/order the groups by how much attention they need/i);
+    expect(prompt).not.toMatch(/most important first/i);
+    expect(prompt).toMatch(/you don't need to order the groups/i);
   });
 
   it("asks for short names, with file lists/qualifiers/parentheticals kept out of the name", async () => {
