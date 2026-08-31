@@ -124,6 +124,88 @@ describe("explainCategories", () => {
     expect(results[0]?.markdown).toContain("src/fetch.test.ts");
   });
 
+  // A realistic LLM slip (mismatched node-shape delimiters), matching the real "Syntax error in
+  // text" a user hit in the browser — see docs/adr/0008.
+  const INVALID_DIAGRAM = "graph TD\nA[Start --> B{Decision\nB -->|Yes] C[End]";
+  const FIXED_DIAGRAM = "graph TD\nA --> B";
+
+  function withInvalidDiagram(body: string): string {
+    return `${body}\n\n\`\`\`mermaid\n${INVALID_DIAGRAM}\n\`\`\``;
+  }
+
+  it("wires mermaid verification into the flow: a fixable diagram ends up valid in the final markdown", async () => {
+    const category: Category = { id: "c1", name: "Diagrammed", description: "Has a diagram." };
+    const production = [change("c1", "src/diagram.ts")];
+    const input: ExplainCategoriesInput = {
+      prTitle: "Add a diagram",
+      prDescription: "Illustrates the flow.",
+      diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
+      categorySets: [categorySet(category, production, [])],
+    };
+
+    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+      if (promptText.includes("Reply with approved")) {
+        return envelope({ approved: true, issues: [] }, "review-session");
+      }
+      if (promptText.includes("corrected Mermaid diagram source")) {
+        expect(promptText).toContain(INVALID_DIAGRAM);
+        return envelope({ source: FIXED_DIAGRAM }, "explain-session-2");
+      }
+      return envelope(
+        {
+          markdown: withInvalidDiagram(
+            `explanation\n\n${refFor(production[0] as ClassifiableChange)}`,
+          ),
+        },
+        "explain-session-1",
+      );
+    });
+
+    const results = await explainCategories(input, { runClaudeProcess });
+
+    expect(results[0]?.markdown).toContain(FIXED_DIAGRAM);
+    expect(results[0]?.markdown).not.toContain(INVALID_DIAGRAM);
+  });
+
+  it("wires mermaid verification into the flow: a diagram still invalid after every fix attempt is omitted, not shipped broken", async () => {
+    const category: Category = { id: "c1", name: "Diagrammed", description: "Has a diagram." };
+    const production = [change("c1", "src/diagram.ts")];
+    const input: ExplainCategoriesInput = {
+      prTitle: "Add a diagram",
+      prDescription: "Illustrates the flow.",
+      diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
+      categorySets: [categorySet(category, production, [])],
+    };
+
+    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+      if (promptText.includes("Reply with approved")) {
+        return envelope({ approved: true, issues: [] }, "review-session");
+      }
+      if (promptText.includes("corrected Mermaid diagram source")) {
+        // The "fix" is still invalid, every attempt.
+        return envelope({ source: "still [[[ broken" }, "explain-session-fix");
+      }
+      return envelope(
+        {
+          markdown: withInvalidDiagram(
+            `explanation\n\n${refFor(production[0] as ClassifiableChange)}`,
+          ),
+        },
+        "explain-session-1",
+      );
+    });
+
+    const results = await explainCategories(input, { runClaudeProcess });
+
+    expect(results[0]?.markdown).not.toContain("```mermaid");
+    expect(results[0]?.markdown).not.toContain(INVALID_DIAGRAM);
+    expect(results[0]?.markdown).toContain("omitted");
+  });
+
   it("processes categories concurrently, capped by the shared claude process limiter", async () => {
     const categories: CategoryChangeSet[] = Array.from({ length: 5 }, (_, i) =>
       categorySet(

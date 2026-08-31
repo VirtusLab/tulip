@@ -2,6 +2,7 @@ import type { CategoryChangeSet } from "../classification/group.js";
 import { createLogger } from "../logging/logger.js";
 import { verifySnippetCoverage } from "./coverage.js";
 import { explainCategory } from "./explain.js";
+import { verifyMermaidDiagrams } from "./mermaid-verify.js";
 import { type ReviewLoopDeps, reviewAndAmend } from "./review.js";
 import type { CategoryExplanation } from "./types.js";
 
@@ -133,7 +134,7 @@ async function explainOneCategory(
       deps,
     );
 
-    const markdown = await reviewAndAmend(
+    const reviewed = await reviewAndAmend(
       {
         prTitle: input.prTitle,
         prDescription: input.prDescription,
@@ -149,8 +150,18 @@ async function explainOneCategory(
       deps,
     );
 
+    // Runs after the review-amend loop (not before) since an amend can itself change a diagram —
+    // this is the FINAL markdown that reaches rendering, so it's the one that must be validated
+    // (docs/adr/0008).
+    const verified = await verifyMermaidDiagrams(
+      reviewed.markdown,
+      reviewed.explainSessionId,
+      set.category.name,
+      deps,
+    );
+
     logger.info(`finished explaining category "${set.category.name}"`);
-    return { category: set.category, markdown };
+    return { category: set.category, markdown: verified.markdown };
   } catch (error) {
     throw new CategoryExplanationError(set.category.name, error);
   }

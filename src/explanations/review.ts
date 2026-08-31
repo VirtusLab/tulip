@@ -29,6 +29,14 @@ export interface ReviewLoopDeps extends RunnerDeps {
   logger?: Logger;
 }
 
+/** Reviewed (and, if amended, coverage-reverified) markdown, plus the explaining session's
+ * latest id — needed by anything that must resume that same session afterward (e.g. mermaid
+ * diagram fixes on the final markdown; see ./mermaid-verify.ts). */
+export interface ReviewLoopResult {
+  markdown: string;
+  explainSessionId: string;
+}
+
 /**
  * Task 6.4: reviews `input.markdown` with a fresh sonnet session (clarity, conciseness,
  * correctness/groundedness). If it raises issues, resumes the explaining session to amend, re-
@@ -39,7 +47,7 @@ export interface ReviewLoopDeps extends RunnerDeps {
 export async function reviewAndAmend(
   input: ReviewLoopInput,
   deps: ReviewLoopDeps = {},
-): Promise<string> {
+): Promise<ReviewLoopResult> {
   const logger = deps.logger ?? createLogger();
   const changes = [...input.production, ...input.test];
   let markdown = input.markdown;
@@ -67,7 +75,7 @@ export async function reviewAndAmend(
     );
 
     if (review.result.approved || review.result.issues.length === 0) {
-      return markdown;
+      return { markdown, explainSessionId };
     }
 
     if (round === MAX_REVIEW_ROUNDS) {
@@ -75,7 +83,7 @@ export async function reviewAndAmend(
         `warning: category "${input.category.name}" still had review issues after ` +
           `${MAX_REVIEW_ROUNDS} rounds; keeping the latest version`,
       );
-      return markdown;
+      return { markdown, explainSessionId };
     }
 
     const amended = await resumeSession<ExplanationResponse>(
@@ -97,5 +105,5 @@ export async function reviewAndAmend(
     explainSessionId = covered.sessionId;
   }
 
-  return markdown;
+  return { markdown, explainSessionId };
 }

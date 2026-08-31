@@ -61,9 +61,10 @@ describe("reviewAndAmend", () => {
       envelope({ approved: true, issues: [] }, "review-1"),
     );
 
-    const markdown = await reviewAndAmend(baseInput(), { runClaudeProcess });
+    const result = await reviewAndAmend(baseInput(), { runClaudeProcess });
 
-    expect(markdown).toBe(`explanation\n\n${REF}`);
+    expect(result.markdown).toBe(`explanation\n\n${REF}`);
+    expect(result.explainSessionId).toBe("explain-session");
     expect(runClaudeProcess).toHaveBeenCalledTimes(1);
     const [args, prompt] = runClaudeProcess.mock.calls[0] ?? [];
     expect(prompt).toContain("Add retry logic to the fetcher");
@@ -141,9 +142,10 @@ describe("reviewAndAmend", () => {
       return envelope({ approved: true, issues: [] }, "review-2");
     });
 
-    const markdown = await reviewAndAmend(baseInput(), { runClaudeProcess });
+    const result = await reviewAndAmend(baseInput(), { runClaudeProcess });
 
-    expect(markdown).toBe(`amended\n\n${REF}`);
+    expect(result.markdown).toBe(`amended\n\n${REF}`);
+    expect(result.explainSessionId).toBe("explain-session-2");
     expect(runClaudeProcess).toHaveBeenCalledTimes(3);
   });
 
@@ -162,11 +164,12 @@ describe("reviewAndAmend", () => {
     const write = vi.fn();
     const logger = createLogger({ write });
 
-    const markdown = await reviewAndAmend(baseInput(), { runClaudeProcess, logger });
+    const result = await reviewAndAmend(baseInput(), { runClaudeProcess, logger });
 
     // MAX_REVIEW_ROUNDS reviews + (MAX_REVIEW_ROUNDS - 1) amendments.
     expect(runClaudeProcess).toHaveBeenCalledTimes(MAX_REVIEW_ROUNDS * 2 - 1);
-    expect(markdown).toBe(`amended 4\n\n${REF}`);
+    expect(result.markdown).toBe(`amended 4\n\n${REF}`);
+    expect(result.explainSessionId).toBe("explain-session-4");
     expect(write).toHaveBeenCalledTimes(1);
     expect(write.mock.calls[0]?.[0]).toMatch(/warning.*Retry logic.*3 rounds/i);
   });
