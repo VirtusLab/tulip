@@ -46,6 +46,7 @@
 - [x] 6.3 Snippet coverage verification: all provided changes referenced; resume session to amend missing ones
 - [x] 6.4 Review subagent: clarity/conciseness/correctness; fix & re-review loop, max 3 rounds
 - [x] 6.5 Tests: markup parsing, coverage check, review loop control
+- [x] 6.6 Mermaid diagram render verification: headless-validate each diagram against the real renderer, fix loop via the explaining session, graceful degradation if still invalid (docs/adr/0008)
 
 ## Epic 7: Rendering
 - [x] 7.1 Static HTML template: light/dark theme toggle, floating TOC, programmer font, narrow layout; bundled assets (no network)
