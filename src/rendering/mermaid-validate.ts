@@ -1,5 +1,4 @@
 import { JSDOM } from "jsdom";
-import mermaid from "mermaid";
 
 /**
  * Headless mermaid diagram validation, with fidelity to the browser renderer (see ./mermaid.ts,
@@ -16,34 +15,41 @@ export interface MermaidValidationResult {
   error?: string;
 }
 
-let mermaidReady: Promise<void> | undefined;
-
 /**
- * mermaid's parser pulls in DOMPurify, which requires a `window` to construct — absent in plain
- * Node, where this runs during the pipeline (unlike a jsdom-based vitest test environment, e.g.
- * ../rendering/highlight-safety.test.ts, which already provides one). Installs a minimal jsdom
- * window/document only when neither exists, so it never clobbers a real or test DOM; otherwise a
- * one-time setup shared by every validation call in the process. `mermaid.initialize` uses
- * defaults — theme/colors are irrelevant to `parse()`, which only checks syntax.
+ * mermaid's parser pulls in DOMPurify, which constructs itself — capturing whatever `window` it
+ * finds — at DOMPurify's own *module-evaluation* time, not on first use. A plain, ordinary
+ * `import mermaid from "mermaid"` at the top of this file would have Node evaluate mermaid's
+ * whole dependency graph (dompurify included) *before* any of this module's own top-level code
+ * runs (ES module evaluation order: imports evaluate first, depth-first, regardless of where the
+ * `import` statement sits in the file) — so installing a jsdom window afterward, even at this
+ * module's own top level, is too late. DOMPurify ends up built without a real `window`, which
+ * leaves it missing `addHook` and makes every label-sanitizing diagram (i.e. almost every real
+ * one — `A[Start]`, `B{Decision}`, ...) fail with "DOMPurify.addHook is not a function", not
+ * just genuinely-invalid ones (see docs/adr/0008's amendment; confirmed on the built `dist`
+ * output, not just under a test environment).
+ *
+ * Fixed by never statically importing "mermaid": the jsdom window/document is installed first,
+ * as this module's own first top-level statement, and only then is "mermaid" (and transitively
+ * dompurify) *dynamically* imported — a dynamic `import()` runs exactly where it's written, not
+ * hoisted like a static one. A jsdom-based vitest test environment (e.g.
+ * ../rendering/highlight-safety.test.ts) already provides `window`/`document` before any test
+ * file's own code (imports included) runs, so this only installs its own when neither exists —
+ * never clobbers a real or test DOM.
  */
-function ensureMermaid(): Promise<void> {
-  if (!mermaidReady) {
-    mermaidReady = Promise.resolve().then(() => {
-      if (typeof document === "undefined") {
-        const dom = new JSDOM("<!doctype html><html><body></body></html>", {
-          url: "http://localhost/",
-        });
-        Object.assign(globalThis, {
-          window: dom.window,
-          document: dom.window.document,
-          SVGElement: dom.window.SVGElement,
-        });
-      }
-      mermaid.initialize({ startOnLoad: false });
-    });
-  }
-  return mermaidReady;
+if (typeof document === "undefined") {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", {
+    url: "http://localhost/",
+  });
+  Object.assign(globalThis, {
+    window: dom.window,
+    document: dom.window.document,
+    SVGElement: dom.window.SVGElement,
+  });
 }
+
+const mermaid = (await import("mermaid")).default;
+// Defaults — theme/colors are irrelevant to `parse()`, which only checks syntax.
+mermaid.initialize({ startOnLoad: false });
 
 // mermaid.parse() shares process-wide parser/DB state across calls; serialized so concurrent
 // validations (one per category explained in parallel — see ../explanations/orchestrate.ts)
@@ -64,7 +70,6 @@ function serialized<T>(run: () => Promise<T>): Promise<T> {
  * `parse()` call, so a `valid: true` result means the page will actually render it.
  */
 export async function validateMermaidDiagram(source: string): Promise<MermaidValidationResult> {
-  await ensureMermaid();
   return serialized(async () => {
     try {
       await mermaid.parse(source);

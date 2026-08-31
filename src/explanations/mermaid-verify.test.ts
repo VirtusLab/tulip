@@ -11,6 +11,10 @@ const MAX_ATTEMPTS = config.limits.maxMermaidFixAttempts;
 // browser showed (see docs/adr/0008's context).
 const INVALID_DIAGRAM = "graph TD\nA[Start --> B{Decision\nB -->|Yes] C[End]";
 const VALID_DIAGRAM = "graph TD\nA --> B";
+// Labeled — the real production regression (docs/adr/0008's amendment) was specific to
+// labeled diagrams (almost every real LLM-produced one); this proves a valid one survives
+// the verify loop completely untouched, not just an unlabeled toy case.
+const VALID_LABELED_DIAGRAM = "graph TD\nA[Start] --> B{Decision}\nB -->|Yes| C[End]";
 const OTHER_VALID_DIAGRAM = "sequenceDiagram\nAlice->>Bob: Hello";
 
 function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessResult {
@@ -31,6 +35,22 @@ function withFence(source: string): string {
 describe("verifyMermaidDiagrams", () => {
   it("leaves a valid diagram untouched and makes no LLM call", async () => {
     const markdown = withFence(VALID_DIAGRAM);
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
+
+    const result = await verifyMermaidDiagrams(markdown, "session-1", "Retry logic", {
+      runClaudeProcess,
+    });
+
+    expect(result).toEqual({ markdown, sessionId: "session-1" });
+    expect(runClaudeProcess).not.toHaveBeenCalled();
+  });
+
+  it("leaves a valid LABELED diagram untouched, not fixed or omitted, and makes no LLM call", async () => {
+    // The real production bug (docs/adr/0008's amendment) false-rejected labeled diagrams —
+    // almost every real one — which would have sent them through the fix loop and then, once
+    // fix attempts were exhausted, silently dropped good diagrams. This proves that can't
+    // happen: a valid labeled diagram is left byte-for-byte alone.
+    const markdown = withFence(VALID_LABELED_DIAGRAM);
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
 
     const result = await verifyMermaidDiagrams(markdown, "session-1", "Retry logic", {

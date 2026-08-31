@@ -88,3 +88,61 @@ invalid ones via the LLM; degrade gracefully if a fix doesn't land.**
   `./wire.ts`, `config.limits.maxMermaidFixAttempts` are new.
 - `reviewAndAmend`'s return type changed (`string` → `{ markdown, explainSessionId }`); its one
   caller (`orchestrate.ts`) and its tests were updated.
+
+## Amendment: labeled diagrams false-rejected in production
+
+### Context
+
+A real production run (bare `node` against the built `dist` output — exactly how the CLI runs)
+found `validateMermaidDiagram` false-rejecting every *labeled* flowchart (`A[Start]`,
+`B{Decision}`, ...) — i.e. almost every real LLM-produced diagram — with `"DOMPurify.addHook is
+not a function"`. Root cause: the original implementation had a normal, static
+`import mermaid from "mermaid"` at the top of the module, with the jsdom window/document
+installed lazily, on first *use*, inside `validateMermaidDiagram`. Under real Node ES module
+semantics, a static import's whole dependency graph — `mermaid`, and transitively `dompurify`,
+whose own module top level unconditionally runs `var purify = createDOMPurify()` — evaluates
+*before* any of the importing module's own top-level code runs, regardless of where the `import`
+statement sits in the file. So by the time the lazy jsdom install ran, `dompurify` had already
+constructed itself without a `window`, permanently missing `addHook`. Unlabeled diagrams
+(`A --> B`) happened to never call mermaid's label-sanitizing path, which is the only thing that
+actually needs `addHook` at parse time — so the original "accepts a valid flowchart" test, which
+used an unlabeled diagram, never exercised the broken path and passed regardless.
+
+Diagnosing this also surfaced that **vitest's own module runner does not reliably reproduce
+plain Node's ES module evaluation order** for this kind of bug: the exact same pre-fix source
+passed some in-process vitest runs (as part of the full test file) and failed others (run as a
+lone/first test in an isolated file), for reasons not fully pinned down. A vitest-only regression
+test is therefore not trustworthy proof for this specific bug class.
+
+### Decision
+
+Never statically import `"mermaid"`. Install the jsdom window/document as this module's own
+first top-level statement, then dynamically `import("mermaid")` — a dynamic `import()` runs
+exactly where it's written, not hoisted like a static one — so `dompurify` only ever constructs
+itself after a real `window` exists. Requires top-level await (supported: Node ESM, `type:
+module`). The `mermaidReady`/lazy-init machinery from the original implementation is gone; module
+evaluation itself is now the one-time setup.
+
+Verified directly against the real failure mode: a temporary revert to the old (buggy) source,
+run via bare `node`, reproduces `{valid:false, error:"DOMPurify.addHook is not a function"}` for
+a labeled flowchart; the fixed source returns `{valid:true}` for the same input, for every
+labeled diagram type tested (flowchart with `[]`/`{}`/`()` shapes, class, pie, state, sequence),
+while a genuinely-broken diagram still returns `{valid:false}` — confirmed on both the bare-node/
+`dist` path and via `tsx` against the TypeScript source directly.
+
+Because vitest alone can't be trusted for this bug class, `mermaid-validate.test.ts` gained a
+second `describe` block that spawns a real child `node` process (via `tsx`, which only strips
+types) with none of vitest's module machinery involved, and asserts on its output — this is the
+actual regression guard; verified it fails against the old buggy source and passes against the
+fix. The in-process vitest tests were also strengthened (labeled diagrams, richer class/pie/state
+content) for everyday functional coverage, and `mermaid-verify.test.ts` gained a case proving a
+valid labeled diagram survives the fix/degrade loop completely untouched — the failure mode this
+bug created otherwise leads the fix loop to waste attempts on already-valid diagrams and then
+*silently drop good ones* once the cap is hit, worse than the original unvalidated state.
+
+### Consequences
+
+- No API change — `validateMermaidDiagram`'s signature and behavior contract are unchanged, only
+  its internal import strategy.
+- `mermaid-validate.test.ts`'s child-process test spawns a real subprocess (~1-2s), the slowest
+  test in the suite; justified given it's the only reliable guard found for this bug class.
