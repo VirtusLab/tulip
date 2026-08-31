@@ -312,8 +312,14 @@ main pre.mermaid {
    Production/Test subsection. Three weights communicate the level without relying on color
    alone (WCAG): "Read closely" is the strongest (warm accent + bolder), "Read through" is
    plain/neutral (no special treatment needed — it's the default, unmarked case), and "Skim" is
-   muted/quiet. Sized down from the surrounding heading via its own font-size/weight rather than
-   inheriting h2's, so it reads as a label, not a second heading. */
+   muted/quiet via fill/border/weight only — never `opacity` on the text, which would blend
+   --muted's already-reduced contrast below WCAG AA's 4.5:1. Sized down from the surrounding
+   heading via its own font-size/weight rather than inheriting h2's, so it reads as a label, not
+   a second heading. `margin-inline` puts a gap on both sides of the badge, so one shared,
+   CSS-driven rule covers both placements — a gap before the badge in the heading (after the
+   category name) and a gap after it in the TOC (before the label) — instead of each relying on
+   its own incidental spacing (a template-literal space vs. a separate TOC-only margin rule);
+   the unused side per placement is simply adjacent to a tag boundary, not another visible glyph. */
 .attention-badge {
   display: inline-block;
   vertical-align: middle;
@@ -324,6 +330,7 @@ main pre.mermaid {
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
   border: 1px solid transparent;
+  margin-inline: 0.4rem;
 }
 
 .attention-close {
@@ -344,11 +351,6 @@ main pre.mermaid {
   background: transparent;
   border-color: var(--border);
   font-weight: 500;
-  opacity: 0.75;
-}
-
-.toc a .attention-badge {
-  margin-right: 0.4rem;
 }
 
 .subsection {

@@ -100,7 +100,10 @@ function renderCategorySection(
   ctx: MarkdownRenderContext,
 ): string {
   const { category } = explanation;
-  const heading = `<h2>${escapeHtml(category.name)} ${renderAttentionBadge(category.attention)}</h2><p class="category-description">${escapeHtml(category.description)}</p>`;
+  // No literal space before the badge: .attention-badge's own margin-inline (style.css) supplies
+  // the gap on both sides, shared with the TOC badge's placement (./toc.ts) — one CSS-driven
+  // rule instead of each call site picking its own incidental spacing.
+  const heading = `<h2>${escapeHtml(category.name)}${renderAttentionBadge(category.attention)}</h2><p class="category-description">${escapeHtml(category.description)}</p>`;
 
   // The intro (anything before the first recognized subsection heading) must render
   // unconditionally, alongside any subsections — not only when there are no subsections.
