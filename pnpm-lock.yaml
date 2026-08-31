@@ -11,9 +11,15 @@ importers:
       diff:
         specifier: ^9.0.0
         version: 9.0.0
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
       marked:
         specifier: ^18.0.11
         version: 18.0.11
+      mermaid:
+        specifier: ^11.17.2
+        version: 11.17.2
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.10
@@ -24,6 +30,9 @@ importers:
       '@fontsource-variable/jetbrains-mono':
         specifier: ^5.3.0
         version: 5.3.0
+      '@types/jsdom':
+        specifier: ^30.0.0
+        version: 30.0.0
       '@types/node':
         specifier: ^26.3.0
         version: 26.3.0
@@ -33,12 +42,6 @@ importers:
       highlight.js:
         specifier: ^11.12.0
         version: 11.12.0
-      jsdom:
-        specifier: ^30.0.1
-        version: 30.0.1
-      mermaid:
-        specifier: ^11.17.2
-        version: 11.17.2
       node-html-parser:
         specifier: ^9.0.1
         version: 9.0.1
@@ -561,8 +564,14 @@ packages:
   '@types/geojson@7946.0.16':
     resolution: {integrity: sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==}
 
+  '@types/jsdom@30.0.0':
+    resolution: {integrity: sha512-uAHGxujGE0cDaKGdK28zgDotFtNA7MKq5DXl8LrfdxdCI8VHcg15oJz+amHTChPNI5JpgEPQWc2xFdrw3em/nQ==}
+
   '@types/node@26.3.0':
     resolution: {integrity: sha512-L3fgrnchriRC2ExBflb8j4uZZURHZfQsmQeyVzhjcHW4kkwVyo8/0h1B2MVzMTrYUJYu6G7EWs14hW/L9putqw==}
+
+  '@types/tough-cookie@4.0.5':
+    resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
@@ -1286,6 +1295,9 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
+  undici-types@8.10.0:
+    resolution: {integrity: sha512-ibvdovq3nCFs8Msrd95BW+zUOq+aOVbT+wpHUoPWhztbHEoPc6oof51iFDB6Es8lTKvNvVW9jNSAB8dwrKTMGg==}
+
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
@@ -1779,9 +1791,18 @@ snapshots:
 
   '@types/geojson@7946.0.16': {}
 
+  '@types/jsdom@30.0.0':
+    dependencies:
+      '@types/node': 26.3.0
+      '@types/tough-cookie': 4.0.5
+      parse5: 8.0.1
+      undici-types: 8.10.0
+
   '@types/node@26.3.0':
     dependencies:
       undici-types: 8.3.0
+
+  '@types/tough-cookie@4.0.5': {}
 
   '@types/trusted-types@2.0.7':
     optional: true
@@ -2507,6 +2528,8 @@ snapshots:
       '@typescript/typescript-sunos-x64': 7.0.2
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
+
+  undici-types@8.10.0: {}
 
   undici-types@8.3.0: {}
 
