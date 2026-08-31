@@ -13,14 +13,15 @@ function readAsset(name: string): string {
 describe("style.css", () => {
   const css = readAsset("style.css");
 
-  it("keeps prose elements narrow while letting diff/code blocks use the full width", () => {
-    // Prose elements get their own centered measure...
+  it("keeps prose elements narrow (shared centered grid column) while letting diff/code blocks use the full width", () => {
+    // Content containers share one centered grid column, sized to --prose-measure...
     expect(css).toMatch(/--prose-measure:\s*\d/);
     expect(css).toMatch(
-      /main\s+:is\([^)]*\bp\b[^)]*\)\s*\{[^}]*max-width:\s*var\(--prose-measure\)/,
+      /:is\([^)]*\.page-section[^)]*\)\s*\{[^}]*grid-template-columns:[^;]*min\(var\(--prose-measure\)/,
     );
-    // ...while `.snippet` (the diff block) is never given that narrow measure.
-    const snippetRuleMatch = css.match(/\.snippet\s*\{[^}]*\}/);
+    // ...while `.snippet` (the diff block) breaks out to the full grid span instead.
+    expect(css).toMatch(/:is\([^)]*\.snippet[^)]*\)[^{]*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
+    const snippetRuleMatch = css.match(/\n\.snippet\s*\{[^}]*\}/);
     expect(snippetRuleMatch?.[0]).toBeDefined();
     expect(snippetRuleMatch?.[0]).not.toContain("--prose-measure");
   });

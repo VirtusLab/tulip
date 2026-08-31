@@ -31,6 +31,70 @@ describe("renderPage", () => {
     );
   });
 
+  it("renders the PR's original description as its own labeled section, before the analysis, with a TOC entry", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "Retries flaky requests.",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [explanation({ category: { id: "c1", name: "Auth", description: "" } })],
+    });
+    const root = parse(html);
+    const section = root.querySelector("#pr-description");
+    expect(section).not.toBeNull();
+    expect(section?.querySelector("h2")?.text).toBe("Original PR description");
+    expect(section?.querySelector(".pr-description")?.text).toContain("Retries flaky requests.");
+    // No longer nested inside the PR header — it's its own section now.
+    expect(root.querySelector("#pr-header .pr-description")).toBeNull();
+    // Comes before the first category section in document order.
+    const sectionsInOrder = root.querySelectorAll("#pr-description, .category");
+    expect(sectionsInOrder[0]?.id).toBe("pr-description");
+    // First entry in the floating TOC, ahead of the category entries.
+    const tocLinks = root.querySelector("#toc")?.querySelectorAll("a") ?? [];
+    expect(tocLinks[0]?.getAttribute("href")).toBe("#pr-description");
+    expect(tocLinks[0]?.text).toBe("PR description");
+  });
+
+  it("keeps headings and body content as direct children of their section, sharing the CSS grid's centered column", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.ts",
+      side: "head",
+      lines: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [
+        explanation({
+          markdown: `Intro paragraph.\n\n- one\n- two\n\n${ref}\n\n## Production code\n\nProd body.\n`,
+        }),
+      ],
+    });
+    const root = parse(html);
+    const category = root.querySelector("#category-0");
+    const introParagraph = category
+      ?.querySelectorAll("p")
+      .find((p) => p.text === "Intro paragraph.");
+    const list = category?.querySelector("ul");
+    const snippet = category?.querySelector(".snippet");
+    const subsection = category?.querySelector(".subsection");
+    // style.css's centered grid only positions DIRECT children into the shared content
+    // column (see docs/adr/0007) — so the heading, an intro paragraph, and a list must all be
+    // direct children of the section for their left edges to actually line up.
+    expect(category?.querySelector("h2")?.parentNode).toBe(category);
+    expect(introParagraph?.parentNode).toBe(category);
+    expect(list?.parentNode).toBe(category);
+    // The diff block and the subsection break out to the full grid span instead — still
+    // direct children of the section, just given `grid-column: 1 / -1` in CSS.
+    expect(snippet?.parentNode).toBe(category);
+    expect(subsection?.parentNode).toBe(category);
+  });
+
   it("renders one section per category, in given order", () => {
     const html = renderPage({
       prTitle: "t",
@@ -92,6 +156,7 @@ describe("renderPage", () => {
     const toc = root.querySelector("#toc");
     const hrefs = toc?.querySelectorAll("a").map((a) => a.getAttribute("href")) ?? [];
     expect(hrefs).toEqual([
+      "#pr-description",
       "#category-0",
       "#category-0-production-0",
       "#category-0-test-1",
@@ -164,6 +229,7 @@ describe("renderPage", () => {
     expect(toc).not.toBeNull();
     const links = toc?.querySelectorAll("a").map((a) => a.getAttribute("href")) ?? [];
     expect(links).toEqual([
+      "#pr-description",
       "#category-0",
       "#category-0-production-0",
       "#category-0-test-1",

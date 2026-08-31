@@ -1,5 +1,9 @@
 import type { SubsectionKind } from "./sections.js";
 
+/** DOM id for the PR's original description section (task: labeled, own TOC entry — see
+ * ./template.ts and ./toc.ts). Stable and unique since there's exactly one per page. */
+export const PR_DESCRIPTION_ID = "pr-description";
+
 /** DOM id for a category's top-level section, used by both the section heading and its TOC link. */
 export function categoryId(categoryIndex: number): string {
   return `category-${categoryIndex}`;

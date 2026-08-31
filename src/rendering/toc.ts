@@ -1,5 +1,5 @@
 import { escapeHtml } from "./escape.js";
-import { categoryId, subsectionId } from "./ids.js";
+import { categoryId, PR_DESCRIPTION_ID, subsectionId } from "./ids.js";
 import type { CategorySubsection } from "./sections.js";
 
 /** One entry in the floating table-of-contents: a category, optionally with its Production/Test
@@ -15,13 +15,20 @@ const SUBSECTION_LABEL: Record<CategorySubsection["kind"], string> = {
   test: "Test code",
 };
 
-/** Builds the TOC structure for the page: one entry per category, in presentation order, with
- * child entries for whichever Production/Test subsections that category's markdown has. */
+/** Builds the TOC structure for the page: the PR's original description first (task: it's the
+ * PR author's own text, not Tulip's analysis — always present, unlike categories, so it's
+ * unconditional), then one entry per category in presentation order, with child entries for
+ * whichever Production/Test subsections that category's markdown has. */
 export function buildToc(
   categories: { name: string }[],
   subsectionsPerCategory: CategorySubsection[][],
 ): TocEntry[] {
-  return categories.map((category, index) => ({
+  const prDescriptionEntry: TocEntry = {
+    id: PR_DESCRIPTION_ID,
+    label: "PR description",
+    children: [],
+  };
+  const categoryEntries = categories.map((category, index) => ({
     id: categoryId(index),
     label: category.name,
     children: (subsectionsPerCategory[index] ?? []).map((subsection, subsectionIndex) => ({
@@ -29,6 +36,7 @@ export function buildToc(
       label: SUBSECTION_LABEL[subsection.kind],
     })),
   }));
+  return [prDescriptionEntry, ...categoryEntries];
 }
 
 /** Renders the TOC as a `<nav>` element with nested `<ul>`s; ./assets/app.js highlights the

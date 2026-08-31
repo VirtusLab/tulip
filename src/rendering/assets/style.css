@@ -124,19 +124,22 @@ body {
 }
 
 /* Full-width layout (task: diffs take the whole width, prose stays narrow). `main` itself is
-   unconstrained (up to --page-max-width) so `.snippet` diff blocks can use the full measure;
-   individual prose elements below each get their own centered --prose-measure column instead
-   of the old single-`max-width` wrapper. Every such element shares the same measure, so their
-   left edges still line up as one visual column. */
+   unconstrained (up to --page-max-width); each *content container* below (the PR header, the
+   PR-description section, each category, each subsection) is its own 3-track grid with a
+   centered --prose-measure column, rather than each prose element centering itself
+   independently (that older approach let nested elements — e.g. a list inside a blockquote —
+   drift off the shared left edge, since a descendant selector re-applied to them too, each
+   auto-centering within its own, narrower parent). Grid item placement only ever affects DIRECT
+   children, so nesting no longer compounds: a paragraph inside a list item just flows inside
+   it, undisturbed. `.subsection` and `.snippet`/`pre` opt out of the center column (full grid
+   span) — `.subsection` so it can host its own identically-sized nested grid at full width,
+   `.snippet`/`pre` for the actual full-bleed breakout. Since none of these containers constrain
+   their own width, every grid's center track computes to the same pixel offset, so headings,
+   paragraphs and lists all share one left edge. */
 main {
   max-width: var(--page-max-width);
   margin: 0 auto;
   padding: 2.5rem clamp(1rem, 4vw, 3rem) 6rem;
-}
-
-main :is(p, ul, ol, blockquote, h1, h2, h3, h4, .pr-link, .category-description) {
-  max-width: var(--prose-measure);
-  margin-inline: auto;
 }
 
 main :is(ul, ol) {
@@ -245,7 +248,9 @@ main img {
   color: var(--muted);
 }
 
-.category {
+/* Shared by the PR-description section and every category (task: PR description reads as its
+   own clearly-labeled section, styled consistently with the category sections that follow it). */
+.page-section {
   padding: 2rem 0;
   border-bottom: 1px solid var(--border);
 }
@@ -254,7 +259,8 @@ main img {
   border-bottom: none;
 }
 
-.category-description {
+.category-description,
+.section-note {
   color: var(--muted);
   margin-top: -0.25rem;
 }
@@ -265,6 +271,24 @@ main img {
 
 .subsection h3 {
   margin-bottom: 0.5rem;
+}
+
+/* The shared centered-content grid (see the "Full-width layout" comment above) — placed after
+   the plain `.subsection`/`.subsection h3` rules above so selector specificity only increases
+   from here down (`noDescendingSpecificity`). */
+:is(#pr-header, .page-section, .subsection) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(var(--prose-measure), 100%) minmax(0, 1fr);
+  column-gap: 0;
+}
+
+:is(#pr-header, .page-section, .subsection) > * {
+  grid-column: 2;
+}
+
+:is(.page-section, .subsection) > :is(.snippet, pre),
+.page-section > .subsection {
+  grid-column: 1 / -1;
 }
 
 #theme-toggle {
