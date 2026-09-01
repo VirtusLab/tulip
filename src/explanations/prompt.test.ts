@@ -92,6 +92,22 @@ describe("buildReviewPrompt", () => {
 
     await expect(buildReviewPrompt(input)).toMatchFileSnapshot("__snapshots__/review-default.txt");
   });
+
+  it("asks the reviewer to check conciseness and minimalism — no over-explaining the obvious or belaboring boilerplate", () => {
+    const input: ReviewPromptInput = {
+      ...EXPLAIN_INPUT,
+      markdown: "explanation\n\nsome markdown",
+    };
+
+    const prompt = buildReviewPrompt(input);
+
+    expect(prompt).toMatch(/conciseness and minimalism/i);
+    expect(prompt).toMatch(/over-explaining the obvious/i);
+    expect(prompt).toMatch(/restating what the code plainly shows/i);
+    expect(prompt).toMatch(/trivial or boilerplate/i);
+    expect(prompt).toMatch(/every\s+sentence should earn its place/i);
+    expect(prompt).toMatch(/padding, redundancy, and belaboring/i);
+  });
 });
 
 describe("buildReviewAmendPrompt", () => {

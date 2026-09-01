@@ -46,7 +46,9 @@ against the change list above.
 
 Review the explanation for:
 - clarity — is it easy to follow for a reviewer who hasn't seen the code yet?
-- conciseness — is anything unnecessary or repetitive?
+- conciseness and minimalism — is it concise and minimal? Flag over-explaining the obvious,
+  restating what the code plainly shows, and dwelling on trivial or boilerplate parts. Every
+  sentence should earn its place — flag padding, redundancy, and belaboring a simple point.
 - correctness — does every claim actually match the changes above? Flag anything invented,
   mistaken, or unsupported by them.
 
