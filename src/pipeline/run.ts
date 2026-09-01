@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { generateCategories } from "../categories/generate.js";
+import { reviewAndAmendCategories } from "../categories/review.js";
 import { groupChangesByCategory } from "../classification/group.js";
 import { classifyChanges } from "../classification/orchestrate.js";
 import { prepareClassifiableChanges } from "../classification/prepare.js";
@@ -37,6 +38,7 @@ export interface PipelineDeps {
   createCheckout?: typeof createCheckout;
   materializeChangeArtifacts?: typeof materializeChangeArtifacts;
   generateCategories?: typeof generateCategories;
+  reviewAndAmendCategories?: typeof reviewAndAmendCategories;
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
   renderExplanations?: typeof renderExplanations;
@@ -71,6 +73,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doMaterializeChangeArtifacts =
     deps.materializeChangeArtifacts ?? materializeChangeArtifacts;
   const doGenerateCategories = deps.generateCategories ?? generateCategories;
+  const doReviewAndAmendCategories = deps.reviewAndAmendCategories ?? reviewAndAmendCategories;
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
@@ -114,14 +117,12 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       doMaterializeChangeArtifacts(checkout as PrCheckout, diff, metadata.diff, { logger }),
     );
 
+    const changedFiles = diff.files.map((file) => ({ path: file.path, status: file.status }));
+
     logger.info("phase 1: generating categories...");
     const phase1 = await runPhase("phase 1 (generating categories)", () =>
       doGenerateCategories(
-        {
-          title: metadata.title,
-          description: metadata.body,
-          files: diff.files.map((file) => ({ path: file.path, status: file.status })),
-        },
+        { title: metadata.title, description: metadata.body, files: changedFiles },
         { cwd: checkoutDir },
       ),
     );
@@ -130,13 +131,31 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
         phase1.categories.map((category) => category.name).join(", "),
     );
 
+    logger.info("phase 1: reviewing categories...");
+    const categoryReview = await runPhase("phase 1 (reviewing categories)", () =>
+      doReviewAndAmendCategories(
+        {
+          prTitle: metadata.title,
+          prDescription: metadata.body,
+          files: changedFiles,
+          categories: phase1.categories,
+          generateSessionId: phase1.sessionId,
+        },
+        { cwd: checkoutDir },
+      ),
+    );
+    logger.debug(
+      `category review done: ${categoryReview.categories.length} categories: ` +
+        categoryReview.categories.map((category) => category.name).join(", "),
+    );
+
     logger.info("phase 2: classifying changes...");
     const classification = await runPhase("phase 2 (classifying changes)", () =>
       doClassifyChanges(
         {
           diff,
-          categories: phase1.categories,
-          phase1SessionId: phase1.sessionId,
+          categories: categoryReview.categories,
+          phase1SessionId: categoryReview.sessionId,
         },
         { cwd: checkoutDir },
       ),

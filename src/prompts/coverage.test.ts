@@ -14,6 +14,8 @@ import { renderPrompt, templatePlaceholders } from "./loader.js";
 const CALL_SITE_VARS: Record<string, string[]> = {
   preamble: [],
   "category-generation": ["title", "description", "fileList"],
+  "category-review": ["prTitle", "prDescription", "fileList", "categoryList"],
+  "category-review-amend": ["issues"],
   "category-consult": ["proposedName", "path", "range", "excerpt"],
   "classify-special-categories": [],
   "classify-output-instructions": [],

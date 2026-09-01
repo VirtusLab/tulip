@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GenerateCategoriesResult } from "../categories/generate.js";
+import type { CategoryReviewLoopResult } from "../categories/review.js";
 import { IncompleteCoverageError } from "../classification/coverage.js";
 import type { ClassifyChangesResult } from "../classification/orchestrate.js";
 import { ClaudeBinaryMissingError, ClaudeOutputError } from "../claude/errors.js";
@@ -120,6 +121,15 @@ function baseDeps(order: string[] = []) {
         sessionId: "s1",
       };
     }),
+    reviewAndAmendCategories: vi.fn(async (): Promise<CategoryReviewLoopResult> => {
+      order.push("phase1-review");
+      return {
+        categories: [
+          { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" },
+        ],
+        sessionId: "s1",
+      };
+    }),
     classifyChanges: vi.fn(async () => {
       order.push("phase2");
       return classificationResult();
@@ -179,6 +189,7 @@ describe("run", () => {
       "checkout",
       "materialize",
       "phase1",
+      "phase1-review",
       "phase2",
       "phase3",
       "render",
@@ -194,6 +205,18 @@ describe("run", () => {
         title: "Add hello()",
         description: "Adds a greeting helper.",
         files: [{ path: "src/new.ts", status: "added" }],
+      },
+      { cwd: "/tmp/tulip-checkout" },
+    );
+    expect(deps.reviewAndAmendCategories).toHaveBeenCalledWith(
+      {
+        prTitle: "Add hello()",
+        prDescription: "Adds a greeting helper.",
+        files: [{ path: "src/new.ts", status: "added" }],
+        categories: [
+          { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" },
+        ],
+        generateSessionId: "s1",
       },
       { cwd: "/tmp/tulip-checkout" },
     );
@@ -366,6 +389,7 @@ describe("run", () => {
     await run(options(), deps);
 
     expect(process.exitCode).toBe(1);
+    expect(deps.reviewAndAmendCategories).not.toHaveBeenCalled();
     expect(deps.classifyChanges).not.toHaveBeenCalled();
     expect(deps.explainCategories).not.toHaveBeenCalled();
     expect(deps.renderExplanations).not.toHaveBeenCalled();
@@ -394,6 +418,50 @@ describe("run", () => {
           line.includes("claude returned an empty category list"),
       ),
     ).toBe(true);
+  });
+
+  it("reports a ClaudeOutputError from the category review stage, naming the phase, and cleans up the checkout", async () => {
+    const deps = baseDeps();
+    deps.reviewAndAmendCategories = vi.fn(async () => {
+      throw new ClaudeOutputError("claude returned an empty amended category list");
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.classifyChanges).not.toHaveBeenCalled();
+    const checkout = await deps.createCheckout.mock.results[0]?.value;
+    expect(checkout.cleanup).toHaveBeenCalledTimes(1);
+    const lines = infoLines(deps);
+    expect(
+      lines.some(
+        (line) =>
+          line.includes("phase 1 (reviewing categories) failed") &&
+          line.includes("claude returned an empty amended category list"),
+      ),
+    ).toBe(true);
+  });
+
+  it("classifies against the review's amended categories and session, not phase 1's originals", async () => {
+    const deps = baseDeps();
+    deps.reviewAndAmendCategories = vi.fn(async () => ({
+      categories: [
+        { id: "c1", name: "Greeting (amended)", description: "Amended.", attention: "close" },
+      ],
+      sessionId: "s1-amended",
+    }));
+
+    await run(options(), deps);
+
+    expect(deps.classifyChanges).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categories: [
+          { id: "c1", name: "Greeting (amended)", description: "Amended.", attention: "close" },
+        ],
+        phase1SessionId: "s1-amended",
+      }),
+      { cwd: "/tmp/tulip-checkout" },
+    );
   });
 
   it("reports an IncompleteCoverageError from phase 2, naming the phase and the uncovered changes", async () => {

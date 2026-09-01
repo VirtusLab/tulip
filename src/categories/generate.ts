@@ -33,7 +33,10 @@ export interface GenerateCategoriesResult {
   sessionId: string;
 }
 
-const GENERATE_CATEGORIES_SCHEMA: JsonSchema = {
+/** Shape of a `{ categories: [...] }` reply — generation's own output, and also what the
+ * category review loop asks for on amendment (see ./review.ts): the full revised list, same
+ * shape as generation, no ids (assigned in code either way — see {@link assignCategoryIds}). */
+export const GENERATE_CATEGORIES_SCHEMA: JsonSchema = {
   type: "object",
   required: ["categories"],
   properties: {

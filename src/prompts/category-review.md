@@ -1,0 +1,32 @@
+You are reviewing the category split proposed for a GitHub pull request, before it's
+used to classify and explain the PR's changes to a human reviewer.
+
+PR title: {{prTitle}}
+
+PR description:
+{{prDescription}}
+
+Changed files:
+{{fileList}}
+
+Proposed categories:
+{{categoryList}}
+
+Check the split against these criteria:
+- Each category should be one of the PR's main features — a self-contained concern a
+  reviewer can understand and sign off on its own, one thing at a time. Flag
+  categories that overlap, that fuse two features together, or that fragment one
+  feature into pieces that don't make sense apart.
+- Granularity should be right — not one giant catch-all category, and not
+  fragmented into trivia. A coherent cross-cutting concern (say, serialization
+  boilerplate spread across many files) is still a valid category on its own.
+- Tests and docs must stay inside their functional category. Flag any standalone
+  "tests" or "documentation" category.
+- Attention ratings should be sensible, so the reviewer meets the most important
+  work first. Flag an inflated spread (most or all categories rated Read closely)
+  and flag a genuinely core or tricky category rated Skim. Attention rates a
+  category that's already been formed — it should never look like it changed how
+  the PR was split.
+
+Reply with approved: true if the split is good as-is. Otherwise reply with
+approved: false and a list of specific issues to fix.

@@ -45,6 +45,12 @@ export interface CategoryProposal {
   attention: Attention;
 }
 
+/** One issue the category review (./review.ts) raised against a proposed split — mirrors
+ * src/explanations/types.ts's ReviewIssue. */
+export interface ReviewIssue {
+  description: string;
+}
+
 /** Shared by every schema below that embeds a model-proposed category (no `id` — see
  * {@link CategoryProposal}). `attention` is a hard-constrained enum, like the classification
  * codeType/id enums (src/classification/wire.ts) — the model must pick one of the three levels. */
