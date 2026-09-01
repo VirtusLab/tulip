@@ -271,6 +271,11 @@ main img {
 main pre.mermaid {
   display: flex;
   justify-content: center;
+  /* Opt out of the 1100px code-readability cap on `main pre` above: a diagram isn't code, so it
+     gets the full full-bleed column width like a diff `.snippet` (a `<div>`, which never hit that
+     cap). Without this, a diagram wider than 1100px was cramped into the capped box and overflowed
+     to the right — reading as left-aligned even though the svg itself was centered. */
+  max-width: none;
 }
 
 /* margin-bottom is the only place a top-level child of one of the shared grid containers (see
