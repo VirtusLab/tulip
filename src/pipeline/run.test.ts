@@ -142,12 +142,13 @@ function baseDeps(order: string[] = []) {
       order.push("render");
       return { dir: "/tmp/tulip-render", indexPath: "/tmp/tulip-render/index.html" };
     }),
+    openInBrowser: vi.fn(async (): Promise<void> => {}),
     logger: { info: vi.fn(), debug: vi.fn() },
   };
 }
 
 function options(overrides: Partial<PipelineOptions> = {}): PipelineOptions {
-  return { pr: PR, diffThreshold: 400, verbose: false, ...overrides };
+  return { pr: PR, diffThreshold: 400, verbose: false, open: true, ...overrides };
 }
 
 function infoLines(deps: PipelineDeps): string[] {
@@ -541,6 +542,50 @@ describe("run", () => {
           line.includes("clean up checkout") &&
           line.includes("EBUSY: resource busy"),
       ),
+    ).toBe(true);
+  });
+
+  it("opens the rendered page in the browser after rendering succeeds", async () => {
+    const deps = baseDeps();
+
+    await run(options({ open: true }), deps);
+
+    expect(deps.openInBrowser).toHaveBeenCalledTimes(1);
+    expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
+  });
+
+  it("does not open the browser when open is false (--no-open)", async () => {
+    const deps = baseDeps();
+
+    await run(options({ open: false }), deps);
+
+    expect(deps.openInBrowser).not.toHaveBeenCalled();
+  });
+
+  it("does not open the browser when rendering fails", async () => {
+    const deps = baseDeps();
+    deps.renderExplanations = vi.fn(async () => {
+      throw new Error("ENOSPC: no space left on device");
+    });
+
+    await run(options({ open: true }), deps);
+
+    expect(deps.openInBrowser).not.toHaveBeenCalled();
+  });
+
+  it("logs a debug note and does not fail the run when openInBrowser fails", async () => {
+    const deps = baseDeps();
+    deps.openInBrowser = vi.fn(async (): Promise<void> => {
+      throw new Error("spawn open ENOENT");
+    });
+
+    await expect(run(options({ open: true }), deps)).resolves.toBeUndefined();
+
+    expect(process.exitCode).toBeUndefined();
+    const debug = deps.logger?.debug as ReturnType<typeof vi.fn>;
+    const debugLines = debug.mock.calls.map((call) => String(call[0]));
+    expect(
+      debugLines.some((line) => line.includes("auto-open") && line.includes("spawn open ENOENT")),
     ).toBe(true);
   });
 });

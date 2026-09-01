@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { generateCategories } from "../categories/generate.js";
 import { groupChangesByCategory } from "../classification/group.js";
 import { classifyChanges } from "../classification/orchestrate.js";
@@ -21,7 +22,13 @@ export interface PipelineOptions {
   diffThreshold: number;
   /** Show debug-level progress logging. */
   verbose: boolean;
+  /** Auto-open the rendered page in the default browser when done. */
+  open: boolean;
 }
+
+/** Opens `path` (a local file) in the user's default browser. Rejects if the opener binary is
+ * missing or the spawn otherwise fails; never throws synchronously. */
+export type BrowserOpener = (path: string) => Promise<void>;
 
 /** Test/advanced-use seams: every phase function, injectable for orchestration tests. All
  * default to the real epic 2-7 implementations. */
@@ -33,6 +40,9 @@ export interface PipelineDeps {
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
   renderExplanations?: typeof renderExplanations;
+  /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
+   * never actually spawns a browser. */
+  openInBrowser?: BrowserOpener;
   logger?: Logger;
 }
 
@@ -64,6 +74,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
+  const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
   const { owner, repo, number } = options.pr;
   const prUrl = `https://github.com/${owner}/${repo}/pull/${number}`;
@@ -173,6 +184,16 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       ),
     );
     logger.debug(`rendered output at ${indexPath}`);
+
+    if (options.open) {
+      try {
+        await doOpenInBrowser(indexPath);
+      } catch (error) {
+        // Never fail the run over this — the file:// path logged by assembleOutput (above,
+        // unconditional) is always there as a fallback.
+        logger.debug(`could not auto-open the page: ${causeMessage(error)}`);
+      }
+    }
   } catch (error) {
     logger.info(describeFailure(error));
     process.exitCode = 1;
@@ -196,6 +217,35 @@ async function runPhase<T>(phase: string, fn: () => Promise<T>): Promise<T> {
   } catch (error) {
     throw new PhaseError(phase, error);
   }
+}
+
+/** Opens `path` via the OS's own "open a file with its default app" command — `open` (macOS),
+ * `xdg-open` (Linux), or `cmd /c start ""` (Windows; the empty-string argument is `start`'s own
+ * window-title placeholder, required so a path isn't mistaken for one). Always spawned with the
+ * path as a separate argv element, never interpolated into a shell string — no injection surface
+ * (this is also always our own temp file), and no shell is invoked at all. */
+const defaultOpenInBrowser: BrowserOpener = (path) =>
+  new Promise((resolve, reject) => {
+    const { command, args } = openCommandFor(process.platform, path);
+    const child = spawn(command, args, { stdio: "ignore", detached: true });
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+  });
+
+function openCommandFor(
+  platform: NodeJS.Platform,
+  path: string,
+): { command: string; args: string[] } {
+  if (platform === "darwin") {
+    return { command: "open", args: [path] };
+  }
+  if (platform === "win32") {
+    return { command: "cmd", args: ["/c", "start", "", path] };
+  }
+  return { command: "xdg-open", args: [path] };
 }
 
 /** Builds the final, user-facing failure line: no stack trace, and — for the common "claude

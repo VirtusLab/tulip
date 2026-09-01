@@ -15,6 +15,8 @@ export interface RunOptions {
   diffThreshold: number;
   /** Show debug-level progress logging. */
   verbose: boolean;
+  /** Auto-open the rendered page in the default browser when done. Defaults to true. */
+  open: boolean;
 }
 
 /** Thrown for any invalid invocation; the message is shown to the user alongside usage info. */
@@ -41,6 +43,7 @@ export function usage(): string {
     `  --diff-threshold <n>  Max diff size (lines) fed verbatim to the LLM; larger changes are`,
     `                        passed as file+line-range references (default: ${DEFAULT_DIFF_THRESHOLD})`,
     "  --verbose             Show debug-level progress logging",
+    "  --no-open             Don't automatically open the rendered page in your browser",
     "  -h, --help            Show this help and exit",
     "  -v, --version         Show version information and exit",
   ].join("\n");
@@ -54,6 +57,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
   let values: {
     "diff-threshold"?: string;
     verbose?: boolean;
+    "no-open"?: boolean;
     help?: boolean;
     version?: boolean;
   };
@@ -64,6 +68,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
       options: {
         "diff-threshold": { type: "string" },
         verbose: { type: "boolean" },
+        "no-open": { type: "boolean" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
       },
@@ -97,7 +102,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
 
   const diffThreshold = parseDiffThreshold(values["diff-threshold"]);
 
-  return { prUrl, pr, diffThreshold, verbose: values.verbose ?? false };
+  return { prUrl, pr, diffThreshold, verbose: values.verbose ?? false, open: !values["no-open"] };
 }
 
 function parseDiffThreshold(raw: string | undefined): number {

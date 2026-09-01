@@ -13,13 +13,18 @@ const VALID_PR = { owner: "owner", repo: "repo", number: 123 };
 const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;
 
 describe("parseCliArgs", () => {
-  it("parses a valid PR URL with defaults for diff threshold and verbosity", () => {
+  it("parses a valid PR URL with defaults for diff threshold, verbosity, and auto-open", () => {
     expect(parseCliArgs([VALID_URL])).toEqual({
       prUrl: VALID_URL,
       pr: VALID_PR,
       diffThreshold: DEFAULT_DIFF_THRESHOLD,
       verbose: false,
+      open: true,
     });
+  });
+
+  it("accepts --no-open, disabling auto-open", () => {
+    expect(parseCliArgs([VALID_URL, "--no-open"]).open).toBe(false);
   });
 
   it("accepts --diff-threshold and parses it as an integer", () => {
@@ -28,6 +33,7 @@ describe("parseCliArgs", () => {
       pr: VALID_PR,
       diffThreshold: 800,
       verbose: false,
+      open: true,
     });
   });
 
