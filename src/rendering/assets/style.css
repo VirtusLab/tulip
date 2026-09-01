@@ -257,13 +257,20 @@ main img {
 /* Mermaid diagrams (./mermaid.ts, ./assets/app.js): the rendered <svg> mermaid inserts already
    scales up to its own natural size on its own — mermaid sets the svg's width to 100% plus an
    inline `max-width` cap (its "useMaxWidth" default), so a diagram larger than the container
-   already grows to fill it. The remaining defect: an svg is an inline-level replaced element, so
-   once its natural size is narrower than the container it sits flush left instead of centered.
-   `text-align: center` on the container is the standard fix for a narrower-than-container
-   replaced element and, unlike a CSS width override, doesn't fight mermaid's own inline
-   max-width style. */
+   already grows to fill it. The remaining defect: once its natural size is narrower than the
+   container it sits flush left instead of centered. docs/adr/0009 tried `text-align: center`
+   here, which only centers an inline-level replaced element — the svg's `width` comes from a
+   presentation *attribute* (not a real style), so whether it actually behaves as one is
+   browser-dependent, and in practice it didn't (docs/adr/0011). `display: flex` +
+   `justify-content: center` centers the item on the main axis regardless of how the svg's own
+   `display` resolves — flexbox blockifies every flex item's outer display, so this doesn't
+   depend on that guess. `overflow-x: auto` (the shared `pre` rule below) still applies, so an
+   oversized diagram scrolls inside the block rather than the page; a diagram whose natural size
+   exceeds the container still grows to fill it (`width: 100%` as its flex-basis), unaffected by
+   centering either way. */
 main pre.mermaid {
-  text-align: center;
+  display: flex;
+  justify-content: center;
 }
 
 /* margin-bottom is the only place a top-level child of one of the shared grid containers (see
