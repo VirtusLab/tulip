@@ -50,7 +50,11 @@ Review the explanation for:
   restating what the code plainly shows, and dwelling on trivial or boilerplate parts. Every
   sentence should earn its place — flag padding, redundancy, and belaboring a simple point.
 - correctness — does every claim actually match the changes above? Flag anything invented,
-  mistaken, or unsupported by them.
+  mistaken, or unsupported by them. Where the explanation summarizes a method or sketches
+  pseudocode, check that summary against the referenced real code and flag drift.
+- earned references — every snippet reference has prose saying what it is and why it matters.
+  Flag snippets that appear only to satisfy coverage, and folded snippets the explanation never
+  actually explains.
 
 Reply with approved: true if it's good as-is. Otherwise reply with approved: false and a list of
 specific issues to fix.
