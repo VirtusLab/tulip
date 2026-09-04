@@ -10,3 +10,9 @@ To reference source code, use this exact markup, on its own line:
 
 Never paste code directly into your explanation — always use this markup instead. A renderer
 will substitute it with the real, syntax-highlighted code afterwards.
+
+Prose, numbered steps, or short pseudocode describing what a body does are fine
+to write inline — the "no pasted code" rule is about real source, which always
+goes through a snippet. When you sketch changed logic in pseudocode, always
+reference the real body alongside it (folded is fine — it's one click away) so
+the reviewer can check the sketch against the code.

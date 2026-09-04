@@ -24,6 +24,12 @@ To reference source code, use this exact markup, on its own line:
 Never paste code directly into your explanation — always use this markup instead. A renderer
 will substitute it with the real, syntax-highlighted code afterwards.
 
+Prose, numbered steps, or short pseudocode describing what a body does are fine
+to write inline — the "no pasted code" rule is about real source, which always
+goes through a snippet. When you sketch changed logic in pseudocode, always
+reference the real body alongside it (folded is fine — it's one click away) so
+the reviewer can check the sketch against the code.
+
 Code and doc changes in this group (everything that ships):
 - src/fetch.ts (modified), side head, lines 1-500
   (diff omitted: 500 lines, over the 3-line threshold —
@@ -84,6 +90,27 @@ For the test code, cover what's relevant:
 It's up to you to judge which of the above points actually apply to this category — skip what
 doesn't, don't force it.
 
-EVERY change listed above MUST appear as a snippet reference somewhere in your explanation — that
-is how the reviewer gets to see the actual code. Mark supporting changes (not crucial to
-understanding the category on its own) with unfold="no"; mark the important ones unfold="yes".
+Lead with the interface. For a changed method, say in prose what it is — name,
+parameters, return type, what it promises — and what its body does at a high
+level. A sentence, a numbered list, a before/after call-sequence diagram, or
+short pseudocode often carries this better than the code, especially for a large
+method.
+
+EVERY change listed above MUST appear as a snippet reference — that is how the
+reviewer sees the actual code. One snippet per change, holding the real code; the
+interface stays in your prose, not in a snippet of its own. Choose unfold by what
+the reviewer needs on the page:
+
+- unfold="yes" when the changed body is the thing to read: it's small, or its
+  logic is subtle (edge cases, ordering, error/retry paths, concurrency), or the
+  signature hides a side effect. Don't fold the code the reviewer came for.
+- unfold="no" when your prose, diagram, or pseudocode already conveys the
+  change — a large body whose essence is its signature and behavior, or a rename,
+  type change, move, or call-site rewiring where the body itself didn't change.
+  Folded still satisfies coverage and stays one click from the real code.
+
+The category's attention rating tunes this: for a Read-closely group show more
+real code unfolded; for a Skim group summarize and fold more. Never override the
+rule above — a subtle body change stays unfolded whatever the rating.
+
+Never leave a snippet without prose saying what it is and why it's there.
