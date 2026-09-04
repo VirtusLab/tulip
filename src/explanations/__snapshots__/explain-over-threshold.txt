@@ -18,8 +18,8 @@ To reference source code, use this exact markup, on its own line:
 - path: the file's path, exactly as given below.
 - side: "base" for the code before the PR, "head" for the code after.
 - lines: the 1-based inclusive line range, exactly as given below (e.g. "10-14").
-- unfold: "yes" if the snippet is important enough to show expanded by default; "no" if it's a
-  supporting/secondary change the reviewer only needs to expand on demand.
+- unfold: "yes" shows the snippet expanded by default; "no" shows it collapsed, to expand on
+  demand. Choose by what the reviewer needs on the page — see the unfold guidance below.
 
 Never paste code directly into your explanation — always use this markup instead. A renderer
 will substitute it with the real, syntax-highlighted code afterwards.
