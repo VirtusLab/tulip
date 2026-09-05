@@ -3,6 +3,7 @@ import { parseSnippetRefs } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import type { PrCheckout } from "../github/checkout.js";
 import { createLogger, type Logger } from "../logging/logger.js";
+import { type BuildInfo, formatVersion, getBuildInfo } from "../version.js";
 import { type AssembleDeps, type AssembleResult, assembleOutput } from "./assemble.js";
 import { loadFileDiffs } from "./file-diffs.js";
 import { renderPage } from "./template.js";
@@ -28,6 +29,9 @@ export interface RenderDeps extends AssembleDeps {
   /** Only file-content access is needed — see src/github/checkout.ts. */
   checkout: Pick<PrCheckout, "getFileAtBase" | "getFileAtHead">;
   logger?: Logger;
+  /** Supplies the build info shown in the page footer (see src/version.ts). Defaults to the
+   * real `getBuildInfo`; overridable so tests don't depend on a real dist/build-info.json. */
+  getBuildInfo?: () => BuildInfo;
 }
 
 /**
@@ -58,6 +62,7 @@ export async function renderExplanations(
     prUrl: input.prUrl,
     explanations: input.explanations,
     fileDiffs,
+    generatedBy: formatVersion((deps.getBuildInfo ?? getBuildInfo)()),
   });
 
   return assembleOutput(page, { ...deps, logger });

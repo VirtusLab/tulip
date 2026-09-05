@@ -417,6 +417,27 @@ main pre.mermaid {
   margin-top: 0;
 }
 
+/* Page footer (build/version info) — the last plain child of `main`, not one of the shared
+   centered grids above, so it doesn't need to opt into their column/reset rules; it's a single
+   short line, not multi-track content, and inherits main's own horizontal padding/max-width by
+   just flowing normally. `margin-top` (not a section `padding-top`) is the gap above it, so it
+   adds on top of `.page-section:last-of-type`'s own border-removal instead of doubling
+   whitespace against main's existing bottom padding. Muted/small/bordered like the rest of the
+   page's quiet metadata (.pr-link, .category-description), and never part of the floating TOC
+   (built from category data in ./toc.ts, not scraped from the DOM). */
+#page-footer {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+#page-footer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
 #theme-toggle {
   position: fixed;
   top: 0.75rem;
