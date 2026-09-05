@@ -11,6 +11,11 @@ Remaining tasks, roughly by priority.
 - [x] Central config module for models (per phase), timeouts, retry/cap counts, batch/excerpt/embed sizes — currently constants scattered across modules; optionally expose via CLI flags/env
 
 ## Features (deferred from spec)
+- [ ] Render-time cross-category proportionality warning (ADR 0014): after assembly, compute each
+  category's word count and unfolded-snippet count from its markdown, rank categories by
+  attention, and `log.warn` when a lower-attention category exceeds a higher one on either
+  metric — a deterministic, non-LLM check, since only the render stage sees every category at
+  once. Non-blocking diagnostic, not a fix.
 - [ ] Optionally feed phase-1 per-file churn (+/- counts) or diffs to sharpen attention ordering (needs CategoryInputFile + diff-stats plumbing)
 - [ ] Checkpointing & resumability of a partially-completed run (spec: "a later concern")
 - [ ] Surface per-run LLM cost (envelopes carry `total_cost_usd`; sum and log it)
