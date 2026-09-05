@@ -9,6 +9,7 @@ PR description:
 Retries transient network failures with backoff.
 
 Category: Retry logic
+Attention rating: Read through
 Adds backoff retries.
 
 To reference source code, use this exact markup, on its own line:
@@ -100,19 +101,52 @@ method.
 
 EVERY change listed above MUST appear as a snippet reference — that is how the
 reviewer sees the actual code. One snippet per change, holding the real code; the
-interface stays in your prose, not in a snippet of its own. Choose unfold by what
-the reviewer needs on the page:
+interface stays in your prose, not in a snippet of its own.
 
-- unfold="yes" when the changed body is the thing to read: it's small, or its
-  logic is subtle (edge cases, ordering, error/retry paths, concurrency), or the
-  signature hides a side effect. Don't fold the code the reviewer came for.
-- unfold="no" when your prose, diagram, or pseudocode already conveys the
-  change — a large body whose essence is its signature and behavior, or a rename,
-  type change, move, or call-site rewiring where the body itself didn't change.
-  Folded still satisfies coverage and stays one click from the real code.
+Fold by default. Write unfold="no"; a folded snippet still satisfies coverage
+and stays one click from the real code. Write unfold="yes" ONLY when one of
+these named triggers applies to that change:
 
-The category's attention rating tunes this: for a Read-closely group show more
-real code unfolded; for a Skim group summarize and fold more. Never override the
-rule above — a subtle body change stays unfolded whatever the rating.
+- SMALL — the changed body is about ten lines or fewer; a fold would trade a click
+  for almost nothing hidden.
+- SUBTLE — its logic is the thing to check: edge cases, ordering, off-by-one,
+  error/retry paths, concurrency, tricky conditionals a summary could hide.
+- HIDDEN EFFECT — the signature doesn't reveal a mutation, side effect, or
+  surprising return the body performs.
+- CORE — the body is the primary logic this category introduces or rewrites and
+  its shape isn't reconstructable from the signature: a new non-trivial algorithm
+  the reviewer is here to read. Length is not a reason to fold this; routineness
+  is.
+
+"The whole thing is new" is not, by itself, a trigger. A new file or method that
+is routine — wiring, boilerplate, delegation, mechanical churn — folds however
+large it is; summarize its shape in prose. Show the code the reviewer must READ,
+not all the code that merely changed.
+
+Never unfold these — fold, and summarize the strategy in prose (the shape, not the
+lines):
+
+- a pure-delegation facade whose methods only forward — say what it fronts and
+  where the real work lives. If a method does real work it is not pure delegation:
+  unfold that method by the triggers above, fold the rest.
+- a whole test file that verifies production code changed elsewhere — say what it
+  covers and how it's structured; if one test's setup is genuinely subtle,
+  reference just that test, unfolded, never the whole file. But when the tests
+  themselves are this category's subject — a new or substantially reworked suite —
+  show the representative and novel cases and fold the repetitive remainder; don't
+  fold the suite when the suite is the point.
+- generated files a tool emits and no one hand-edits — say what produced them.
+
+Say each thing once within this explanation. Point back to your own earlier
+snippet rather than re-slicing the same file; state a fact once and refer back
+rather than restating it. Explain only THIS category's concern — don't re-explain
+the surrounding module or the rest of the PR. Name a trivial doc or wording tweak
+in a phrase; don't walk through it.
+
+The attention rating is your budget. A Read-closely category may show more real
+code unfolded and go deeper. A Read-through or Skim category stays short and folds
+almost everything, showing only the snippets a named trigger demands. The rating
+tunes how much ROUTINE code to show; a SMALL, SUBTLE, or CORE body stays unfolded
+at any rating.
 
 Never leave a snippet without prose saying what it is and why it's there.

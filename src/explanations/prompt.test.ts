@@ -52,6 +52,40 @@ describe("buildExplainPrompt", () => {
     );
   });
 
+  // Fold discipline & attention budget (docs/adr/0014): fold-by-default, the four named unfold
+  // triggers, and the never-unfold list must survive in the rendered prompt.
+  it("asks for fold-by-default with named unfold triggers, and never-unfolds facades/tests/generated files", () => {
+    const prompt = buildExplainPrompt(EXPLAIN_INPUT);
+
+    expect(prompt).toMatch(/Fold by default/i);
+    expect(prompt).toMatch(/Write unfold="yes" ONLY when/i);
+    expect(prompt).toMatch(/SMALL — the changed body is about ten lines or fewer/i);
+    expect(prompt).toMatch(/SUBTLE — its logic is the thing to check/i);
+    expect(prompt).toMatch(/HIDDEN EFFECT — the signature doesn't reveal/i);
+    expect(prompt).toMatch(/CORE — the body is the primary logic/i);
+    expect(prompt).toMatch(/"The whole thing is new" is not, by itself, a trigger/i);
+    expect(prompt).toMatch(/Never unfold these/i);
+    expect(prompt).toMatch(/pure-delegation facade whose methods only forward/i);
+    expect(prompt).toMatch(/whole test file that verifies production code changed elsewhere/i);
+    expect(prompt).toMatch(/generated files a tool emits and no one hand-edits/i);
+    expect(prompt).toMatch(/Say each thing once within this explanation/i);
+    expect(prompt).toMatch(/The attention rating is your budget/i);
+  });
+
+  it("renders the category's attention label into the prompt", () => {
+    const closeInput: ExplainCategoryInput = {
+      ...EXPLAIN_INPUT,
+      category: { ...CATEGORY, attention: "close" },
+    };
+    const skimInput: ExplainCategoryInput = {
+      ...EXPLAIN_INPUT,
+      category: { ...CATEGORY, attention: "skim" },
+    };
+
+    expect(buildExplainPrompt(closeInput)).toContain("Attention rating: Read closely");
+    expect(buildExplainPrompt(skimInput)).toContain("Attention rating: Skim");
+  });
+
   it("renders byte-identical prompt output when a change's range is over the diff threshold", async () => {
     const input: ExplainCategoryInput = {
       ...EXPLAIN_INPUT,
@@ -107,6 +141,41 @@ describe("buildReviewPrompt", () => {
     expect(prompt).toMatch(/trivial or boilerplate/i);
     expect(prompt).toMatch(/every\s+sentence should earn its place/i);
     expect(prompt).toMatch(/padding, redundancy, and belaboring/i);
+  });
+
+  // Fold discipline & attention budget (docs/adr/0014): the merged review-time check.
+  it("asks the reviewer to check fold discipline against the category's attention budget", () => {
+    const input: ReviewPromptInput = {
+      ...EXPLAIN_INPUT,
+      markdown: "explanation\n\nsome markdown",
+    };
+
+    const prompt = buildReviewPrompt(input);
+
+    expect(prompt).toMatch(/fold discipline & attention budget/i);
+    expect(prompt).toMatch(/folded \(unfold="no"\) is the default/i);
+    expect(prompt).toMatch(/forwarding facade methods/i);
+    expect(prompt).toMatch(/whole test files \(unless the tests are this category's subject\)/i);
+    expect(prompt).toMatch(/Match depth to this category's rating\s*\(Read through\)/i);
+    expect(prompt).toMatch(/Don't flag a correctly-unfolded SMALL, SUBTLE, or CORE body/i);
+    expect(prompt).toMatch(/trivial change earns a proportionate phrase/i);
+    expect(prompt).toMatch(/no duplication — flag a fact restated elsewhere/i);
+  });
+
+  it("renders the category's attention label into the prompt", () => {
+    const closeInput: ReviewPromptInput = {
+      ...EXPLAIN_INPUT,
+      category: { ...CATEGORY, attention: "close" },
+      markdown: "explanation",
+    };
+    const skimInput: ReviewPromptInput = {
+      ...EXPLAIN_INPUT,
+      category: { ...CATEGORY, attention: "skim" },
+      markdown: "explanation",
+    };
+
+    expect(buildReviewPrompt(closeInput)).toContain("Attention rating: Read closely");
+    expect(buildReviewPrompt(skimInput)).toContain("Attention rating: Skim");
   });
 });
 

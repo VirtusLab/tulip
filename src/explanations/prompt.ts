@@ -1,5 +1,6 @@
 import type { ClassifiableChange } from "../classification/types.js";
 import { renderPrompt } from "../prompts/loader.js";
+import { ATTENTION_LABEL } from "../rendering/attention-badge.js";
 import type { ExplainCategoryInput, ReviewIssue, ReviewPromptInput } from "./types.js";
 
 /** Text lives in src/prompts/explain-markup-instructions.md (docs/adr/0006). */
@@ -47,18 +48,21 @@ function formatChanges(changes: ClassifiableChange[], diffThreshold: number): st
 
 /**
  * Task 6.2: the explaining session's initial prompt. Gives the PR's title/description, explains
- * the task (this is one category among several, explained separately), the category itself, and
- * its changes — full diff excerpt or a file+side+line-range reference only, per
- * `input.diffThreshold`, applied per change (not to the total). Instructs research-then-analyze,
- * then a markdown answer interleaving prose, Mermaid diagrams, and snippet references, split
- * into production/test sections, covering the spec's checklist where relevant, and referencing
- * every provided change at least once. Text lives in src/prompts/explain.md (docs/adr/0006).
+ * the task (this is one category among several, explained separately), the category itself
+ * (including its attention rating's label, e.g. "Read closely" — docs/adr/0010/0014 — via
+ * `ATTENTION_LABEL`), and its changes — full diff excerpt or a file+side+line-range reference
+ * only, per `input.diffThreshold`, applied per change (not to the total). Instructs
+ * research-then-analyze, then a markdown answer interleaving prose, Mermaid diagrams, and
+ * snippet references, split into production/test sections, covering the spec's checklist where
+ * relevant, and referencing every provided change at least once. Text lives in
+ * src/prompts/explain.md (docs/adr/0006).
  */
 export function buildExplainPrompt(input: ExplainCategoryInput): string {
   return renderPrompt("explain", {
     prTitle: input.prTitle,
     prDescription: input.prDescription.trim() || "(no description provided)",
     categoryName: input.category.name,
+    attention: ATTENTION_LABEL[input.category.attention],
     categoryDescription: input.category.description,
     markupInstructions: MARKUP_INSTRUCTIONS,
     productionChanges: formatChanges(input.production, input.diffThreshold),
@@ -86,17 +90,20 @@ export function buildCoverageAmendPrompt(missing: ClassifiableChange[]): string 
 }
 
 /**
- * Task 6.4: a fresh reviewing session's prompt. Reviews for clarity, conciseness, and
- * correctness/groundedness. Gives the reviewer the same changes the explaining session got
- * (same diff-vs-reference threshold logic as ./buildExplainPrompt) — without them, "grounded in
- * the changes" can't actually be checked, only the explanation's internal consistency. Text
- * lives in src/prompts/review.md (docs/adr/0006).
+ * Task 6.4: a fresh reviewing session's prompt. Reviews for clarity, conciseness,
+ * correctness/groundedness, and fold discipline against the category's attention budget
+ * (docs/adr/0014, same `ATTENTION_LABEL` as ./buildExplainPrompt). Gives the reviewer the same
+ * changes the explaining session got (same diff-vs-reference threshold logic as
+ * ./buildExplainPrompt) — without them, "grounded in the changes" can't actually be checked,
+ * only the explanation's internal consistency. Text lives in src/prompts/review.md
+ * (docs/adr/0006).
  */
 export function buildReviewPrompt(input: ReviewPromptInput): string {
   return renderPrompt("review", {
     prTitle: input.prTitle,
     prDescription: input.prDescription.trim() || "(no description provided)",
     categoryName: input.category.name,
+    attention: ATTENTION_LABEL[input.category.attention],
     categoryDescription: input.category.description,
     markdown: input.markdown,
     productionChanges: formatChanges(input.production, input.diffThreshold),

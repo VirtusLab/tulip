@@ -7,6 +7,7 @@ PR description:
 {{prDescription}}
 
 Category being explained: {{categoryName}}
+Attention rating: {{attention}}
 {{categoryDescription}}
 
 Here is the explanation:
@@ -36,9 +37,19 @@ Review the explanation for:
 - correctness — does every claim actually match the changes above? Flag anything invented,
   mistaken, or unsupported by them. Where the explanation summarizes a method or sketches
   pseudocode, check that summary against the referenced real code and flag drift.
-- earned references — every snippet reference has prose saying what it is and why it matters.
-  Flag snippets that appear only to satisfy coverage, and folded snippets the explanation never
-  actually explains.
+- earned references — every snippet has prose saying what it is and why it matters. Flag
+  snippets that appear only to satisfy coverage and folded snippets never explained — but a
+  trivial change earns a proportionate phrase, not a paragraph; a one-line mention of a trivial
+  tweak is enough and is not a violation.
+- fold discipline & attention budget — folded (unfold="no") is the default; an unfolded snippet
+  must earn it with a named trigger (a SMALL ~10-line body, SUBTLE logic, a HIDDEN side effect,
+  or the CORE new logic under review). Flag large routine bodies, forwarding facade methods,
+  whole test files (unless the tests are this category's subject), and generated files shown
+  unfolded, and any unfold you can't tie to a trigger. Match depth to this category's rating
+  ({{attention}}): a Skim or Read-through explanation that runs long or shows large unfolded
+  bodies is out of proportion. Don't flag a correctly-unfolded SMALL, SUBTLE, or CORE body.
+- no duplication — flag a fact restated elsewhere in this explanation, the same file's lines
+  shown in more than one snippet, and prose spent walking through a trivial doc or wording tweak.
 
 Reply with approved: true if it's good as-is. Otherwise reply with approved: false and a list of
 specific issues to fix.
