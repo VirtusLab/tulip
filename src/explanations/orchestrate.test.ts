@@ -31,7 +31,12 @@ function categorySet(
   production: ClassifiableChange[],
   test: ClassifiableChange[],
 ): CategoryChangeSet {
-  return { category, production, test };
+  return {
+    category,
+    production,
+    test,
+    primaryChangeIds: new Set([...production, ...test].map((c) => c.id)),
+  };
 }
 
 function refFor(c: ClassifiableChange): string {

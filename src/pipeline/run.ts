@@ -165,7 +165,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
         `${classification.ignoredChangeIds.size} ignored`,
     );
 
-    const categorySets = groupChangesByCategory(classification);
+    const { sets: categorySets } = groupChangesByCategory(classification);
 
     logger.info("phase 3: generating explanations...");
     const explanations = await runPhase("phase 3 (generating explanations)", () =>
