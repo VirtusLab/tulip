@@ -143,15 +143,16 @@ describe("explainCategories", () => {
   });
 
   it("does not require a snippet for a secondary (non-primary) change", async () => {
-    // The change is in the category's production list but not its `primaryChangeIds` — owned by
-    // an earlier category (docs/adr/0015). Coverage must pass with no snippet for it; the
-    // explanation only mentions it. Two claude calls total (explain + review), no coverage repair.
+    // The category has one primary change and one secondary (owned earlier, docs/adr/0015). The
+    // explanation snippets only the primary; coverage must still pass with no snippet for the
+    // secondary — explain + review only, no coverage-repair round.
     const category: Category = {
       id: "c2",
-      name: "Secondary",
-      description: "Only secondary changes.",
+      name: "Mixed",
+      description: "A primary and a secondary change.",
       attention: "normal",
     };
+    const primary = change("owned", "src/owned.ts");
     const secondary = change("shared", "src/shared.ts");
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
@@ -163,9 +164,9 @@ describe("explainCategories", () => {
       categorySets: [
         {
           category,
-          production: [secondary],
+          production: [primary, secondary],
           test: [],
-          primaryChangeIds: new Set<string>(),
+          primaryChangeIds: new Set(["owned"]),
         },
       ],
     };
@@ -174,14 +175,66 @@ describe("explainCategories", () => {
       if (promptText.includes("Reply with approved")) {
         return envelope({ approved: true, issues: [] }, "review-session");
       }
-      // No snippet ref at all — just prose backlinking elsewhere.
-      return envelope({ markdown: "explained under another category" }, "explain-session");
+      // Snippets the primary only; the secondary is merely mentioned.
+      return envelope({ markdown: `explanation\n\n${refFor(primary)}` }, "explain-session");
     });
 
     const results = await explainCategories(input, { runClaudeProcess });
 
     expect(results).toHaveLength(1);
+    expect(results[0]?.markdown).toContain("src/owned.ts");
+    expect(results[0]?.markdown).not.toContain("src/shared.ts");
     expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+  });
+
+  it("runs an all-secondary category but skips its review loop (docs/adr/0015)", async () => {
+    // Every change is owned earlier (empty `primaryChangeIds`), so the category is not dropped
+    // and still produces backlink output — but the sonnet review+amend cycle is skipped.
+    const category: Category = {
+      id: "c2",
+      name: "All secondary",
+      description: "Nothing owned here.",
+      attention: "skim",
+    };
+    const secondary = change("shared", "src/shared.ts");
+    const input: ExplainCategoriesInput = {
+      prTitle: "Add retry logic",
+      prDescription: "Retries transient failures.",
+      diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
+      changeOwners: new Map([["shared", { ownerCategoryId: "c1", ownerTitle: "Owner" }]]),
+      categorySets: [
+        {
+          category,
+          production: [secondary],
+          test: [],
+          primaryChangeIds: new Set<string>(),
+        },
+      ],
+    };
+
+    const info = vi.fn();
+    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+      if (promptText.includes("Reply with approved")) {
+        throw new Error("review must be skipped for an all-secondary category");
+      }
+      return envelope({ markdown: 'see {{catref id="c1"}}' }, "explain-session");
+    });
+
+    const results = await explainCategories(input, {
+      runClaudeProcess,
+      logger: { info, debug: vi.fn() },
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.markdown).toContain("catref");
+    // Only the explain call ran — no review round.
+    expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+    const lines = info.mock.calls.map((call) => String(call[0]));
+    expect(
+      lines.some((line) => line.includes("All secondary") && /skipping review/.test(line)),
+    ).toBe(true);
   });
 
   // A realistic LLM slip (mismatched node-shape delimiters), matching the real "Syntax error in

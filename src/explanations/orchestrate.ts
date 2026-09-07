@@ -3,7 +3,7 @@ import { createLogger } from "../logging/logger.js";
 import { verifySnippetCoverage } from "./coverage.js";
 import { explainCategory } from "./explain.js";
 import { verifyMermaidDiagrams } from "./mermaid-verify.js";
-import { type ReviewLoopDeps, reviewAndAmend } from "./review.js";
+import { type ReviewLoopDeps, type ReviewLoopResult, reviewAndAmend } from "./review.js";
 import type { CategoryExplanation } from "./types.js";
 
 /** Everything phase 3 needs to explain every category. */
@@ -144,23 +144,12 @@ async function explainOneCategory(
       deps,
     );
 
-    const reviewed = await reviewAndAmend(
-      {
-        prTitle: input.prTitle,
-        prDescription: input.prDescription,
-        category: set.category,
-        production: set.production,
-        test: set.test,
-        primaryChangeIds: set.primaryChangeIds,
-        changeOwners: input.changeOwners,
-        diffThreshold: input.diffThreshold,
-        baseSha: input.baseSha,
-        headSha: input.headSha,
-        markdown: covered.markdown,
-        explainSessionId: covered.sessionId,
-      },
-      deps,
-    );
+    // docs/adr/0015 §all-secondary: a category that owns none of its changes still runs (it's not
+    // empty — partitionEmptyCategorySets kept it), but renders as mostly backlinks. It needs the
+    // explain pass to emit those backlinks; a full sonnet review+amend cycle would spend the most
+    // cost on the least original output, so skip review for it — the cheaper of the two options
+    // the ADR leaves open. Coverage above already passed trivially (empty primary set).
+    const reviewed = await reviewOrSkip(input, set, covered, deps);
 
     // Runs after the review-amend loop (not before) since an amend can itself change a diagram —
     // this is the FINAL markdown that reaches rendering, so it's the one that must be validated
@@ -177,4 +166,40 @@ async function explainOneCategory(
   } catch (error) {
     throw new CategoryExplanationError(set.category.name, error);
   }
+}
+
+/** Runs the review+amend loop, unless this is an all-secondary category (empty
+ * `primaryChangeIds`) — then it keeps the explanation as-is and logs at info level (see the
+ * §all-secondary note at the call site). `covered` is {@link verifySnippetCoverage}'s result. */
+async function reviewOrSkip(
+  input: ExplainCategoriesInput,
+  set: CategoryChangeSet,
+  covered: { markdown: string; sessionId: string },
+  deps: ReviewLoopDeps,
+): Promise<ReviewLoopResult> {
+  if (set.primaryChangeIds.size === 0) {
+    const logger = deps.logger ?? createLogger();
+    logger.info(
+      `category "${set.category.name}" has only secondary changes; ` +
+        `skipping review, it links to their owning categories (docs/adr/0015)`,
+    );
+    return { markdown: covered.markdown, explainSessionId: covered.sessionId };
+  }
+  return reviewAndAmend(
+    {
+      prTitle: input.prTitle,
+      prDescription: input.prDescription,
+      category: set.category,
+      production: set.production,
+      test: set.test,
+      primaryChangeIds: set.primaryChangeIds,
+      changeOwners: input.changeOwners,
+      diffThreshold: input.diffThreshold,
+      baseSha: input.baseSha,
+      headSha: input.headSha,
+      markdown: covered.markdown,
+      explainSessionId: covered.sessionId,
+    },
+    deps,
+  );
 }
