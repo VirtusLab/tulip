@@ -40,6 +40,7 @@ function baseInput(overrides: Partial<ReviewLoopInput> = {}): ReviewLoopInput {
     category: CATEGORY,
     production: [CHANGE],
     test: [],
+    primaryChangeIds: new Set(["c1"]),
     diffThreshold: 100,
     baseSha: "base-sha",
     headSha: "head-sha",
@@ -154,6 +155,33 @@ describe("reviewAndAmend", () => {
     expect(result.markdown).toBe(`amended\n\n${REF}`);
     expect(result.explainSessionId).toBe("explain-session-2");
     expect(runClaudeProcess).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not re-impose snippet coverage on a secondary change after an amend", async () => {
+    // The change is secondary here (empty `primaryChangeIds`), so the post-amend coverage check
+    // must not force a snippet for it — even though the amended markdown drops every ref
+    // (docs/adr/0015: relaxing only the initial explain would let an amend round re-force it).
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+      call++;
+      if (call === 1) {
+        return envelope({ approved: false, issues: [{ description: "reword it" }] }, "review-1");
+      }
+      if (call === 2) {
+        // Amend drops the snippet entirely; coverage must still accept it.
+        return envelope({ markdown: "amended, no snippet" }, "explain-session-2");
+      }
+      expect(input).toContain("amended, no snippet");
+      return envelope({ approved: true, issues: [] }, "review-2");
+    });
+
+    const result = await reviewAndAmend(baseInput({ primaryChangeIds: new Set<string>() }), {
+      runClaudeProcess,
+    });
+
+    // Exactly review, amend, review — no coverage-repair resume in between.
+    expect(runClaudeProcess).toHaveBeenCalledTimes(3);
+    expect(result.markdown).toBe("amended, no snippet");
   });
 
   it("keeps the latest version and logs a warning after the review-round cap", async () => {

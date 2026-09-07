@@ -36,6 +36,7 @@ function baseInput(overrides: Partial<ExplainCategoryInput> = {}): ExplainCatego
     category: CATEGORY,
     production: [change()],
     test: [change({ id: "c2", path: "src/fetch.test.ts", excerpt: "+test1", lines: ["+test1"] })],
+    primaryChangeIds: new Set(["c1", "c2"]),
     diffThreshold: 100,
     baseSha: "base-sha",
     headSha: "head-sha",

@@ -49,7 +49,11 @@ export async function reviewAndAmend(
   deps: ReviewLoopDeps = {},
 ): Promise<ReviewLoopResult> {
   const logger = deps.logger ?? createLogger();
-  const changes = [...input.production, ...input.test];
+  // Post-amend coverage relaxes to primaries at THIS call site too (docs/adr/0015): relaxing only
+  // the initial explain would let an amend round silently re-force a snippet for a secondary change.
+  const primaryChanges = [...input.production, ...input.test].filter((change) =>
+    input.primaryChangeIds.has(change.id),
+  );
   let markdown = input.markdown;
   let explainSessionId = input.explainSessionId;
 
@@ -65,6 +69,7 @@ export async function reviewAndAmend(
           category: input.category,
           production: input.production,
           test: input.test,
+          primaryChangeIds: input.primaryChangeIds,
           diffThreshold: input.diffThreshold,
           baseSha: input.baseSha,
           headSha: input.headSha,
@@ -98,7 +103,7 @@ export async function reviewAndAmend(
     const covered = await verifySnippetCoverage(
       amended.result.markdown,
       amended.sessionId,
-      changes,
+      primaryChanges,
       deps,
     );
     markdown = covered.markdown;

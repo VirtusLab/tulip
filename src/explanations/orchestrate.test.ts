@@ -140,6 +140,47 @@ describe("explainCategories", () => {
     expect(results[0]?.markdown).toContain("src/fetch.test.ts");
   });
 
+  it("does not require a snippet for a secondary (non-primary) change", async () => {
+    // The change is in the category's production list but not its `primaryChangeIds` — owned by
+    // an earlier category (docs/adr/0015). Coverage must pass with no snippet for it; the
+    // explanation only mentions it. Two claude calls total (explain + review), no coverage repair.
+    const category: Category = {
+      id: "c2",
+      name: "Secondary",
+      description: "Only secondary changes.",
+      attention: "normal",
+    };
+    const secondary = change("shared", "src/shared.ts");
+    const input: ExplainCategoriesInput = {
+      prTitle: "Add retry logic",
+      prDescription: "Retries transient failures.",
+      diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
+      categorySets: [
+        {
+          category,
+          production: [secondary],
+          test: [],
+          primaryChangeIds: new Set<string>(),
+        },
+      ],
+    };
+
+    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+      if (promptText.includes("Reply with approved")) {
+        return envelope({ approved: true, issues: [] }, "review-session");
+      }
+      // No snippet ref at all — just prose backlinking elsewhere.
+      return envelope({ markdown: "explained under another category" }, "explain-session");
+    });
+
+    const results = await explainCategories(input, { runClaudeProcess });
+
+    expect(results).toHaveLength(1);
+    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+  });
+
   // A realistic LLM slip (mismatched node-shape delimiters), matching the real "Syntax error in
   // text" a user hit in the browser — see docs/adr/0008.
   const INVALID_DIAGRAM = "graph TD\nA[Start --> B{Decision\nB -->|Yes] C[End]";

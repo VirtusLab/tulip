@@ -108,7 +108,12 @@ async function explainOneCategory(
   deps: ReviewLoopDeps,
 ): Promise<CategoryExplanation> {
   const logger = deps.logger ?? createLogger();
-  const changes = [...set.production, ...set.test];
+  // Coverage is required only for this category's primary changes (docs/adr/0015): a secondary
+  // change is explained by its owner and merely backlinked here, so forcing a snippet for it
+  // would re-impose the duplication the ledger removes.
+  const primaryChanges = [...set.production, ...set.test].filter((change) =>
+    set.primaryChangeIds.has(change.id),
+  );
 
   logger.info(`explaining category "${set.category.name}"...`);
 
@@ -120,6 +125,7 @@ async function explainOneCategory(
         category: set.category,
         production: set.production,
         test: set.test,
+        primaryChangeIds: set.primaryChangeIds,
         diffThreshold: input.diffThreshold,
         baseSha: input.baseSha,
         headSha: input.headSha,
@@ -130,7 +136,7 @@ async function explainOneCategory(
     const covered = await verifySnippetCoverage(
       generated.markdown,
       generated.sessionId,
-      changes,
+      primaryChanges,
       deps,
     );
 
@@ -141,6 +147,7 @@ async function explainOneCategory(
         category: set.category,
         production: set.production,
         test: set.test,
+        primaryChangeIds: set.primaryChangeIds,
         diffThreshold: input.diffThreshold,
         baseSha: input.baseSha,
         headSha: input.headSha,

@@ -15,6 +15,10 @@ export interface ExplainCategoryInput {
   production: ClassifiableChange[];
   /** This category's test-code changes. */
   test: ClassifiableChange[];
+  /** Ids of the changes this category is the *primary* owner of (docs/adr/0015) — the only ones
+   * snippet coverage is required for here. Its remaining changes (in `production`/`test` but not
+   * in this set) are secondary: their owning category explains them, this one only backlinks. */
+  primaryChangeIds: ReadonlySet<string>;
   /** Changes whose diff excerpt spans more lines than this are given as file+side+line-range
    * references only, not verbatim (see src/pipeline/run.js's PipelineOptions). */
   diffThreshold: number;

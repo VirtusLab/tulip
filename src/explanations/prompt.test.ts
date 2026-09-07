@@ -36,6 +36,7 @@ const EXPLAIN_INPUT: ExplainCategoryInput = {
   category: CATEGORY,
   production: [change()],
   test: [change({ id: "c2", path: "src/fetch.test.ts", excerpt: "+test1", lines: ["+test1"] })],
+  primaryChangeIds: new Set(["c1", "c2"]),
   diffThreshold: 100,
   baseSha: "abc123base",
   headSha: "def456head",
