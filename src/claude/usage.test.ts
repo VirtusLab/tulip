@@ -90,7 +90,7 @@ describe("formatUsageSummary", () => {
         .split(/\s+/);
 
     expect(lines[0]).toBe("Token usage");
-    expect(lines[1]).toMatch(/Model\s+Input\s+Output\s+Cache write\s+Cache read/);
+    expect(lines[1]).toMatch(/Model\s+Uncached in\s+Output\s+Cache write\s+Cache read/);
     // Columns: Model, Input, Output, Cache write (cache_creation), Cache read (cache_read).
     expect(cells("sonnet")).toEqual(["sonnet", "12,345", "6,789", "2,000", "40,000"]);
     expect(cells("opus")).toEqual(["opus", "98,765", "43,210", "12,000", "500,000"]);

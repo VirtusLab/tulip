@@ -111,7 +111,9 @@ function parseUsage(usage: unknown): ModelTokens {
   };
 }
 
-const COLUMNS = ["Model", "Input", "Output", "Cache write", "Cache read"] as const;
+// "Uncached in" is Anthropic's `input_tokens` — only the fresh input of a turn; the cached bulk
+// of the input is in the Cache write/read columns, not here.
+const COLUMNS = ["Model", "Uncached in", "Output", "Cache write", "Cache read"] as const;
 
 /** Two-space indent so rows sit under the flush-left "Token usage" title; three-space gap between
  * columns. */
@@ -123,10 +125,10 @@ const COLUMN_GAP = "   ";
  * totals row, e.g.:
  *
  *   Token usage
- *     Model     Input   Output   Cache write   Cache read
- *     sonnet   12,345    6,789         2,000       40,000
- *     opus     98,765   43,210        12,000      500,000
- *     total   111,110   49,999        14,000      540,000
+ *     Model    Uncached in   Output   Cache write   Cache read
+ *     sonnet        12,345    6,789         2,000       40,000
+ *     opus          98,765   43,210        12,000      500,000
+ *     total        111,110   49,999        14,000      540,000
  *
  * Returns an empty string when nothing was recorded.
  */
