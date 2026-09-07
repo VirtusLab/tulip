@@ -5,6 +5,7 @@ import { groupChangesByCategory } from "../classification/group.js";
 import { classifyChanges } from "../classification/orchestrate.js";
 import { prepareClassifiableChanges } from "../classification/prepare.js";
 import { ClaudeBinaryMissingError } from "../claude/errors.js";
+import { createUsageLedger, formatUsageSummary } from "../claude/usage.js";
 import type { FileStatus, ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
@@ -86,6 +87,9 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   logger.info(`Processing PR ${prUrl}`);
   logger.debug(`options: ${JSON.stringify(options)}`);
 
+  // Shared by every phase (threaded via each phase's RunnerDeps), summarized at the end.
+  const usage = createUsageLedger();
+
   let checkout: PrCheckout | undefined;
   try {
     logger.info(`fetching ${owner}/${repo}#${number}...`);
@@ -123,7 +127,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     const phase1 = await runPhase("phase 1 (generating categories)", () =>
       doGenerateCategories(
         { title: metadata.title, description: metadata.body, files: changedFiles },
-        { cwd: checkoutDir },
+        { cwd: checkoutDir, usage },
       ),
     );
     logger.info(
@@ -141,7 +145,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categories: phase1.categories,
           generateSessionId: phase1.sessionId,
         },
-        { cwd: checkoutDir },
+        { cwd: checkoutDir, usage },
       ),
     );
     logger.debug(
@@ -157,7 +161,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categories: categoryReview.categories,
           phase1SessionId: categoryReview.sessionId,
         },
-        { cwd: checkoutDir },
+        { cwd: checkoutDir, usage },
       ),
     );
     logger.debug(
@@ -179,7 +183,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categorySets,
           changeOwners,
         },
-        { logger, cwd: checkoutDir },
+        { logger, cwd: checkoutDir, usage },
       ),
     );
     logger.info(`generated explanations for ${explanations.length} categories`);
@@ -218,6 +222,12 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     logger.info(describeFailure(error));
     process.exitCode = 1;
   } finally {
+    // Printed whenever any LLM work ran — on success, and after a mid-run failure that still
+    // burned tokens; empty for an untouched ledger.
+    const usageSummary = formatUsageSummary(usage);
+    if (usageSummary) {
+      logger.info(usageSummary);
+    }
     if (checkout) {
       logger.debug("cleaning up checkout...");
       try {

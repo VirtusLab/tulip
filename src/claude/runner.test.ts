@@ -4,6 +4,7 @@ import { ClaudeBinaryMissingError, ClaudeOutputError } from "./errors.js";
 import type { ClaudeProcessResult } from "./exec.js";
 import { type ClaudeInvocation, invokeClaude } from "./runner.js";
 import type { JsonSchema } from "./schema.js";
+import { createUsageLedger } from "./usage.js";
 
 const SCHEMA: JsonSchema = {
   type: "object",
@@ -39,6 +40,54 @@ describe("invokeClaude", () => {
     expect(result).toEqual({ ok: true });
     expect(sessionId).toBe("session-1");
     expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+  });
+
+  it("records token usage into a provided ledger, under the invocation's model", async () => {
+    const runClaudeProcess = vi.fn(async () =>
+      processResult(
+        envelope({
+          usage: {
+            input_tokens: 100,
+            output_tokens: 20,
+            cache_read_input_tokens: 5,
+            cache_creation_input_tokens: 3,
+          },
+        }),
+      ),
+    );
+    const usage = createUsageLedger();
+
+    await invokeClaude(BASE_INVOCATION, { runClaudeProcess, usage });
+
+    expect(usage.rows()).toEqual([
+      { model: "sonnet", tokens: { input: 100, output: 20, cacheWrite: 3, cacheRead: 5 } },
+    ]);
+  });
+
+  it("records usage for both the initial call and the retry, under the same model", async () => {
+    let call = 0;
+    const runClaudeProcess = vi.fn(async () => {
+      call++;
+      if (call === 1) {
+        // No structured_output → invalid → one retry (a resume of this session).
+        return processResult(
+          JSON.stringify({
+            result: "oops",
+            session_id: "session-1",
+            usage: { input_tokens: 100, output_tokens: 10 },
+          }),
+        );
+      }
+      return processResult(envelope({ usage: { input_tokens: 40, output_tokens: 5 } }));
+    });
+    const usage = createUsageLedger();
+
+    await invokeClaude(BASE_INVOCATION, { runClaudeProcess, usage });
+
+    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+    expect(usage.rows()).toEqual([
+      { model: "sonnet", tokens: { input: 140, output: 15, cacheWrite: 0, cacheRead: 0 } },
+    ]);
   });
 
   it("builds the CLI args (-p, --output-format json, --json-schema, --model) and sends the prompt via stdin, not argv", async () => {

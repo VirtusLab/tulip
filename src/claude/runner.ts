@@ -3,6 +3,7 @@ import { claudeConcurrencyLimiter } from "./concurrency.js";
 import { ClaudeOutputError } from "./errors.js";
 import { type ClaudeProcessRunner, runClaudeProcess } from "./exec.js";
 import { type JsonSchema, validateAgainstSchema } from "./schema.js";
+import type { UsageLedger } from "./usage.js";
 
 /** Model alias accepted by `claude --model`. */
 export type ClaudeModel = "sonnet" | "haiku" | "opus";
@@ -42,6 +43,9 @@ export interface RunnerDeps {
    * this to the PR checkout dir (see src/pipeline/run.ts), so a session can read the actual
    * repo files instead of inheriting the caller's cwd. */
   cwd?: string;
+  /** Collects per-model token usage across the run for the end-of-run summary (see
+   * src/claude/usage.ts). When set, every `claude` invocation (including retries) is recorded. */
+  usage?: UsageLedger;
 }
 
 const RETRY_PREFIX = "Your previous reply did not parse as JSON matching the required schema";
@@ -59,6 +63,7 @@ export async function invokeClaude<T = unknown>(
   const runProcess = deps.runClaudeProcess ?? runClaudeProcess;
 
   const first = await execute(invocation, runProcess, deps.cwd);
+  deps.usage?.record(invocation, first);
   const firstAttempt = extractStructuredOutput<T>(first, invocation.schema);
   if (firstAttempt.ok) {
     return { result: firstAttempt.value, sessionId: first.session_id, envelope: first };
@@ -70,6 +75,7 @@ export async function invokeClaude<T = unknown>(
     prompt: `${RETRY_PREFIX}: ${firstAttempt.error}. Reply again with ONLY valid JSON matching the schema.`,
   };
   const second = await execute(retry, runProcess, deps.cwd);
+  deps.usage?.record(retry, second);
   const secondAttempt = extractStructuredOutput<T>(second, invocation.schema);
   if (secondAttempt.ok) {
     return { result: secondAttempt.value, sessionId: second.session_id, envelope: second };

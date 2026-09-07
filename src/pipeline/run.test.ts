@@ -4,6 +4,7 @@ import type { CategoryReviewLoopResult } from "../categories/review.js";
 import { IncompleteCoverageError } from "../classification/coverage.js";
 import type { ClassifyChangesResult } from "../classification/orchestrate.js";
 import { ClaudeBinaryMissingError, ClaudeOutputError } from "../claude/errors.js";
+import type { UsageLedger } from "../claude/usage.js";
 import { SnippetCoverageError } from "../explanations/coverage.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import type { PrCheckout } from "../github/checkout.js";
@@ -166,6 +167,38 @@ function infoLines(deps: PipelineDeps): string[] {
   return info.mock.calls.map((call) => String(call[0]));
 }
 
+/** The RunnerDeps object (2nd arg) a mocked phase was called with, for inspecting the threaded
+ * `usage` ledger. */
+function phaseRunnerDeps(fn: { mock: { calls: unknown[][] } }): { usage?: UsageLedger } {
+  return (fn.mock.calls[0]?.[1] ?? {}) as { usage?: UsageLedger };
+}
+
+/** A generateCategories mock that records some usage into the ledger it's handed, so run()'s
+ * end-of-run summary has something to print. The double cast bridges baseDeps' zero-arg mock
+ * signature to the real (input, runnerDeps) shape run() calls it with. */
+function recordingGenerate(): ReturnType<typeof baseDeps>["generateCategories"] {
+  return vi.fn(async (_input: unknown, runnerDeps: { usage: UsageLedger }) => {
+    runnerDeps.usage.record(
+      { model: "sonnet" },
+      {
+        session_id: "s1",
+        usage: {
+          input_tokens: 100,
+          output_tokens: 20,
+          cache_read_input_tokens: 5,
+          cache_creation_input_tokens: 3,
+        },
+      },
+    );
+    return {
+      categories: [
+        { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" as const },
+      ],
+      sessionId: "s1",
+    };
+  }) as unknown as ReturnType<typeof baseDeps>["generateCategories"];
+}
+
 describe("run", () => {
   let originalExitCode: number | string | undefined | null;
 
@@ -206,7 +239,7 @@ describe("run", () => {
         description: "Adds a greeting helper.",
         files: [{ path: "src/new.ts", status: "added" }],
       },
-      { cwd: "/tmp/tulip-checkout" },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
     );
     expect(deps.reviewAndAmendCategories).toHaveBeenCalledWith(
       {
@@ -218,7 +251,7 @@ describe("run", () => {
         ],
         generateSessionId: "s1",
       },
-      { cwd: "/tmp/tulip-checkout" },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
     );
     expect(deps.classifyChanges).toHaveBeenCalledWith(
       {
@@ -228,7 +261,7 @@ describe("run", () => {
         ],
         phase1SessionId: "s1",
       },
-      { cwd: "/tmp/tulip-checkout" },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
     );
     expect(deps.explainCategories).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -248,7 +281,11 @@ describe("run", () => {
           }),
         ],
       }),
-      expect.objectContaining({ logger: deps.logger, cwd: "/tmp/tulip-checkout" }),
+      expect.objectContaining({
+        logger: deps.logger,
+        cwd: "/tmp/tulip-checkout",
+        usage: expect.any(Object),
+      }),
     );
     expect(deps.renderExplanations).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -259,9 +296,40 @@ describe("run", () => {
       expect.objectContaining({ logger: deps.logger }),
     );
 
+    // Every phase gets the SAME ledger instance (one summary for the whole run), not its own.
+    const sharedUsage = phaseRunnerDeps(deps.generateCategories).usage;
+    expect(sharedUsage).toBeDefined();
+    expect(phaseRunnerDeps(deps.reviewAndAmendCategories).usage).toBe(sharedUsage);
+    expect(phaseRunnerDeps(deps.classifyChanges).usage).toBe(sharedUsage);
+    expect(phaseRunnerDeps(deps.explainCategories).usage).toBe(sharedUsage);
+
     const checkout = await deps.createCheckout.mock.results[0]?.value;
     expect(checkout.cleanup).toHaveBeenCalledTimes(1);
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it("prints the per-model token-usage summary at the end of a successful run", async () => {
+    const deps = baseDeps();
+    deps.generateCategories = recordingGenerate();
+
+    await run(options(), deps);
+
+    const summary = infoLines(deps).find((line) => line.startsWith("Token usage"));
+    expect(summary).toBeDefined();
+    expect(summary).toContain("sonnet");
+  });
+
+  it("still prints the token-usage summary after a mid-run failure", async () => {
+    const deps = baseDeps();
+    deps.generateCategories = recordingGenerate();
+    deps.classifyChanges = vi.fn(async () => {
+      throw new Error("boom");
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(infoLines(deps).find((line) => line.startsWith("Token usage"))).toBeDefined();
   });
 
   it("logs the welcome message and what it will process, before fetching", async () => {
@@ -460,7 +528,7 @@ describe("run", () => {
         ],
         phase1SessionId: "s1-amended",
       }),
-      { cwd: "/tmp/tulip-checkout" },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
     );
   });
 
