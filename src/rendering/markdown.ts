@@ -1,4 +1,8 @@
-import { parseSnippetRefs } from "../explanations/markup.js";
+import {
+  type CategoryRefTarget,
+  parseSnippetRefs,
+  substituteCategoryRefs,
+} from "../explanations/markup.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { findMermaidFences, renderMermaidPlaceholder } from "./mermaid.js";
 import { renderWithSegments, type Segment } from "./segments.js";
@@ -16,6 +20,10 @@ export interface MarkdownRenderContext {
   /** Diff data for every path referenced by a `{{snippet}}` marker anywhere on the page (see
    * ./file-diffs.ts). */
   fileDiffs: Map<string, FileDiffData>;
+  /** Category id -> {array index, title} for every category on the page (docs/adr/0015), so an
+   * inline `{{catref id="x"}}` can be rewritten to a link to that category's section. Built in
+   * ./template.ts, where the ordered explanations (hence each category's index) are known. */
+  categoryRefTargets: ReadonlyMap<string, CategoryRefTarget>;
 }
 
 export interface RenderCategoryMarkdownOptions {
@@ -36,7 +44,13 @@ export function renderCategoryMarkdown(
   ctx: MarkdownRenderContext,
   options: RenderCategoryMarkdownOptions = {},
 ): string {
-  const mermaidSegments: Segment[] = findMermaidFences(markdown).map((fence) => ({
+  // Inline `{{catref}}` backlinks are rewritten to markdown links first, at text level, before
+  // any segment is located or the prose is parsed (docs/adr/0015) — a catref sits mid-sentence,
+  // so it can't be a block segment. Own-line mermaid fences and snippet refs never overlap it,
+  // so locating them on the substituted text keeps their offsets correct.
+  const source = substituteCategoryRefs(markdown, ctx.categoryRefTargets);
+
+  const mermaidSegments: Segment[] = findMermaidFences(source).map((fence) => ({
     start: fence.start,
     end: fence.end,
     render: () => {
@@ -45,12 +59,12 @@ export function renderCategoryMarkdown(
     },
   }));
 
-  const snippetSegments: Segment[] = parseSnippetRefs(markdown).map((match) => ({
+  const snippetSegments: Segment[] = parseSnippetRefs(source).map((match) => ({
     start: match.start,
     end: match.end,
     render: () =>
       renderSnippetBlock(match.ref, ctx.fileDiffs, options.forceSnippetsCollapsed ?? false),
   }));
 
-  return renderWithSegments(markdown, [...mermaidSegments, ...snippetSegments]);
+  return renderWithSegments(source, [...mermaidSegments, ...snippetSegments]);
 }

@@ -69,6 +69,45 @@ export function parseSnippetRefs(markdown: string): SnippetRefMatch[] {
   return matches;
 }
 
+/** An inline backlink to another category's section (docs/adr/0015), emitted mid-prose by the
+ * explainer as `{{catref id="c3"}}`. Unlike {@link SnippetRef} it is NOT own-line and NOT
+ * block-rendered: it's rewritten to a markdown link before the prose is parsed (see
+ * {@link substituteCategoryRefs}), so it can sit in the middle of a sentence without splitting
+ * it. The attributed form is required — a bare `{{catref}}` would match the prompt loader's
+ * placeholder pattern and throw (docs/adr/0006). */
+const CATEGORY_REF_PATTERN = /\{\{catref id="([^"]*)"\}\}/g;
+
+/** Where a {@link substituteCategoryRefs} backlink points: a category's array position (its
+ * `#category-<index>` anchor — see src/rendering/ids.ts) and display name (the link text). */
+export interface CategoryRefTarget {
+  index: number;
+  title: string;
+}
+
+/**
+ * Rewrites every `{{catref id="x"}}` in `markdown` to a markdown link
+ * `[<title>](#category-<index>)`, resolving `x` through `targets`. An id not in `targets`
+ * (unknown or malformed) is left as literal text — never a crash, mirroring
+ * {@link parseSnippetRefs}' leniency. Title and index come from `targets` (the renderer), so the
+ * link text always matches the real section; the agent supplies only the id. Meant to run as a
+ * text-level pre-substitution before the markdown is parsed, since a catref is inline.
+ */
+export function substituteCategoryRefs(
+  markdown: string,
+  targets: ReadonlyMap<string, CategoryRefTarget>,
+): string {
+  return markdown.replace(CATEGORY_REF_PATTERN, (raw, id: string) => {
+    const target = targets.get(id);
+    if (!target) {
+      return raw;
+    }
+    // Escape the link-text brackets so a title containing them can't break the `[...]( ...)`
+    // syntax (titles are LLM-authored text); marked renders `\[`/`\]` as literal brackets.
+    const text = target.title.replace(/[\\[\]]/g, "\\$&");
+    return `[${text}](#category-${target.index})`;
+  });
+}
+
 function parseSide(raw: string | undefined): DiffSide | undefined {
   return raw === "base" || raw === "head" ? raw : undefined;
 }

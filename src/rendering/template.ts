@@ -43,7 +43,20 @@ export function renderPage(input: PageInput): string {
     parsedSections.map((sections) => sections.subsections),
   );
 
-  const ctx: MarkdownRenderContext = { mermaidSources: [], fileDiffs: input.fileDiffs };
+  // Category id -> {array index, title}, so an inline {{catref}} in any section's prose resolves
+  // to a link to the owning category's section (docs/adr/0015). Index is the array position,
+  // matching `categoryId(index)` (./ids.ts).
+  const categoryRefTargets = new Map(
+    input.explanations.map((explanation, index) => [
+      explanation.category.id,
+      { index, title: explanation.category.name },
+    ]),
+  );
+  const ctx: MarkdownRenderContext = {
+    mermaidSources: [],
+    fileDiffs: input.fileDiffs,
+    categoryRefTargets,
+  };
   const description = renderCategoryMarkdown(input.prDescription, ctx);
   const sections = input.explanations
     .map((explanation, index) =>

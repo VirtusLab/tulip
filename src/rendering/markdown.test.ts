@@ -7,8 +7,11 @@ import {
   renderProseMarkdown,
 } from "./markdown.js";
 
-function context(fileDiffs: Map<string, FileDiffData> = new Map()): MarkdownRenderContext {
-  return { mermaidSources: [], fileDiffs };
+function context(
+  fileDiffs: Map<string, FileDiffData> = new Map(),
+  categoryRefTargets: MarkdownRenderContext["categoryRefTargets"] = new Map(),
+): MarkdownRenderContext {
+  return { mermaidSources: [], fileDiffs, categoryRefTargets };
 }
 
 describe("renderProseMarkdown", () => {
@@ -138,6 +141,33 @@ describe("renderCategoryMarkdown", () => {
     expect(html).toContain("Outro.");
     expect(html).toContain('class="snippet"');
     expect(html).not.toContain("{{snippet");
+  });
+
+  it("rewrites an inline {{catref}} to a link into the owning category's section, sentence intact", () => {
+    // Rendering it as an <a> (not stripped to plain text) also proves the produced
+    // "#category-1" fragment href passed the prose renderer's safety check.
+    const targets = new Map([["c2", { index: 1, title: "Retry logic" }]]);
+    const html = renderCategoryMarkdown(
+      'See the {{catref id="c2"}} section for details.',
+      context(new Map(), targets),
+    );
+    expect(html).toContain('<a href="#category-1">Retry logic</a>');
+    expect(html).toContain("See the");
+    expect(html).toContain("section for details.");
+    // One paragraph — the inline link didn't split the sentence into separate blocks.
+    expect(html.match(/<p>/g)).toHaveLength(1);
+    expect(html).not.toContain("{{catref");
+  });
+
+  it("leaves an unknown {{catref}} id as literal text — no link, no throw", () => {
+    const targets = new Map([["c2", { index: 1, title: "Retry logic" }]]);
+    const html = renderCategoryMarkdown(
+      'Refers to {{catref id="c9"}} here.',
+      context(new Map(), targets),
+    );
+    expect(html).not.toContain("<a ");
+    expect(html).toContain("catref");
+    expect(html).toContain("c9");
   });
 
   it("forces a {{snippet}}'s details closed when forceSnippetsCollapsed is set, even with unfold=yes", () => {
