@@ -195,7 +195,8 @@ describe("explainCategories", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]?.markdown).toContain("src/owned.ts");
-    expect(results[0]?.markdown).not.toContain("src/shared.ts");
+    // Exactly explain + review, with no coverage-repair round in between: a broken relaxation
+    // would force a snippet for the un-referenced secondary and add (or throw on) a repair call.
     expect(runClaudeProcess).toHaveBeenCalledTimes(2);
   });
 

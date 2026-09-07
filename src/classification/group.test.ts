@@ -187,4 +187,34 @@ describe("groupChangesByCategory", () => {
 
     expect(owners.get("x1")).toEqual({ ownerCategoryId: "c3", ownerTitle: "Earlier" });
   });
+
+  it("makes a change spanning three categories primary only in the first (docs/adr/0015)", () => {
+    // The motivating case (jox#351): one change assigned to three categories. It's listed under
+    // all three, but owned by exactly the first in array order — secondary in the two later ones.
+    const c1 = change("c1");
+    const result: ClassifyChangesResult = {
+      categories: [
+        { id: "c1", name: "First", description: "", attention: "normal" },
+        { id: "c2", name: "Second", description: "", attention: "normal" },
+        { id: "c3", name: "Third", description: "", attention: "normal" },
+      ],
+      assignments: new Map([
+        [
+          "c1",
+          [
+            { category: "c1", codeType: "production" },
+            { category: "c2", codeType: "production" },
+            { category: "c3", codeType: "production" },
+          ],
+        ],
+      ]),
+      ignoredChangeIds: new Set(),
+      changesById: new Map([["c1", c1]]),
+    };
+
+    const { sets, owners } = groupChangesByCategory(result);
+
+    expect(sets.map((s) => s.production)).toEqual([[c1], [c1], [c1]]);
+    expect(owners).toEqual(new Map([["c1", { ownerCategoryId: "c1", ownerTitle: "First" }]]));
+  });
 });
