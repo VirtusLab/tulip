@@ -1,4 +1,4 @@
-import type { CategoryChangeSet } from "../classification/group.js";
+import type { CategoryChangeSet, ChangeOwner } from "../classification/group.js";
 import { createLogger } from "../logging/logger.js";
 import { verifySnippetCoverage } from "./coverage.js";
 import { explainCategory } from "./explain.js";
@@ -17,6 +17,9 @@ export interface ExplainCategoriesInput {
   headSha: string;
   /** In presentation order (see src/classification/group.js). */
   categorySets: CategoryChangeSet[];
+  /** Each non-ignored change's primary owning category, keyed by change id (docs/adr/0015) — for
+   * annotating and backlinking a category's secondary changes (see ./types.js's `changeOwners`). */
+  changeOwners: ReadonlyMap<string, ChangeOwner>;
 }
 
 /** Thrown when one category's explanation generation fails; keeps the category name so a
@@ -126,6 +129,7 @@ async function explainOneCategory(
         production: set.production,
         test: set.test,
         primaryChangeIds: set.primaryChangeIds,
+        changeOwners: input.changeOwners,
         diffThreshold: input.diffThreshold,
         baseSha: input.baseSha,
         headSha: input.headSha,
@@ -148,6 +152,7 @@ async function explainOneCategory(
         production: set.production,
         test: set.test,
         primaryChangeIds: set.primaryChangeIds,
+        changeOwners: input.changeOwners,
         diffThreshold: input.diffThreshold,
         baseSha: input.baseSha,
         headSha: input.headSha,

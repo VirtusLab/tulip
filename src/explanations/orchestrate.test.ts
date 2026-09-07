@@ -65,6 +65,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: [categorySet(categoryA, [changeA], []), categorySet(categoryB, [changeB], [])],
     };
 
@@ -105,6 +106,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: [categorySet(category, production, test)],
     };
 
@@ -157,6 +159,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: [
         {
           category,
@@ -204,6 +207,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: [categorySet(category, production, [])],
     };
 
@@ -245,6 +249,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: [categorySet(category, production, [])],
     };
 
@@ -287,6 +292,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: categories,
     };
 
@@ -337,6 +343,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: [
         categorySet(categoryA, [change("a1", "src/a.ts")], []),
         categorySet(categoryB, [change("b1", "src/b.ts")], []),
@@ -384,6 +391,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: [
         categorySet(categoryA, [change("a1", "src/a.ts")], []),
         categorySet(categoryB, [change("b1", "src/b.ts")], []),
@@ -432,6 +440,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: [
         categorySet(categoryA, [change("a1", "src/a.ts")], []),
         categorySet(categoryEmpty, [], []),
@@ -481,6 +490,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
+      changeOwners: new Map(),
       categorySets: [
         categorySet(categoryA, [change("a1", "src/a.ts")], []),
         categorySet(categoryB, [change("b1", "src/b.ts")], []),

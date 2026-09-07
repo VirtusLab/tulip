@@ -41,6 +41,7 @@ function baseInput(overrides: Partial<ReviewLoopInput> = {}): ReviewLoopInput {
     production: [CHANGE],
     test: [],
     primaryChangeIds: new Set(["c1"]),
+    changeOwners: new Map(),
     diffThreshold: 100,
     baseSha: "base-sha",
     headSha: "head-sha",

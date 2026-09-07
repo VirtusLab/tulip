@@ -37,6 +37,7 @@ const EXPLAIN_INPUT: ExplainCategoryInput = {
   production: [change()],
   test: [change({ id: "c2", path: "src/fetch.test.ts", excerpt: "+test1", lines: ["+test1"] })],
   primaryChangeIds: new Set(["c1", "c2"]),
+  changeOwners: new Map(),
   diffThreshold: 100,
   baseSha: "abc123base",
   headSha: "def456head",
@@ -71,6 +72,29 @@ describe("buildExplainPrompt", () => {
     expect(prompt).toMatch(/generated files a tool emits and no one hand-edits/i);
     expect(prompt).toMatch(/Say each thing once within this explanation/i);
     expect(prompt).toMatch(/The attention rating is your budget/i);
+  });
+
+  it("annotates a secondary change with its owner and a catref backlink, but not a primary one", () => {
+    const input: ExplainCategoryInput = {
+      ...EXPLAIN_INPUT,
+      production: [
+        change(),
+        change({ id: "shared", path: "src/shared.ts", excerpt: "+s", lines: ["+s"] }),
+      ],
+      test: [],
+      // Only "c1" is primary here; "shared" is owned by another category.
+      primaryChangeIds: new Set(["c1"]),
+      changeOwners: new Map([["shared", { ownerCategoryId: "c3", ownerTitle: "Shared helpers" }]]),
+    };
+
+    const prompt = buildExplainPrompt(input);
+
+    // The secondary change carries the reference-only annotation and an attributed catref.
+    expect(prompt).toContain('already explained under "Shared helpers"');
+    expect(prompt).toContain('{{catref id="c3"}}');
+    // The primary change (src/fetch.ts) is not annotated.
+    expect(prompt).toMatch(/src\/fetch\.ts \(modified\), side head, lines 10-12\n/);
+    expect(prompt).not.toMatch(/src\/fetch\.ts.*already explained under/);
   });
 
   it("renders the category's attention label into the prompt", () => {

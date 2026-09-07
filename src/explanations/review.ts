@@ -70,6 +70,7 @@ export async function reviewAndAmend(
           production: input.production,
           test: input.test,
           primaryChangeIds: input.primaryChangeIds,
+          changeOwners: input.changeOwners,
           diffThreshold: input.diffThreshold,
           baseSha: input.baseSha,
           headSha: input.headSha,

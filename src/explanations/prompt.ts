@@ -1,3 +1,4 @@
+import type { ChangeOwner } from "../classification/group.js";
 import type { ClassifiableChange } from "../classification/types.js";
 import { renderPrompt } from "../prompts/loader.js";
 import { ATTENTION_LABEL } from "../rendering/attention-badge.js";
@@ -12,8 +13,34 @@ const PRODUCTION_CHECKLIST = renderPrompt("explain-production-checklist", {});
 /** Text lives in src/prompts/explain-test-checklist.md (docs/adr/0006). */
 const TEST_CHECKLIST = renderPrompt("explain-test-checklist", {});
 
-function formatChange(change: ClassifiableChange, diffThreshold: number): string {
-  const location = `${change.path} (${change.status}), side ${change.side}, lines ${change.range.start}-${change.range.end}`;
+/** The primary/owner context {@link formatChange} needs to annotate secondary changes
+ * (docs/adr/0015): which changes this category owns, and every change's owning category. */
+interface SecondaryRefContext {
+  primaryChangeIds: ReadonlySet<string>;
+  owners: ReadonlyMap<string, ChangeOwner>;
+}
+
+/** Inline note appended to a change that is *secondary* in the category being explained
+ * (docs/adr/0015): owned and explained in full by an earlier category, so it must be linked here
+ * rather than re-snippeted. Empty for a primary change (or one with no known owner). The catref
+ * must stay attributed — a bare `{{catref}}` trips the prompt loader (docs/adr/0006). */
+function secondaryAnnotation(change: ClassifiableChange, secondary: SecondaryRefContext): string {
+  if (secondary.primaryChangeIds.has(change.id)) {
+    return "";
+  }
+  const owner = secondary.owners.get(change.id);
+  if (!owner) {
+    return "";
+  }
+  return ` — already explained under "${owner.ownerTitle}": don't add a snippet; say in one line what it does here and link with {{catref id="${owner.ownerCategoryId}"}}`;
+}
+
+function formatChange(
+  change: ClassifiableChange,
+  diffThreshold: number,
+  secondary: SecondaryRefContext,
+): string {
+  const location = `${change.path} (${change.status}), side ${change.side}, lines ${change.range.start}-${change.range.end}${secondaryAnnotation(change, secondary)}`;
   // Uses `change.lines` — the full, untruncated diff — never `change.excerpt`, which phase 2
   // (classification) truncates by character count for cheap-model prompts (see
   // src/classification/excerpt.ts). That truncation is unrelated to this threshold and would
@@ -39,11 +66,15 @@ function describeCheckoutAccess(input: { baseSha: string; headSha: string }): st
   });
 }
 
-function formatChanges(changes: ClassifiableChange[], diffThreshold: number): string {
+function formatChanges(
+  changes: ClassifiableChange[],
+  diffThreshold: number,
+  secondary: SecondaryRefContext,
+): string {
   if (changes.length === 0) {
     return "(none)";
   }
-  return changes.map((change) => formatChange(change, diffThreshold)).join("\n\n");
+  return changes.map((change) => formatChange(change, diffThreshold, secondary)).join("\n\n");
 }
 
 /**
@@ -58,6 +89,10 @@ function formatChanges(changes: ClassifiableChange[], diffThreshold: number): st
  * src/prompts/explain.md (docs/adr/0006).
  */
 export function buildExplainPrompt(input: ExplainCategoryInput): string {
+  const secondary: SecondaryRefContext = {
+    primaryChangeIds: input.primaryChangeIds,
+    owners: input.changeOwners,
+  };
   return renderPrompt("explain", {
     prTitle: input.prTitle,
     prDescription: input.prDescription.trim() || "(no description provided)",
@@ -65,8 +100,8 @@ export function buildExplainPrompt(input: ExplainCategoryInput): string {
     attention: ATTENTION_LABEL[input.category.attention],
     categoryDescription: input.category.description,
     markupInstructions: MARKUP_INSTRUCTIONS,
-    productionChanges: formatChanges(input.production, input.diffThreshold),
-    testChanges: formatChanges(input.test, input.diffThreshold),
+    productionChanges: formatChanges(input.production, input.diffThreshold, secondary),
+    testChanges: formatChanges(input.test, input.diffThreshold, secondary),
     checkoutAccess: describeCheckoutAccess(input),
     productionChecklist: PRODUCTION_CHECKLIST,
     testChecklist: TEST_CHECKLIST,
@@ -99,6 +134,10 @@ export function buildCoverageAmendPrompt(missing: ClassifiableChange[]): string 
  * (docs/adr/0006).
  */
 export function buildReviewPrompt(input: ReviewPromptInput): string {
+  const secondary: SecondaryRefContext = {
+    primaryChangeIds: input.primaryChangeIds,
+    owners: input.changeOwners,
+  };
   return renderPrompt("review", {
     prTitle: input.prTitle,
     prDescription: input.prDescription.trim() || "(no description provided)",
@@ -106,8 +145,8 @@ export function buildReviewPrompt(input: ReviewPromptInput): string {
     attention: ATTENTION_LABEL[input.category.attention],
     categoryDescription: input.category.description,
     markdown: input.markdown,
-    productionChanges: formatChanges(input.production, input.diffThreshold),
-    testChanges: formatChanges(input.test, input.diffThreshold),
+    productionChanges: formatChanges(input.production, input.diffThreshold, secondary),
+    testChanges: formatChanges(input.test, input.diffThreshold, secondary),
     checkoutAccess: describeCheckoutAccess(input),
   });
 }

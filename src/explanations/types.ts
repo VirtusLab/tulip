@@ -1,4 +1,5 @@
 import type { Category } from "../categories/types.js";
+import type { ChangeOwner } from "../classification/group.js";
 import type { ClassifiableChange } from "../classification/types.js";
 
 /**
@@ -19,6 +20,10 @@ export interface ExplainCategoryInput {
    * snippet coverage is required for here. Its remaining changes (in `production`/`test` but not
    * in this set) are secondary: their owning category explains them, this one only backlinks. */
   primaryChangeIds: ReadonlySet<string>;
+  /** Every non-ignored change's primary owning category, keyed by change id (docs/adr/0015) —
+   * the page-wide map from grouping (src/classification/group.js), so a secondary change here can
+   * be annotated with its owner's title and backlinked to it with `{{catref id="<owner id>"}}`. */
+  changeOwners: ReadonlyMap<string, ChangeOwner>;
   /** Changes whose diff excerpt spans more lines than this are given as file+side+line-range
    * references only, not verbatim (see src/pipeline/run.js's PipelineOptions). */
   diffThreshold: number;

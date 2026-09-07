@@ -97,9 +97,16 @@ level. A sentence, a numbered list, a before/after call-sequence diagram, or
 short pseudocode often carries this better than the code, especially for a large
 method.
 
-EVERY change listed above MUST appear as a snippet reference — that is how the
-reviewer sees the actual code. One snippet per change, holding the real code; the
-interface stays in your prose, not in a snippet of its own.
+EVERY change listed above that is NOT marked "already explained under ..." MUST
+appear as a snippet reference — that is how the reviewer sees the actual code. One
+snippet per change, holding the real code; the interface stays in your prose, not in
+a snippet of its own.
+
+A change marked "already explained under <category>" is owned and explained in full
+by that other category. Don't snippet it here: in one line, say what it does in this
+category's context, then link to its home with a `{{catref id="<that category's id>"}}`
+backlink — use the exact id from the annotation. You MAY still show a focused slice
+if this category genuinely needs the code through its own lens, but it isn't required.
 
 Fold by default. Write unfold="no"; a folded snippet still satisfies coverage
 and stays one click from the real code. Write unfold="yes" ONLY when one of
