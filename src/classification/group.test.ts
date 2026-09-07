@@ -40,21 +40,19 @@ describe("groupChangesByCategory", () => {
       ]),
     };
 
-    const { sets } = groupChangesByCategory(result);
+    const { sets, owners } = groupChangesByCategory(result);
 
     expect(sets.map((g) => g.category.name)).toEqual(["B", "A"]);
-    expect(sets[0]).toEqual({
-      category: result.categories[0],
-      production: [c3],
-      test: [],
-      primaryChangeIds: new Set(["c3"]),
-    });
-    expect(sets[1]).toEqual({
-      category: result.categories[1],
-      production: [c1],
-      test: [c2],
-      primaryChangeIds: new Set(["c1", "c2"]),
-    });
+    expect(sets[0]).toEqual({ category: result.categories[0], production: [c3], test: [] });
+    expect(sets[1]).toEqual({ category: result.categories[1], production: [c1], test: [c2] });
+    // Each change is owned by the (only) category it was assigned to.
+    expect(owners).toEqual(
+      new Map([
+        ["c3", { ownerCategoryId: "c1", ownerTitle: "B" }],
+        ["c1", { ownerCategoryId: "c2", ownerTitle: "A" }],
+        ["c2", { ownerCategoryId: "c2", ownerTitle: "A" }],
+      ]),
+    );
   });
 
   it("matches category ids exactly — a case/whitespace variant does not match", () => {
@@ -124,21 +122,6 @@ describe("groupChangesByCategory", () => {
     expect(sets[1]?.production).toEqual([c1]);
   });
 
-  it("gives a single-category change its one primary — that category", () => {
-    const c1 = change("c1");
-    const result: ClassifyChangesResult = {
-      categories: [{ id: "c1", name: "A", description: "", attention: "normal" }],
-      assignments: new Map([["c1", [{ category: "c1", codeType: "production" }]]]),
-      ignoredChangeIds: new Set(),
-      changesById: new Map([["c1", c1]]),
-    };
-
-    const { sets, owners } = groupChangesByCategory(result);
-
-    expect(sets[0]?.primaryChangeIds).toEqual(new Set(["c1"]));
-    expect(owners.get("c1")).toEqual({ ownerCategoryId: "c1", ownerTitle: "A" });
-  });
-
   it("gives every non-ignored change exactly one primary across all sets", () => {
     // c1 assigned to both categories; c2 to the second only. Every change must be primary once.
     const c1 = change("c1");
@@ -165,24 +148,16 @@ describe("groupChangesByCategory", () => {
       ]),
     };
 
-    const { sets, owners } = groupChangesByCategory(result);
+    const { owners } = groupChangesByCategory(result);
 
-    const primaryCounts = new Map<string, number>();
-    for (const set of sets) {
-      for (const id of set.primaryChangeIds) {
-        primaryCounts.set(id, (primaryCounts.get(id) ?? 0) + 1);
-      }
-    }
-    expect(primaryCounts).toEqual(
+    // The owner map has exactly one entry per non-ignored change (one primary each), and c1 —
+    // assigned to both categories — is owned by the first (index 0), not the second.
+    expect(owners).toEqual(
       new Map([
-        ["c1", 1],
-        ["c2", 1],
+        ["c1", { ownerCategoryId: "c1", ownerTitle: "First" }],
+        ["c2", { ownerCategoryId: "c2", ownerTitle: "Second" }],
       ]),
     );
-    // c1's primary is the first category (index 0), not the second.
-    expect(sets[0]?.primaryChangeIds).toEqual(new Set(["c1"]));
-    expect(sets[1]?.primaryChangeIds).toEqual(new Set(["c2"]));
-    expect(owners.get("c1")?.ownerCategoryId).toBe("c1");
   });
 
   it("owns a change at its earliest array position, not its lowest category id", () => {
@@ -208,10 +183,8 @@ describe("groupChangesByCategory", () => {
       changesById: new Map([["x1", c1]]),
     };
 
-    const { sets, owners } = groupChangesByCategory(result);
+    const { owners } = groupChangesByCategory(result);
 
-    expect(sets[0]?.primaryChangeIds).toEqual(new Set(["x1"]));
-    expect(sets[1]?.primaryChangeIds).toEqual(new Set());
     expect(owners.get("x1")).toEqual({ ownerCategoryId: "c3", ownerTitle: "Earlier" });
   });
 });

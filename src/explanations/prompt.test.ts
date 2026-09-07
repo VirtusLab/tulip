@@ -36,7 +36,6 @@ const EXPLAIN_INPUT: ExplainCategoryInput = {
   category: CATEGORY,
   production: [change()],
   test: [change({ id: "c2", path: "src/fetch.test.ts", excerpt: "+test1", lines: ["+test1"] })],
-  primaryChangeIds: new Set(["c1", "c2"]),
   changeOwners: new Map(),
   diffThreshold: 100,
   baseSha: "abc123base",
@@ -82,9 +81,11 @@ describe("buildExplainPrompt", () => {
         change({ id: "shared", path: "src/shared.ts", excerpt: "+s", lines: ["+s"] }),
       ],
       test: [],
-      // Only "c1" is primary here; "shared" is owned by another category.
-      primaryChangeIds: new Set(["c1"]),
-      changeOwners: new Map([["shared", { ownerCategoryId: "c3", ownerTitle: "Shared helpers" }]]),
+      // "c1" is primary here (owned by this category "c1"); "shared" is owned by another.
+      changeOwners: new Map([
+        ["c1", { ownerCategoryId: "c1", ownerTitle: "Retry logic" }],
+        ["shared", { ownerCategoryId: "c3", ownerTitle: "Shared helpers" }],
+      ]),
     };
 
     const prompt = buildExplainPrompt(input);

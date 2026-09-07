@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Category } from "../categories/types.js";
-import type { CategoryChangeSet } from "../classification/group.js";
+import type { CategoryChangeSet, ChangeOwner } from "../classification/group.js";
 import type { ClassifiableChange } from "../classification/types.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
 import { serializeSnippetRef } from "./markup.js";
@@ -31,12 +31,22 @@ function categorySet(
   production: ClassifiableChange[],
   test: ClassifiableChange[],
 ): CategoryChangeSet {
-  return {
-    category,
-    production,
-    test,
-    primaryChangeIds: new Set([...production, ...test].map((c) => c.id)),
-  };
+  return { category, production, test };
+}
+
+/** Owner map as grouping would build it (docs/adr/0015): the first set (in order) containing a
+ * change owns it. Lets a test derive `changeOwners` from its `categorySets` instead of hand-
+ * maintaining both. */
+function ownersFor(sets: CategoryChangeSet[]): Map<string, ChangeOwner> {
+  const owners = new Map<string, ChangeOwner>();
+  for (const set of sets) {
+    for (const c of [...set.production, ...set.test]) {
+      if (!owners.has(c.id)) {
+        owners.set(c.id, { ownerCategoryId: set.category.id, ownerTitle: set.category.name });
+      }
+    }
+  }
+  return owners;
 }
 
 function refFor(c: ClassifiableChange): string {
@@ -59,14 +69,18 @@ describe("explainCategories", () => {
     };
     const changeA = change("a1", "src/a.ts");
     const changeB = change("b1", "src/b.ts");
+    const categorySets = [
+      categorySet(categoryA, [changeA], []),
+      categorySet(categoryB, [changeB], []),
+    ];
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
-      categorySets: [categorySet(categoryA, [changeA], []), categorySet(categoryB, [changeB], [])],
+      changeOwners: ownersFor(categorySets),
+      categorySets,
     };
 
     const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
@@ -100,14 +114,15 @@ describe("explainCategories", () => {
     };
     const production = [change("c1", "src/fetch.ts", { start: 10, end: 12 })];
     const test = [change("c2", "src/fetch.test.ts", { start: 1, end: 2 })];
+    const categorySets = [categorySet(category, production, test)];
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
-      categorySets: [categorySet(category, production, test)],
+      changeOwners: ownersFor(categorySets),
+      categorySets,
     };
 
     let call = 0;
@@ -160,15 +175,12 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
-      categorySets: [
-        {
-          category,
-          production: [primary, secondary],
-          test: [],
-          primaryChangeIds: new Set(["owned"]),
-        },
-      ],
+      // "owned" is primary here (owner === this category "c2"); "shared" is owned elsewhere.
+      changeOwners: new Map([
+        ["owned", { ownerCategoryId: "c2", ownerTitle: "Mixed" }],
+        ["shared", { ownerCategoryId: "c1", ownerTitle: "Other" }],
+      ]),
+      categorySets: [{ category, production: [primary, secondary], test: [] }],
     };
 
     const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
@@ -188,8 +200,8 @@ describe("explainCategories", () => {
   });
 
   it("runs an all-secondary category but skips its review loop (docs/adr/0015)", async () => {
-    // Every change is owned earlier (empty `primaryChangeIds`), so the category is not dropped
-    // and still produces backlink output — but the sonnet review+amend cycle is skipped.
+    // Every change is owned earlier (this category owns none), so it is not dropped and still
+    // produces backlink output — but the sonnet review+amend cycle is skipped.
     const category: Category = {
       id: "c2",
       name: "All secondary",
@@ -204,14 +216,7 @@ describe("explainCategories", () => {
       baseSha: "base-sha",
       headSha: "head-sha",
       changeOwners: new Map([["shared", { ownerCategoryId: "c1", ownerTitle: "Owner" }]]),
-      categorySets: [
-        {
-          category,
-          production: [secondary],
-          test: [],
-          primaryChangeIds: new Set<string>(),
-        },
-      ],
+      categorySets: [{ category, production: [secondary], test: [] }],
     };
 
     const info = vi.fn();
@@ -254,14 +259,15 @@ describe("explainCategories", () => {
       attention: "normal",
     };
     const production = [change("c1", "src/diagram.ts")];
+    const categorySets = [categorySet(category, production, [])];
     const input: ExplainCategoriesInput = {
       prTitle: "Add a diagram",
       prDescription: "Illustrates the flow.",
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
-      categorySets: [categorySet(category, production, [])],
+      changeOwners: ownersFor(categorySets),
+      categorySets,
     };
 
     const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
@@ -296,14 +302,15 @@ describe("explainCategories", () => {
       attention: "normal",
     };
     const production = [change("c1", "src/diagram.ts")];
+    const categorySets = [categorySet(category, production, [])];
     const input: ExplainCategoriesInput = {
       prTitle: "Add a diagram",
       prDescription: "Illustrates the flow.",
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
-      categorySets: [categorySet(category, production, [])],
+      changeOwners: ownersFor(categorySets),
+      categorySets,
     };
 
     const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
@@ -345,7 +352,7 @@ describe("explainCategories", () => {
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
+      changeOwners: ownersFor(categories),
       categorySets: categories,
     };
 
@@ -390,17 +397,18 @@ describe("explainCategories", () => {
       description: "Second category.",
       attention: "normal",
     };
+    const categorySets = [
+      categorySet(categoryA, [change("a1", "src/a.ts")], []),
+      categorySet(categoryB, [change("b1", "src/b.ts")], []),
+    ];
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
-      categorySets: [
-        categorySet(categoryA, [change("a1", "src/a.ts")], []),
-        categorySet(categoryB, [change("b1", "src/b.ts")], []),
-      ],
+      changeOwners: ownersFor(categorySets),
+      categorySets,
     };
     const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("Reply with approved")) {
@@ -438,17 +446,18 @@ describe("explainCategories", () => {
       description: "Second category.",
       attention: "normal",
     };
+    const categorySets = [
+      categorySet(categoryA, [change("a1", "src/a.ts")], []),
+      categorySet(categoryB, [change("b1", "src/b.ts")], []),
+    ];
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
-      categorySets: [
-        categorySet(categoryA, [change("a1", "src/a.ts")], []),
-        categorySet(categoryB, [change("b1", "src/b.ts")], []),
-      ],
+      changeOwners: ownersFor(categorySets),
+      categorySets,
     };
     const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("First category.")) {
@@ -487,17 +496,18 @@ describe("explainCategories", () => {
       description: "Nothing here.",
       attention: "normal",
     };
+    const categorySets = [
+      categorySet(categoryA, [change("a1", "src/a.ts")], []),
+      categorySet(categoryEmpty, [], []),
+    ];
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
-      categorySets: [
-        categorySet(categoryA, [change("a1", "src/a.ts")], []),
-        categorySet(categoryEmpty, [], []),
-      ],
+      changeOwners: ownersFor(categorySets),
+      categorySets,
     };
     const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("Reply with approved")) {
@@ -537,17 +547,18 @@ describe("explainCategories", () => {
       description: "Second category.",
       attention: "normal",
     };
+    const categorySets = [
+      categorySet(categoryA, [change("a1", "src/a.ts")], []),
+      categorySet(categoryB, [change("b1", "src/b.ts")], []),
+    ];
     const input: ExplainCategoriesInput = {
       prTitle: "Add retry logic",
       prDescription: "Retries transient failures.",
       diffThreshold: 100,
       baseSha: "base-sha",
       headSha: "head-sha",
-      changeOwners: new Map(),
-      categorySets: [
-        categorySet(categoryA, [change("a1", "src/a.ts")], []),
-        categorySet(categoryB, [change("b1", "src/b.ts")], []),
-      ],
+      changeOwners: ownersFor(categorySets),
+      categorySets,
     };
     const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("First category.")) {

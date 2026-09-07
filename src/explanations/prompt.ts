@@ -13,23 +13,21 @@ const PRODUCTION_CHECKLIST = renderPrompt("explain-production-checklist", {});
 /** Text lives in src/prompts/explain-test-checklist.md (docs/adr/0006). */
 const TEST_CHECKLIST = renderPrompt("explain-test-checklist", {});
 
-/** The primary/owner context {@link formatChange} needs to annotate secondary changes
- * (docs/adr/0015): which changes this category owns, and every change's owning category. */
+/** The owner context {@link formatChange} needs to annotate secondary changes (docs/adr/0015):
+ * the category being explained and every change's owning category. */
 interface SecondaryRefContext {
-  primaryChangeIds: ReadonlySet<string>;
+  categoryId: string;
   owners: ReadonlyMap<string, ChangeOwner>;
 }
 
 /** Inline note appended to a change that is *secondary* in the category being explained
- * (docs/adr/0015): owned and explained in full by an earlier category, so it must be linked here
- * rather than re-snippeted. Empty for a primary change (or one with no known owner). The catref
- * must stay attributed — a bare `{{catref}}` trips the prompt loader (docs/adr/0006). */
+ * (docs/adr/0015): owned and explained in full by another category, so it must be linked here
+ * rather than re-snippeted. Empty when this category owns the change (it's primary) — and, for
+ * safety, when the change has no owner, which can't happen for a matched change. The catref must
+ * stay attributed — a bare `{{catref}}` trips the prompt loader (docs/adr/0006). */
 function secondaryAnnotation(change: ClassifiableChange, secondary: SecondaryRefContext): string {
-  if (secondary.primaryChangeIds.has(change.id)) {
-    return "";
-  }
   const owner = secondary.owners.get(change.id);
-  if (!owner) {
+  if (!owner || owner.ownerCategoryId === secondary.categoryId) {
     return "";
   }
   return ` — already explained under "${owner.ownerTitle}": don't add a snippet; say in one line what it does here and link with {{catref id="${owner.ownerCategoryId}"}}`;
@@ -90,7 +88,7 @@ function formatChanges(
  */
 export function buildExplainPrompt(input: ExplainCategoryInput): string {
   const secondary: SecondaryRefContext = {
-    primaryChangeIds: input.primaryChangeIds,
+    categoryId: input.category.id,
     owners: input.changeOwners,
   };
   return renderPrompt("explain", {
@@ -135,7 +133,7 @@ export function buildCoverageAmendPrompt(missing: ClassifiableChange[]): string 
  */
 export function buildReviewPrompt(input: ReviewPromptInput): string {
   const secondary: SecondaryRefContext = {
-    primaryChangeIds: input.primaryChangeIds,
+    categoryId: input.category.id,
     owners: input.changeOwners,
   };
   return renderPrompt("review", {

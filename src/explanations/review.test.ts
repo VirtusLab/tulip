@@ -40,8 +40,8 @@ function baseInput(overrides: Partial<ReviewLoopInput> = {}): ReviewLoopInput {
     category: CATEGORY,
     production: [CHANGE],
     test: [],
-    primaryChangeIds: new Set(["c1"]),
-    changeOwners: new Map(),
+    // CHANGE ("c1") is primary in CATEGORY ("c1") by default; a test overrides this to secondary.
+    changeOwners: new Map([["c1", { ownerCategoryId: "c1", ownerTitle: "Retry logic" }]]),
     diffThreshold: 100,
     baseSha: "base-sha",
     headSha: "head-sha",
@@ -159,7 +159,7 @@ describe("reviewAndAmend", () => {
   });
 
   it("does not re-impose snippet coverage on a secondary change after an amend", async () => {
-    // The change is secondary here (empty `primaryChangeIds`), so the post-amend coverage check
+    // The change is secondary here (owned by another category), so the post-amend coverage check
     // must not force a snippet for it — even though the amended markdown drops every ref
     // (docs/adr/0015: relaxing only the initial explain would let an amend round re-force it).
     let call = 0;
@@ -176,9 +176,12 @@ describe("reviewAndAmend", () => {
       return envelope({ approved: true, issues: [] }, "review-2");
     });
 
-    const result = await reviewAndAmend(baseInput({ primaryChangeIds: new Set<string>() }), {
-      runClaudeProcess,
-    });
+    const result = await reviewAndAmend(
+      baseInput({
+        changeOwners: new Map([["c1", { ownerCategoryId: "other", ownerTitle: "Other" }]]),
+      }),
+      { runClaudeProcess },
+    );
 
     // Exactly review, amend, review — no coverage-repair resume in between.
     expect(runClaudeProcess).toHaveBeenCalledTimes(3);

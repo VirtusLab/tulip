@@ -16,13 +16,11 @@ export interface ExplainCategoryInput {
   production: ClassifiableChange[];
   /** This category's test-code changes. */
   test: ClassifiableChange[];
-  /** Ids of the changes this category is the *primary* owner of (docs/adr/0015) — the only ones
-   * snippet coverage is required for here. Its remaining changes (in `production`/`test` but not
-   * in this set) are secondary: their owning category explains them, this one only backlinks. */
-  primaryChangeIds: ReadonlySet<string>;
-  /** Every non-ignored change's primary owning category, keyed by change id (docs/adr/0015) —
-   * the page-wide map from grouping (src/classification/group.js), so a secondary change here can
-   * be annotated with its owner's title and backlinked to it with `{{catref id="<owner id>"}}`. */
+  /** Every non-ignored change's primary owning category, keyed by change id (docs/adr/0015) — the
+   * page-wide map from grouping (src/classification/group.js). Snippet coverage is required only
+   * for changes this category owns (`isPrimary` against `category.id`); its remaining changes are
+   * secondary — their owner explains them, this one annotates and backlinks them with
+   * `{{catref id="<owner id>"}}`. */
   changeOwners: ReadonlyMap<string, ChangeOwner>;
   /** Changes whose diff excerpt spans more lines than this are given as file+side+line-range
    * references only, not verbatim (see src/pipeline/run.js's PipelineOptions). */

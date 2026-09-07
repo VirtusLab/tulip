@@ -1,4 +1,4 @@
-import type { CategoryChangeSet, ChangeOwner } from "../classification/group.js";
+import { type CategoryChangeSet, type ChangeOwner, isPrimary } from "../classification/group.js";
 import { createLogger } from "../logging/logger.js";
 import { verifySnippetCoverage } from "./coverage.js";
 import { explainCategory } from "./explain.js";
@@ -115,7 +115,7 @@ async function explainOneCategory(
   // change is explained by its owner and merely backlinked here, so forcing a snippet for it
   // would re-impose the duplication the ledger removes.
   const primaryChanges = [...set.production, ...set.test].filter((change) =>
-    set.primaryChangeIds.has(change.id),
+    isPrimary(input.changeOwners, change.id, set.category.id),
   );
 
   logger.info(`explaining category "${set.category.name}"...`);
@@ -128,7 +128,6 @@ async function explainOneCategory(
         category: set.category,
         production: set.production,
         test: set.test,
-        primaryChangeIds: set.primaryChangeIds,
         changeOwners: input.changeOwners,
         diffThreshold: input.diffThreshold,
         baseSha: input.baseSha,
@@ -149,7 +148,7 @@ async function explainOneCategory(
     // explain pass to emit those backlinks; a full sonnet review+amend cycle would spend the most
     // cost on the least original output, so skip review for it — the cheaper of the two options
     // the ADR leaves open. Coverage above already passed trivially (empty primary set).
-    const reviewed = await reviewOrSkip(input, set, covered, deps);
+    const reviewed = await reviewOrSkip(input, set, covered, primaryChanges.length === 0, deps);
 
     // Runs after the review-amend loop (not before) since an amend can itself change a diagram —
     // this is the FINAL markdown that reaches rendering, so it's the one that must be validated
@@ -168,16 +167,17 @@ async function explainOneCategory(
   }
 }
 
-/** Runs the review+amend loop, unless this is an all-secondary category (empty
- * `primaryChangeIds`) — then it keeps the explanation as-is and logs at info level (see the
+/** Runs the review+amend loop, unless this is an all-secondary category (`allSecondary`: it owns
+ * none of its changes) — then it keeps the explanation as-is and logs at info level (see the
  * §all-secondary note at the call site). `covered` is {@link verifySnippetCoverage}'s result. */
 async function reviewOrSkip(
   input: ExplainCategoriesInput,
   set: CategoryChangeSet,
   covered: { markdown: string; sessionId: string },
+  allSecondary: boolean,
   deps: ReviewLoopDeps,
 ): Promise<ReviewLoopResult> {
-  if (set.primaryChangeIds.size === 0) {
+  if (allSecondary) {
     const logger = deps.logger ?? createLogger();
     logger.info(
       `category "${set.category.name}" has only secondary changes; ` +
@@ -192,7 +192,6 @@ async function reviewOrSkip(
       category: set.category,
       production: set.production,
       test: set.test,
-      primaryChangeIds: set.primaryChangeIds,
       changeOwners: input.changeOwners,
       diffThreshold: input.diffThreshold,
       baseSha: input.baseSha,

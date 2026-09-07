@@ -1,3 +1,4 @@
+import { isPrimary } from "../classification/group.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession, runSession } from "../claude/session.js";
 import { config } from "../config.js";
@@ -52,7 +53,7 @@ export async function reviewAndAmend(
   // Post-amend coverage relaxes to primaries at THIS call site too (docs/adr/0015): relaxing only
   // the initial explain would let an amend round silently re-force a snippet for a secondary change.
   const primaryChanges = [...input.production, ...input.test].filter((change) =>
-    input.primaryChangeIds.has(change.id),
+    isPrimary(input.changeOwners, change.id, input.category.id),
   );
   let markdown = input.markdown;
   let explainSessionId = input.explainSessionId;
@@ -69,7 +70,6 @@ export async function reviewAndAmend(
           category: input.category,
           production: input.production,
           test: input.test,
-          primaryChangeIds: input.primaryChangeIds,
           changeOwners: input.changeOwners,
           diffThreshold: input.diffThreshold,
           baseSha: input.baseSha,
