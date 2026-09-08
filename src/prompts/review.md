@@ -45,7 +45,8 @@ Review the explanation for:
 - earned references — every snippet has prose saying what it is and why it matters. Flag
   snippets that appear only to satisfy coverage and folded snippets never explained — but a
   trivial change earns a proportionate phrase, not a paragraph; a one-line mention of a trivial
-  tweak is enough and is not a violation. A change marked "already explained under ..." is
+  tweak is enough and is not a violation, and trivial sibling snippets may share one sentence —
+  don't require separate prose for each. A change marked "already explained under ..." is
   reference-only: it is owned by another category, so a one-line note plus a
   {{catref id="..."}} backlink and no snippet is correct — don't flag it as missing or
   under-explained (a focused slice for it is allowed but not required).

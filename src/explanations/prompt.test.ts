@@ -70,7 +70,7 @@ describe("buildExplainPrompt", () => {
     expect(prompt).toMatch(/whole test file that verifies production code changed elsewhere/i);
     expect(prompt).toMatch(/generated files a tool emits and no one hand-edits/i);
     expect(prompt).toMatch(/Say each thing once within this explanation/i);
-    expect(prompt).toMatch(/The attention rating is your budget/i);
+    expect(prompt).toMatch(/The attention rating governs length/i);
   });
 
   it("annotates a secondary change with its owner and a catref backlink, but not a primary one", () => {

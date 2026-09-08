@@ -32,16 +32,23 @@ your final answer matters.
 Then write the explanation as markdown, interleaving prose, Mermaid diagrams (fenced with
 ```mermaid), and snippet references.
 
+The attention rating governs length. A Read-closely category goes deep; a Read-through or Skim
+category stays short and folds almost everything. Where any instruction below would add material
+the rating doesn't warrant, the rating wins — it governs prose depth and what you unfold, not
+whether a change is snippeted; on a tight rating you fold a snippet, not drop it.
+
 Structure it top-down. Open, before any snippet, with the big picture: in a few sentences, what
 this category does as a whole and how the changed pieces fit together. Where the flow of calls
 is worth a picture, put an orienting diagram here — a call-sequence or flow/architecture diagram,
 before/after wherever the flow changed — so the reviewer grasps the shape before the parts. Keep
-this a lead-in, not its own "## " section. ONLY THEN drill into the individual changes, each
-one's interface then its code; point back to the overview for how a change fits rather than
-re-narrating the flow. Never lead with a low-level detail the reviewer can't yet place. Scale the
-overview to the attention budget — a sentence or two for a Skim or single-file category, and no
-diagram when the flow is trivial. The first diagram orients the whole category; later ones
-illustrate a specific mechanism.
+this a lead-in, not its own "## " section. ONLY THEN drill into the individual changes: for each,
+lead with its interface in prose — name, parameters, return type, what it promises, and what its
+body does at a high level (a sentence, a short numbered list, or pseudocode often carries this
+better than the code, especially for a large method) — then its code. Point back to the overview
+for how a change fits rather than re-narrating the flow, and never lead with a low-level detail
+the reviewer can't yet place. Scale both the overview and the per-change prose to the rating — a
+sentence or two for a Skim or single-file category, and no diagram when the flow is trivial. The
+first diagram orients the whole category; later ones illustrate a specific mechanism.
 
 Write "## ..." sections only for facets that have something to explain:
 - a section on the main change — name it for what it covers, not "production";
@@ -55,19 +62,12 @@ touch that facet; don't call that out with a "none" of your own.
 
 {{testChecklist}}
 
-It's up to you to judge which of the above points actually apply to this category — skip what
-doesn't, don't force it.
-
-Lead with the interface. For a changed method, say in prose what it is — name,
-parameters, return type, what it promises — and what its body does at a high
-level. A sentence, a numbered list, a before/after call-sequence diagram, or
-short pseudocode often carries this better than the code, especially for a large
-method.
-
 EVERY change listed above that is NOT marked "already explained under ..." MUST
 appear as a snippet reference — that is how the reviewer sees the actual code. One
 snippet per change, holding the real code; the interface stays in your prose, not in
-a snippet of its own.
+a snippet of its own. Coverage is that one reference plus prose proportionate to the
+change: a folded snippet with a single clause fully covers a routine change, and
+trivial sibling changes can share a sentence. It does not mean a paragraph each.
 
 A change marked "already explained under <category>" is owned and explained in full
 by that other category. Don't snippet it here: in one line, say what it does in this
@@ -75,9 +75,8 @@ category's context, then link to its home with a `{{catref id="<that category's 
 backlink — use the exact id from the annotation. You MAY still show a focused slice
 if this category genuinely needs the code through its own lens, but it isn't required.
 
-Fold by default. Write unfold="no"; a folded snippet still satisfies coverage
-and stays one click from the real code. Write unfold="yes" ONLY when one of
-these named triggers applies to that change:
+Fold by default. Write unfold="no"; a folded snippet stays one click from the real
+code. Write unfold="yes" ONLY when one of these named triggers applies to that change:
 
 - SMALL — the changed body is about ten lines or fewer; a fold would trade a click
   for almost nothing hidden.
@@ -115,10 +114,8 @@ rather than restating it. Explain only THIS category's concern — don't re-expl
 the surrounding module or the rest of the PR. Name a trivial doc or wording tweak
 in a phrase; don't walk through it.
 
-The attention rating is your budget. A Read-closely category may show more real
-code unfolded and go deeper. A Read-through or Skim category stays short and folds
-almost everything, showing only the snippets a named trigger demands. The rating
-tunes how much ROUTINE code to show; a SMALL, SUBTLE, or CORE body stays unfolded
-at any rating.
+A named trigger still wins over the rating: a SMALL, SUBTLE, or CORE body stays unfolded at any
+rating.
 
-Never leave a snippet without prose saying what it is and why it's there.
+Every snippet gets prose saying what it is and why — one clause for a routine one, no more than
+the change earns.
