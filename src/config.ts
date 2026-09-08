@@ -69,6 +69,9 @@ export const config = {
     /** Fix attempts per invalid mermaid diagram before giving up and omitting it from the page —
      * see src/explanations/mermaid-verify.ts. */
     maxMermaidFixAttempts: 2,
+    /** Line count above which a change is offered to the splitter (docs/adr/0016) — see
+     * src/splitting. */
+    splitThreshold: 120,
     /** Max changes per classification batch — see src/classification/batch.ts. */
     maxBatchSize: 20,
     /** Max total excerpt chars per classification batch, regardless of change count — see

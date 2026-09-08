@@ -41,3 +41,11 @@ export interface FileDiff {
 export interface ParsedDiff {
   files: FileDiff[];
 }
+
+/** The canonical `Change.id` string for a range on one side of a file: `${path}:${side}:${start}-${end}`
+ * (docs/adr/0005). The single source of this format — both the diff parser (src/diff/parse-diff.ts)
+ * and the splitter (src/splitting/partition.ts) build ids through it, so sub-changes are keyed
+ * identically to parser-produced ones. */
+export function changeId(path: string, side: DiffSide, range: LineRange): string {
+  return `${path}:${side}:${range.start}-${range.end}`;
+}

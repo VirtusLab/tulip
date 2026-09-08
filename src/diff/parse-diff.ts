@@ -1,4 +1,12 @@
-import type { Change, DiffSide, FileDiff, FileStatus, LineRange, ParsedDiff } from "./change.js";
+import {
+  type Change,
+  changeId,
+  type DiffSide,
+  type FileDiff,
+  type FileStatus,
+  type LineRange,
+  type ParsedDiff,
+} from "./change.js";
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 
@@ -210,5 +218,5 @@ function parseHunkBody(
 }
 
 function makeChange(path: string, side: DiffSide, range: LineRange, lines: string[]): Change {
-  return { id: `${path}:${side}:${range.start}-${range.end}`, path, side, range, lines };
+  return { id: changeId(path, side, range), path, side, range, lines };
 }
