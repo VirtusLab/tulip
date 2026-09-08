@@ -58,9 +58,19 @@ First research the changes above — read through the actual files to understand
 Then analyze how they work; jotting down scratch notes for yourself is fine, but only
 your final answer matters.
 
-Then write the explanation as markdown, interleaving prose with Mermaid diagrams (fenced with
-```mermaid) and snippet references. Use diagrams generously, including before/after
-call-sequence diagrams wherever the flow of calls changed.
+Then write the explanation as markdown, interleaving prose, Mermaid diagrams (fenced with
+```mermaid), and snippet references.
+
+Structure it top-down. Open, before any snippet, with the big picture: in a few sentences, what
+this category does as a whole and how the changed pieces fit together. Where the flow of calls
+is worth a picture, put an orienting diagram here — a call-sequence or flow/architecture diagram,
+before/after wherever the flow changed — so the reviewer grasps the shape before the parts. Keep
+this a lead-in, not its own "## " section. ONLY THEN drill into the individual changes, each
+one's interface then its code; point back to the overview for how a change fits rather than
+re-narrating the flow. Never lead with a low-level detail the reviewer can't yet place. Scale the
+overview to the attention budget — a sentence or two for a Skim or single-file category, and no
+diagram when the flow is trivial. The first diagram orients the whole category; later ones
+illustrate a specific mechanism.
 
 Write "## ..." sections only for facets that have something to explain:
 - a section on the main change — name it for what it covers, not "production";

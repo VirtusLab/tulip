@@ -30,6 +30,11 @@ everything else there goes in the main section.
 against the change list above.
 
 Review the explanation for:
+- top-down structure — does it open with the big picture (how the pieces fit end-to-end, with an
+  orienting diagram where the flow warrants one) before drilling into individual changes? Flag
+  leading with a specific method or snippet before the overall shape is set, or an orienting
+  diagram buried at the end. Scale to the rating — a Skim or trivial single-file category needs
+  only a sentence or two, and no diagram when the flow is trivial.
 - clarity — is it easy to follow for a reviewer who hasn't seen the code yet?
 - conciseness and minimalism — is it concise and minimal? Flag over-explaining the obvious,
   restating what the code plainly shows, and dwelling on trivial or boilerplate parts. Every
