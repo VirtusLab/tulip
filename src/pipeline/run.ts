@@ -15,6 +15,7 @@ import { fetchPrMetadata, type PrMetadata } from "../github/pr-fetcher.js";
 import type { PrRef } from "../github/pr-url.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
+import { splitLargeChanges } from "../splitting/orchestrate.js";
 import { formatVersion } from "../version.js";
 
 /** Input the pipeline needs to process a PR. Constructed by callers (e.g. the CLI). */
@@ -40,6 +41,7 @@ export interface PipelineDeps {
   materializeChangeArtifacts?: typeof materializeChangeArtifacts;
   generateCategories?: typeof generateCategories;
   reviewAndAmendCategories?: typeof reviewAndAmendCategories;
+  splitLargeChanges?: typeof splitLargeChanges;
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
   renderExplanations?: typeof renderExplanations;
@@ -75,6 +77,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     deps.materializeChangeArtifacts ?? materializeChangeArtifacts;
   const doGenerateCategories = deps.generateCategories ?? generateCategories;
   const doReviewAndAmendCategories = deps.reviewAndAmendCategories ?? reviewAndAmendCategories;
+  const doSplitLargeChanges = deps.splitLargeChanges ?? splitLargeChanges;
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
@@ -153,11 +156,24 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
         categoryReview.categories.map((category) => category.name).join(", "),
     );
 
+    // Splits over-threshold changes into per-concern sub-changes (docs/adr/0016), so
+    // classification can route each piece to its own category. Coverage is guaranteed in code, so
+    // this only ever refines the diff — everything downstream sees more, smaller changes. Only
+    // classification is given the split diff; grouping/explain/render inherit the sub-changes via
+    // the classification result, and the file-level uses of `diff` below stay on the original.
+    logger.info("splitting large changes...");
+    const splitDiff = await runPhase("splitting large changes", () =>
+      doSplitLargeChanges(
+        { diff, categories: categoryReview.categories },
+        { cwd: checkoutDir, usage },
+      ),
+    );
+
     logger.info("phase 2: classifying changes...");
     const classification = await runPhase("phase 2 (classifying changes)", () =>
       doClassifyChanges(
         {
-          diff,
+          diff: splitDiff,
           categories: categoryReview.categories,
           phase1SessionId: categoryReview.sessionId,
         },

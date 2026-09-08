@@ -5,6 +5,7 @@ import { IncompleteCoverageError } from "../classification/coverage.js";
 import type { ClassifyChangesResult } from "../classification/orchestrate.js";
 import { ClaudeBinaryMissingError, ClaudeOutputError } from "../claude/errors.js";
 import type { UsageLedger } from "../claude/usage.js";
+import type { ParsedDiff } from "../diff/change.js";
 import { SnippetCoverageError } from "../explanations/coverage.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import type { PrCheckout } from "../github/checkout.js";
@@ -131,6 +132,10 @@ function baseDeps(order: string[] = []) {
         sessionId: "s1",
       };
     }),
+    splitLargeChanges: vi.fn(async ({ diff }: { diff: ParsedDiff }): Promise<ParsedDiff> => {
+      order.push("split");
+      return diff;
+    }),
     classifyChanges: vi.fn(async () => {
       order.push("phase2");
       return classificationResult();
@@ -223,6 +228,7 @@ describe("run", () => {
       "materialize",
       "phase1",
       "phase1-review",
+      "split",
       "phase2",
       "phase3",
       "render",
@@ -300,6 +306,7 @@ describe("run", () => {
     const sharedUsage = phaseRunnerDeps(deps.generateCategories).usage;
     expect(sharedUsage).toBeDefined();
     expect(phaseRunnerDeps(deps.reviewAndAmendCategories).usage).toBe(sharedUsage);
+    expect(phaseRunnerDeps(deps.splitLargeChanges).usage).toBe(sharedUsage);
     expect(phaseRunnerDeps(deps.classifyChanges).usage).toBe(sharedUsage);
     expect(phaseRunnerDeps(deps.explainCategories).usage).toBe(sharedUsage);
 
@@ -528,6 +535,28 @@ describe("run", () => {
         ],
         phase1SessionId: "s1-amended",
       }),
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
+    );
+  });
+
+  it("splits large changes between category review and classification, then classifies the split diff", async () => {
+    const deps = baseDeps();
+    const splitDiff: ParsedDiff = { files: [] };
+    deps.splitLargeChanges = vi.fn(async (): Promise<ParsedDiff> => splitDiff);
+
+    await run(options(), deps);
+
+    expect(deps.splitLargeChanges).toHaveBeenCalledWith(
+      {
+        diff: expect.objectContaining({ files: expect.any(Array) }),
+        categories: [
+          { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" },
+        ],
+      },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
+    );
+    expect(deps.classifyChanges).toHaveBeenCalledWith(
+      expect.objectContaining({ diff: splitDiff }),
       { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
     );
   });
