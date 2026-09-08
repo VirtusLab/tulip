@@ -80,6 +80,10 @@ export const config = {
     /** Max total excerpt chars per classification batch, regardless of change count — see
      * src/classification/batch.ts. */
     maxBatchExcerptChars: 20_000,
+    /** Max total *full* diff-text chars per split batch (docs/adr/0016) — see src/splitting.
+     * Distinct from `maxBatchExcerptChars`, which caps *truncated* classification excerpts; the
+     * splitter sends untruncated lines, so it needs its own budget. */
+    maxSplitBatchDiffChars: 20_000,
     /** Diff excerpts longer than this are truncated (with a marker) before going into a
      * classification prompt — see src/classification/excerpt.ts. */
     maxExcerptChars: 2000,
