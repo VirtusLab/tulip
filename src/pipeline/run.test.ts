@@ -553,11 +553,22 @@ describe("run", () => {
           { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" },
         ],
       },
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
+      expect.objectContaining({
+        logger: deps.logger,
+        cwd: "/tmp/tulip-checkout",
+        usage: expect.any(Object),
+      }),
     );
+    // Only classification gets the split diff...
     expect(deps.classifyChanges).toHaveBeenCalledWith(
       expect.objectContaining({ diff: splitDiff }),
       { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
+    );
+    // ...grouping/render keep the ORIGINAL diff: fileStatuses is built from src/new.ts (added),
+    // not the empty split diff.
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({ fileStatuses: new Map([["src/new.ts", "added"]]) }),
+      expect.anything(),
     );
   });
 

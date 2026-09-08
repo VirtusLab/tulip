@@ -1,10 +1,10 @@
 import type { Category } from "../categories/types.js";
+import { batchBySize } from "../claude/batch.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { runSession } from "../claude/session.js";
 import { config } from "../config.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { createLogger, type Logger } from "../logging/logger.js";
-import { batchBySize } from "./batch.js";
 import { buildPartition, isSplitCandidate } from "./partition.js";
 import { buildSplitPrompt, type SplitCandidate } from "./prompt.js";
 import { SPLIT_SCHEMA, type SplitResponse } from "./wire.js";

@@ -1,11 +1,12 @@
 /**
  * Groups `items` into batches bounded by both a count (`maxCount`) and a total size (`maxChars`,
- * via `sizeOf`). A single item whose own size exceeds `maxChars` still forms its own (oversized)
- * batch rather than being dropped — so there is always at least one item per batch.
+ * via `sizeOf`), to keep each `claude` prompt within limits. A single item whose own size exceeds
+ * `maxChars` still forms its own (oversized) batch rather than being dropped — so there is always
+ * at least one item per batch.
  *
- * Generic on purpose: the classifier's batcher (src/classification/batch.ts) is typed to
- * `ClassifiableChange` (it reads `.excerpt`), whereas the splitter batches raw `Change`s by their
- * full diff text — the same size-bounding shape, different size source (docs/adr/0016).
+ * Shared by the phases that batch LLM calls: classification (src/classification/batch.ts, sized by
+ * excerpt length) and change-splitting (src/splitting, sized by full diff text) — same
+ * size-bounding shape, different size source.
  */
 export function batchBySize<T>(
   items: T[],

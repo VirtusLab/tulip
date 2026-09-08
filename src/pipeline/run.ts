@@ -165,7 +165,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     const splitDiff = await runPhase("splitting large changes", () =>
       doSplitLargeChanges(
         { diff, categories: categoryReview.categories },
-        { cwd: checkoutDir, usage },
+        { logger, cwd: checkoutDir, usage },
       ),
     );
 

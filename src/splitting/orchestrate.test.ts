@@ -101,10 +101,17 @@ describe("splitLargeChanges", () => {
     ]);
   });
 
-  it("leaves a batch's changes whole and logs when its session fails (fail-soft)", async () => {
-    const big = change("src/a.ts", "head", 1, 130);
-    const diff: ParsedDiff = { files: [file([big])] };
+  it("is fail-soft per batch: a failing batch is left whole and logged, other batches still split", async () => {
+    // 21 candidates -> batch A (20) then batch B (1). A succeeds and splits its first change; B
+    // throws. A's split must survive B's failure (the load-bearing half of fail-soft).
+    const changes = Array.from({ length: 21 }, (_, i) => change(`src/f${i}.ts`, "head", 1, 130));
+    const diff: ParsedDiff = { files: changes.map((c) => file([c])) };
+    let call = 0;
     const runClaudeProcess = vi.fn(async () => {
+      call++;
+      if (call === 1) {
+        return envelope({ splits: [{ changeId: changes[0]?.id ?? "", splitBefore: [50] }] });
+      }
       throw new Error("boom");
     });
     const messages: string[] = [];
@@ -115,7 +122,14 @@ describe("splitLargeChanges", () => {
       { runClaudeProcess, logger },
     );
 
-    expect(result.files[0]?.changes.map((c) => c.id)).toEqual([big.id]);
+    // Batch A's first change was split...
+    expect(result.files[0]?.changes.map((c) => c.id)).toEqual([
+      "src/f0.ts:head:1-49",
+      "src/f0.ts:head:50-130",
+    ]);
+    // ...and batch B's change (the 21st file) is left whole despite the failure.
+    expect(result.files[20]?.changes.map((c) => c.id)).toEqual(["src/f20.ts:head:1-130"]);
+    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
     expect(messages.some((m) => m.includes("failed") && m.includes("boom"))).toBe(true);
   });
 
