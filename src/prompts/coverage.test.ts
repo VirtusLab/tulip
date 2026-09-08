@@ -6,7 +6,8 @@ import { renderPrompt, templatePlaceholders } from "./loader.js";
 /**
  * For every prompt template (`src/prompts/*.md`), the exact set of vars its real TS call site
  * supplies — mirroring the calls in ../categories/generate.ts, ../categories/consult.ts,
- * ../classification/prompt.ts and ../explanations/prompt.ts. This is the runtime guard docs/adr
+ * ../classification/prompt.ts, ../explanations/prompt.ts and ../splitting/prompt.ts. This is the
+ * runtime guard docs/adr
  * /0006 trades for TS's lost compile-time field coupling: keep this manifest's key sets in sync
  * with both the `.md` files' `{{placeholders}}` and the real call sites — a mismatch in either
  * direction fails the test below via `renderPrompt`'s strict checking.
@@ -61,6 +62,7 @@ const CALL_SITE_VARS: Record<string, string[]> = {
     "checkoutAccess",
   ],
   "review-amend": ["issues"],
+  split: ["categoryList", "changes"],
 };
 
 const PROMPTS_DIR = fileURLToPath(new URL(".", import.meta.url));

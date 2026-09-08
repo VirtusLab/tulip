@@ -29,6 +29,9 @@ export const config = {
     categoryGeneration: "sonnet",
     /** Phase 2: classifies each change into a category — see src/classification/classify.ts. */
     classification: "haiku",
+    /** Proposes where to split large changes into per-concern sub-changes (docs/adr/0016) — see
+     * src/splitting. */
+    changeSplitting: "sonnet",
     /** Phase 3: writes a category's explanation — see src/explanations/explain.ts. */
     explanation: "opus",
     /** Phase 3: reviews/critiques an explanation draft — see src/explanations/review.ts. */
