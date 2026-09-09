@@ -3,10 +3,11 @@ import { type Category, nextCategoryId } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
+import type { ChangeSideContent } from "../diff/change.js";
 import { categoryNamesMatch } from "./category-match.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
 import { buildEscapeHatchResumePrompt, type EscapeHatchOutcome } from "./prompt.js";
-import { type ClassifiableChange, changeDisplayRange } from "./types.js";
+import type { ClassifiableChange } from "./types.js";
 import { buildClassifyBatchSchema, type ClassifyBatchResponse } from "./wire.js";
 
 /** Cap on new categories accepted per run — the spec sets no cap; this exists to bound runaway
@@ -106,7 +107,11 @@ async function consultOnEach(
       {
         sessionId: state.phase1SessionId,
         proposedName: entry.suggestedCategory.name,
-        change: { path: change.path, range: changeDisplayRange(change), excerpt: change.excerpt },
+        change: {
+          path: change.path,
+          range: ((change.head ?? change.base) as ChangeSideContent).range,
+          excerpt: change.excerpt,
+        },
       },
       deps,
     );

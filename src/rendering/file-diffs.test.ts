@@ -61,30 +61,6 @@ describe("loadFileDiffs", () => {
     expect(result.get("small.ts")?.embeddable).toBe(true);
   });
 
-  it("sets a file's status from the fileStatuses map, defaulting to modified when absent", async () => {
-    const checkout = stubCheckout({
-      "new.ts": { head: "line\n" },
-      "old.ts": { base: "line\n" },
-      "changed.ts": { base: "a\n", head: "b\n" },
-    });
-    const fileStatuses = new Map<string, "added" | "removed" | "modified" | "renamed">([
-      ["new.ts", "added"],
-      ["old.ts", "removed"],
-    ]);
-
-    const result = await loadFileDiffs(
-      ["new.ts", "old.ts", "changed.ts"],
-      checkout,
-      new Map(),
-      fileStatuses,
-    );
-
-    expect(result.get("new.ts")?.status).toBe("added");
-    expect(result.get("old.ts")?.status).toBe("removed");
-    // Not present in fileStatuses -> defaults to "modified".
-    expect(result.get("changed.ts")?.status).toBe("modified");
-  });
-
   it("fetches base content from the renamed-from path, keyed by the referenced (new) path", async () => {
     const checkout = stubCheckout({
       "old/name.ts": { base: "old\n" },

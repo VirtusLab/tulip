@@ -89,6 +89,35 @@ describe("findUnreferencedChanges", () => {
 
     expect(findUnreferencedChanges(ref, [change()])).toEqual([change()]);
   });
+
+  it("treats a both-sided modification as covered when one two-range ref spans both sides", () => {
+    const modification = change({
+      base: { range: { start: 2, end: 3 }, lines: ["-old"] },
+      head: { range: { start: 10, end: 14 }, lines: ["+new"] },
+    });
+    const ref = serializeSnippetRef({
+      path: "src/fetch.ts",
+      base: { start: 2, end: 3 },
+      head: { start: 10, end: 14 },
+      unfold: true,
+    });
+
+    expect(findUnreferencedChanges(ref, [modification])).toEqual([]);
+  });
+
+  it("flags a both-sided modification whose base side is left uncovered", () => {
+    const modification = change({
+      base: { range: { start: 2, end: 3 }, lines: ["-old"] },
+      head: { range: { start: 10, end: 14 }, lines: ["+new"] },
+    });
+    const ref = serializeSnippetRef({
+      path: "src/fetch.ts",
+      head: { start: 10, end: 14 },
+      unfold: true,
+    });
+
+    expect(findUnreferencedChanges(ref, [modification])).toEqual([modification]);
+  });
 });
 
 describe("verifySnippetCoverage", () => {

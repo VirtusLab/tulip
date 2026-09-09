@@ -383,20 +383,6 @@ describe("run", () => {
     );
   });
 
-  it("passes a file-status map to rendering, built from the parsed diff", async () => {
-    const deps = baseDeps();
-
-    await run(options(), deps);
-
-    // Default metadata() uses ADDED_FILE_DIFF (src/new.ts, added).
-    expect(deps.renderExplanations).toHaveBeenCalledWith(
-      expect.objectContaining({
-        fileStatuses: new Map([["src/new.ts", "added"]]),
-      }),
-      expect.anything(),
-    );
-  });
-
   it("logs the generated category names and phase progress", async () => {
     const deps = baseDeps();
 
@@ -557,16 +543,10 @@ describe("run", () => {
         usage: expect.any(Object),
       }),
     );
-    // Only classification gets the split diff...
+    // Only classification gets the split diff.
     expect(deps.classifyChanges).toHaveBeenCalledWith(
       expect.objectContaining({ diff: splitDiff }),
       { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
-    );
-    // ...grouping/render keep the ORIGINAL diff: fileStatuses is built from src/new.ts (added),
-    // not the empty split diff.
-    expect(deps.renderExplanations).toHaveBeenCalledWith(
-      expect.objectContaining({ fileStatuses: new Map([["src/new.ts", "added"]]) }),
-      expect.anything(),
     );
   });
 

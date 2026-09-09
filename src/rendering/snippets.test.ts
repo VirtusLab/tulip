@@ -72,6 +72,28 @@ describe("renderSnippetBlock — per-region alignment", () => {
     ]);
   });
 
+  it("shows real file line numbers, not 1-based region numbers, for a snippet past line 1", () => {
+    // A change deep in the file: line 40 modified. The rendered line-number cells must carry the
+    // real file line (40), guarding a regression where a split piece at line 40 renders as line 1.
+    const base = Array.from({ length: 41 }, (_, i) => (i === 39 ? "old" : `line${i + 1}`)).join(
+      "\n",
+    );
+    const head = Array.from({ length: 41 }, (_, i) => (i === 39 ? "new" : `line${i + 1}`)).join(
+      "\n",
+    );
+    const rows = buildAlignedDiff(`${base}\n`, `${head}\n`);
+    const ref: SnippetRef = {
+      path: "src/a.ts",
+      base: { start: 40, end: 40 },
+      head: { start: 40, end: 40 },
+      unfold: true,
+    };
+    const trs = parse(renderSnippetBlock(ref, fileDiffs(rows))).querySelectorAll("tr");
+    expect(trs).toHaveLength(1);
+    expect(trs[0]?.querySelector(".snippet-line-no.side-base")?.text).toBe("40");
+    expect(trs[0]?.querySelector(".snippet-line-no.side-head")?.text).toBe("40");
+  });
+
   it("renders an addition ref as a head-only single pane", () => {
     const rows = buildAlignedDiff("", "line1\nline2\n");
     const ref: SnippetRef = { path: "src/a.ts", head: { start: 1, end: 2 }, unfold: true };

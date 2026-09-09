@@ -31,8 +31,8 @@ function formatCandidate({ change, status }: SplitCandidate): string {
   const header = `- changeId: ${change.id}
   file: ${change.path} (${status})`;
   if (change.base && change.head) {
-    // Modification: show both sides. (Modifications pass through the splitter whole for now; the
-    // two-axis paired-boundary form arrives with the `boundaries` wire — docs/adr/0018.)
+    // Modification: show both sides' numbered lines so the model can place paired base/head
+    // split boundaries across them (docs/adr/0018).
     return `${header}
   base lines ${change.base.range.start}-${change.base.range.end}:
 ${formatNumberedLines(change.base)}

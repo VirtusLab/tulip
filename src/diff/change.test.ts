@@ -1,22 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  type ChangeSideContent,
-  changeDiffLines,
-  changeId,
-  changeKind,
-  makeChange,
-} from "./change.js";
+import { type ChangeSideContent, changeDiffLines, changeId, makeChange } from "./change.js";
 
 const base: ChangeSideContent = { range: { start: 2, end: 3 }, lines: ["-a", "-b"] };
 const head: ChangeSideContent = { range: { start: 2, end: 4 }, lines: ["+x", "+y", "+z"] };
-
-describe("changeKind", () => {
-  it("derives kind from the present sides", () => {
-    expect(changeKind({ head })).toBe("addition");
-    expect(changeKind({ base })).toBe("deletion");
-    expect(changeKind({ base, head })).toBe("modification");
-  });
-});
 
 describe("changeDiffLines", () => {
   it("returns base lines then head lines, keeping markers", () => {

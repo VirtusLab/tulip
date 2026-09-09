@@ -253,6 +253,18 @@ describe("parseHunkBody — pairing rule (docs/adr/0018)", () => {
     ]);
   });
 
+  it("counts base and head lines from their own divergent hunk starts", () => {
+    // Header advances base from 5, head from 40 — guards a baseLine/headLine counter swap.
+    expect(changesOf(["-old", "+new"], "@@ -5,2 +40,2 @@")).toEqual([
+      {
+        id: "src/f.ts:mod:5-5:40-40",
+        path: "src/f.ts",
+        base: { range: { start: 5, end: 5 }, lines: ["-old"] },
+        head: { range: { start: 40, end: 40 }, lines: ["+new"] },
+      },
+    ]);
+  });
+
   it("pairs a base-longer modification (-a -b -c +x) into one change", () => {
     expect(changesOf(["-a", "-b", "-c", "+x"])).toEqual([
       {

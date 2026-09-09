@@ -1,4 +1,4 @@
-import type { ChangeSideContent, FileStatus, LineRange } from "../diff/change.js";
+import type { ChangeSideContent, FileStatus } from "../diff/change.js";
 
 /**
  * Public domain model for phase 2 (change classification). Raw wire types and JSON schemas for
@@ -49,14 +49,4 @@ export function changeLocationRanges(change: Pick<ClassifiableChange, "base" | "
     parts.push(`head ${change.head.range.start}-${change.head.range.end}`);
   }
   return parts.join(", ");
-}
-
-/** A single range to display a change at (head if present, else base) — for consumers that still
- * need one range, e.g. the phase-1 category consultation (see ./escape-hatch.ts). */
-export function changeDisplayRange(change: Pick<ClassifiableChange, "base" | "head">): LineRange {
-  const side = change.head ?? change.base;
-  if (!side) {
-    throw new Error("A change must have at least one of base/head");
-  }
-  return side.range;
 }

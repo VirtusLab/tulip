@@ -79,7 +79,7 @@ describe("renderExplanations", () => {
     expect(checkout.getFileAtHead).toHaveBeenCalledWith("new/name.ts");
   });
 
-  it("renders a single head-only pane for an added file, per the fileStatuses map", async () => {
+  it("renders a single head-only pane for a head-only (addition) snippet ref", async () => {
     const ref = serializeSnippetRef({
       path: "src/new.ts",
       head: { start: 1, end: 1 },
@@ -97,7 +97,6 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         explanations: [explanation(`## Production code\n\n${ref}\n`)],
-        fileStatuses: new Map([["src/new.ts", "added"]]),
       },
       {
         checkout,

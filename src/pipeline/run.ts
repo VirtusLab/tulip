@@ -6,7 +6,7 @@ import { classifyChanges } from "../classification/orchestrate.js";
 import { prepareClassifiableChanges } from "../classification/prepare.js";
 import { ClaudeBinaryMissingError } from "../claude/errors.js";
 import { createUsageLedger, formatUsageSummary } from "../claude/usage.js";
-import type { FileStatus, ParsedDiff } from "../diff/change.js";
+import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
 import { createCheckout, type PrCheckout } from "../github/checkout.js";
@@ -206,7 +206,6 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.info("preparing output page...");
     const renamedFrom = buildRenamedFromMap(diff);
-    const fileStatuses = buildFileStatusMap(diff);
     // Safe: this phase only runs once "creating checkout" (above) has already succeeded, so
     // `checkout` is always assigned by this point — TypeScript just can't see that across the
     // try/finally.
@@ -218,7 +217,6 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           prUrl,
           explanations,
           renamedFrom,
-          fileStatuses,
         },
         { checkout: checkout as PrCheckout, logger },
       ),
@@ -316,12 +314,6 @@ function buildRenamedFromMap(diff: ParsedDiff): Map<string, string> {
       file.previousPath ? [[file.path, file.previousPath] as const] : [],
     ),
   );
-}
-
-/** Maps each file's path to its `FileDiff.status`, so rendering can pick a single- vs two-pane
- * snippet layout (see src/rendering/file-diffs.ts's `fileStatuses`). */
-function buildFileStatusMap(diff: ParsedDiff): Map<string, FileStatus> {
-  return new Map(diff.files.map((file) => [file.path, file.status]));
 }
 
 /**

@@ -17,7 +17,7 @@ export interface ChangeSideContent {
 /**
  * A single change within one file, carrying both sides of the diff it represents (docs/adr/0018).
  * At least one of `base`/`head` is present (enforced by {@link makeChange}); the kind is *derived*
- * from which sides are present, never stored — see {@link changeKind}:
+ * from which sides are present, never stored:
  *   - head only → an addition, base only → a deletion, both → an in-place modification.
  * A modification's `base` (removed) and `head` (added) runs together form one before/after diff, so
  * one change maps to exactly one rendered diff. Each change has a stable id (see {@link changeId}).
@@ -28,9 +28,6 @@ export interface Change {
   base?: ChangeSideContent;
   head?: ChangeSideContent;
 }
-
-/** A change's derived kind (see {@link changeKind}). */
-export type ChangeKind = "addition" | "deletion" | "modification";
 
 /** How a file was touched by the PR, per the diff's file header. */
 export type FileStatus = "added" | "removed" | "modified" | "renamed";
@@ -56,14 +53,6 @@ export interface ParsedDiff {
 export interface ChangeSides {
   base?: ChangeSideContent;
   head?: ChangeSideContent;
-}
-
-/** The kind of `change`, derived from which sides are present (never stored — docs/adr/0018). */
-export function changeKind(change: ChangeSides): ChangeKind {
-  if (change.base && change.head) {
-    return "modification";
-  }
-  return change.head ? "addition" : "deletion";
 }
 
 /** A change's diff lines as one unified run: base (removed) lines first, then head (added) lines,
