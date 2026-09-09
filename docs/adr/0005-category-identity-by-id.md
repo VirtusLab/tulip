@@ -90,11 +90,17 @@ backstop this all ultimately relies on regardless of how the CLI enforces it ups
   anything — only the id does — closing the coverage/grouping consistency gap this ADR exists
   to fix. Regression test: a change classified against a slightly different *name* is not
   covered; the same change classified against the correct *id* is.
-- **Known, separate limitation — not fixed here.** The classification change-unit is the diff
-  hunk / whole-added-file (see ADR 0003 and `src/classification/prepare.ts`). When phase 1
-  proposes categories that slice a single added file by method (e.g. splitting one `JsonFlow`
-  file into a `parse*` category and a `render*` category), classification can't honor that split
-  — a whole added file's change-unit can only carry one set of category assignments, so it lands
-  entirely under one category. This id-based matching fix makes coverage/grouping correct for
-  whatever the classifier actually decides; it doesn't give phase 1 or phase 2 finer-grained
-  change units to work with. Tracked as a follow-up, not addressed by this change.
+- **Known, separate limitation at the time — since addressed.** The classification change-unit
+  was the diff hunk / whole-added-file (see ADR 0003 and `src/classification/prepare.ts`), so a
+  category that sliced a single added file by method (e.g. one `JsonFlow` file into a `parse*`
+  and a `render*` category) couldn't be honored — the whole file carried one set of assignments.
+  ADR 0016 later added the splitter that carves an over-threshold change into per-concern
+  sub-changes routed independently, and ADR 0018 generalized it to any change kind (including
+  in-place modifications), giving phase 2 the finer-grained units this note said it lacked. The
+  id-based matching fix here remains the backstop that keeps coverage/grouping correct for
+  whatever the classifier decides on those units.
+
+- **Change ids follow the same code-assigned, opaque principle.** Beyond category ids, a
+  `Change`'s id (`src/diff/change.ts`) is also built only in code and never parsed — ADR 0016
+  reuses it for split sub-changes, and ADR 0018 adds the `path:mod:bs-be:hs-he` form for an
+  in-place modification.
