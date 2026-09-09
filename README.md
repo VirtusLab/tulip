@@ -21,16 +21,25 @@ sized to the job:
 2. **Categorize** (Sonnet). Split the changes into a few self-contained groups by
    concern — tests and docs ride along with the code they belong to. Each group
    gets an *attention* rating (Read closely / Read through / Skim); groups are
-   ordered most-important first.
-3. **Classify** (Haiku). Assign every change to one of those groups and mark it as
+   ordered most-important first. A second Sonnet pass reviews the groups and
+   amends them if the split is off.
+3. **Split large changes** (Sonnet). For each change over a size threshold, decide
+   whether it spans more than one group's concern and, if so, where to cut it —
+   turned into an exact partition in code, so no line is lost. This lets the next
+   step route the pieces of a big multi-concern file to different groups.
+4. **Classify** (Haiku). Assign every change to one or more groups and mark it as
    production or test code. Unfitting changes can propose a new group; generated
-   files and lockfiles are dropped. Every change is checked to be covered.
-4. **Explain** (Opus, one session per group). Write a prose explanation grounded in
-   the actual code — interleaving diagrams (Mermaid) and references to specific
-   line ranges. A separate pass (Sonnet) reviews each explanation for clarity and
-   correctness, every referenced snippet is checked to appear, and every diagram is
-   validated to actually render.
-5. **Render.** Assemble everything into one self-contained HTML page: light/dark
+   files and lockfiles are dropped; every change is checked to be covered. A change
+   that lands in several groups is *owned* by one — its highest-attention group —
+   and only linked from the others.
+5. **Explain** (Opus, one session per group; Sonnet review). Write a top-down prose
+   explanation grounded in the real code: open with the overall shape and an
+   orienting diagram, then drill into each change — leading with its interface,
+   folding routine code by default, and showing in full only what the group's
+   attention rating and the must-see cases demand. A change owned by another group
+   is linked, not re-explained. A Sonnet pass reviews each explanation; every
+   referenced snippet is checked to appear and every diagram validated to render.
+6. **Render.** Assemble everything into one self-contained HTML page: light/dark
    theme, floating table of contents, syntax-highlighted side-by-side diffs, and
    the attention badges.
 
