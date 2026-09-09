@@ -7,24 +7,31 @@ The pull request's categories are:
 - [c1] Parsing: Reads the wire format.
 - [c2] Rendering: Draws the output.
 
-Below are large changes. Each has a `changeId` and its diff lines, every line prefixed
-with its line number on the change's own side.
+Below are large changes. Each has a `changeId` and its diff lines. A change may have a
+base side (removed lines, before the PR), a head side (added lines, after), or both (an
+in-place rewrite); each side's lines are numbered on that side.
 
 For each change, decide whether it spans more than one category's concern. If it does,
-return the line numbers where a new concern begins — the first line of each new segment,
-in the change's own numbering. If the change is a single coherent concern, return an
-empty list.
+return the boundaries where a new concern begins — the first line of each new segment. If
+the change is a single coherent concern, return an empty list.
+
+Each boundary is an object:
+- For a change with only one side, give that side's line number: `{ "head": N }` for an
+  addition, `{ "base": N }` for a deletion.
+- For a change with both sides (a modification), give BOTH the base and head line where
+  the next concern begins: `{ "base": B, "head": H }` — so the removed and added lines
+  stay paired. Which deletions go with which additions is exactly your call.
 
 Rules:
-- Return only boundary line numbers, never ranges. Every line stays covered
-  automatically; you never assign lines to segments yourself.
-- A boundary line number is the first line of a new segment. Do not return the change's
-  first line as a boundary (it already starts the first segment).
+- Return only boundaries, never ranges. Every line stays covered automatically; you never
+  assign lines to segments yourself.
+- A boundary is the first line of a new segment. Do not return a change's first line as a
+  boundary (it already starts the first segment). Boundaries must strictly advance.
 - Prefer few, meaningful boundaries over many small ones: split only where the concern
   genuinely changes.
 
 Reply with JSON matching the required schema: for each change, its `changeId` and a
-`splitBefore` list of boundary line numbers (empty if it should not be split).
+`boundaries` list (empty if it should not be split).
 
 The changes to consider:
 

@@ -64,7 +64,9 @@ describe("splitLargeChanges", () => {
     const big = change("src/a.ts", "head", 1, 130);
     const small = change("src/a.ts", "head", 200, 2);
     const diff: ParsedDiff = { files: [file([big, small])] };
-    const runClaudeProcess = mockProcess({ splits: [{ changeId: big.id, splitBefore: [50] }] });
+    const runClaudeProcess = mockProcess({
+      splits: [{ changeId: big.id, boundaries: [{ head: 50 }] }],
+    });
 
     const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
 
@@ -78,7 +80,7 @@ describe("splitLargeChanges", () => {
   it("passes a candidate through whole for an empty split list", async () => {
     const big = change("src/a.ts", "head", 1, 130);
     const diff: ParsedDiff = { files: [file([big])] };
-    const runClaudeProcess = mockProcess({ splits: [{ changeId: big.id, splitBefore: [] }] });
+    const runClaudeProcess = mockProcess({ splits: [{ changeId: big.id, boundaries: [] }] });
 
     const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
 
@@ -90,8 +92,8 @@ describe("splitLargeChanges", () => {
     const diff: ParsedDiff = { files: [file([big])] };
     const runClaudeProcess = mockProcess({
       splits: [
-        { changeId: "src/nope.ts:head:1-2", splitBefore: [99] },
-        { changeId: big.id, splitBefore: [70] },
+        { changeId: "src/nope.ts:head:1-2", boundaries: [{ head: 99 }] },
+        { changeId: big.id, boundaries: [{ head: 70 }] },
       ],
     });
 
@@ -112,7 +114,9 @@ describe("splitLargeChanges", () => {
     const runClaudeProcess = vi.fn(async () => {
       call++;
       if (call === 1) {
-        return envelope({ splits: [{ changeId: changes[0]?.id ?? "", splitBefore: [50] }] });
+        return envelope({
+          splits: [{ changeId: changes[0]?.id ?? "", boundaries: [{ head: 50 }] }],
+        });
       }
       throw new Error("boom");
     });
@@ -149,8 +153,8 @@ describe("splitLargeChanges", () => {
     };
     const runClaudeProcess = mockProcess({
       splits: [
-        { changeId: baseSide.id, splitBefore: [40] },
-        { changeId: headSide.id, splitBefore: [60] },
+        { changeId: baseSide.id, boundaries: [{ base: 40 }] },
+        { changeId: headSide.id, boundaries: [{ head: 60 }] },
       ],
     });
 
@@ -167,10 +171,34 @@ describe("splitLargeChanges", () => {
     ]);
   });
 
+  it("splits a large in-place modification into paired sub-modifications", () => {
+    const modification: Change = {
+      id: "src/a.ts:mod:1-70:1-70",
+      path: "src/a.ts",
+      base: { range: { start: 1, end: 70 }, lines: Array.from({ length: 70 }, () => "-x") },
+      head: { range: { start: 1, end: 70 }, lines: Array.from({ length: 70 }, () => "+y") },
+    };
+    const diff: ParsedDiff = { files: [file([modification])] };
+    const runClaudeProcess = mockProcess({
+      splits: [{ changeId: modification.id, boundaries: [{ base: 30, head: 30 }] }],
+    });
+
+    return splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess }).then(
+      (result) => {
+        expect(result.files[0]?.changes.map((c) => c.id)).toEqual([
+          "src/a.ts:mod:1-29:1-29",
+          "src/a.ts:mod:30-70:30-70",
+        ]);
+      },
+    );
+  });
+
   it("records the split session's usage under the threaded ledger", async () => {
     const big = change("src/a.ts", "head", 1, 130);
     const diff: ParsedDiff = { files: [file([big])] };
-    const runClaudeProcess = mockProcess({ splits: [{ changeId: big.id, splitBefore: [50] }] });
+    const runClaudeProcess = mockProcess({
+      splits: [{ changeId: big.id, boundaries: [{ head: 50 }] }],
+    });
     const usage = createUsageLedger();
 
     await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess, usage });

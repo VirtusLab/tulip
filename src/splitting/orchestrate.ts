@@ -7,7 +7,7 @@ import { changeDiffLines, type ParsedDiff } from "../diff/change.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { buildPartition, isSplitCandidate } from "./partition.js";
 import { buildSplitPrompt, type SplitCandidate } from "./prompt.js";
-import { SPLIT_SCHEMA, type SplitResponse } from "./wire.js";
+import { SPLIT_SCHEMA, type SplitBoundary, type SplitResponse } from "./wire.js";
 
 /** Everything the split phase needs: the parsed diff and the PR's (reviewed) category list. */
 export interface SplitLargeChangesInput {
@@ -59,7 +59,7 @@ export async function splitLargeChanges(
     diffTextSize,
   );
 
-  const splitBefore = new Map<string, number[]>();
+  const boundariesByChange = new Map<string, SplitBoundary[]>();
   for (const batch of batches) {
     try {
       const { result } = await runSession<SplitResponse>(
@@ -72,8 +72,8 @@ export async function splitLargeChanges(
       );
       for (const split of result.splits) {
         // An unknown changeId (not one we asked about) is simply never looked up in the rebuild
-        // below, so storing it is harmless; buildPartition sanitizes the numbers.
-        splitBefore.set(split.changeId, split.splitBefore);
+        // below, so storing it is harmless; buildPartition validates the boundaries.
+        boundariesByChange.set(split.changeId, split.boundaries);
       }
     } catch (error) {
       logger.info(
@@ -87,7 +87,7 @@ export async function splitLargeChanges(
     files: input.diff.files.map((file) => ({
       ...file,
       changes: file.changes.flatMap((change) =>
-        buildPartition(change, splitBefore.get(change.id) ?? []),
+        buildPartition(change, boundariesByChange.get(change.id) ?? []),
       ),
     })),
   };
