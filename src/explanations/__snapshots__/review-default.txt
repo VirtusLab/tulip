@@ -71,8 +71,10 @@ Review the explanation for:
   or the CORE new logic under review). Flag large routine bodies, forwarding facade methods,
   whole test files (unless the tests are this category's subject), and generated files shown
   unfolded, and any unfold you can't tie to a trigger. Match depth to this category's rating
-  (Read through): a Skim or Read-through explanation that runs long or shows large unfolded
-  bodies is out of proportion. Don't flag a correctly-unfolded SMALL, SUBTLE, or CORE body.
+  (Read through). SUBTLE, HIDDEN EFFECT, and CORE bodies are must-see — never flag them unfolded,
+  at any rating. SMALL is a convenience that yields to the rating: a correctly-unfolded SMALL body
+  is fine on Read-closely, but on a Read-through or Skim category a SMALL body should be folded —
+  flag it shown unfolded there, along with any Skim/Read-through explanation that runs long.
 - no duplication — flag a fact restated elsewhere in this explanation, the same file's lines
   shown in more than one snippet, and prose spent walking through a trivial doc or wording tweak.
 

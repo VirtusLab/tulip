@@ -65,8 +65,10 @@ Then write the explanation as markdown, interleaving prose, Mermaid diagrams (fe
 
 The attention rating governs length. A Read-closely category goes deep; a Read-through or Skim
 category stays short and folds almost everything. Where any instruction below would add material
-the rating doesn't warrant, the rating wins — it governs prose depth and what you unfold, not
-whether a change is snippeted; on a tight rating you fold a snippet, not drop it.
+the rating doesn't warrant, the rating wins — it governs prose depth and which convenience
+snippets you unfold (a must-see trigger — SUBTLE, HIDDEN EFFECT, or CORE — stays unfolded
+regardless of rating; see "Trigger vs. rating" below), not whether a change is snippeted; on a
+tight rating you fold a snippet, not drop it.
 
 Structure it top-down. Open, before any snippet, with the big picture: in a few sentences, what
 this category does as a whole and how the changed pieces fit together. Where the flow of calls
@@ -101,9 +103,10 @@ approach (example-based, property-based, and so on).
 EVERY change listed above that is NOT marked "already explained under ..." MUST
 appear as a snippet reference — that is how the reviewer sees the actual code. One
 snippet per change, holding the real code; the interface stays in your prose, not in
-a snippet of its own. Coverage is that one reference plus prose proportionate to the
-change: a folded snippet with a single clause fully covers a routine change, and
-trivial sibling changes can share a sentence. It does not mean a paragraph each.
+a snippet of its own. Coverage is that one reference plus prose saying what it is and
+why, proportionate to the change: a folded snippet with a single clause fully covers a
+routine change, and trivial sibling changes can share a sentence. It does not mean a
+paragraph each.
 
 A change marked "already explained under <category>" is owned and explained in full
 by that other category. Don't snippet it here: in one line, say what it does in this
@@ -115,7 +118,8 @@ Fold by default. Write unfold="no"; a folded snippet stays one click from the re
 code. Write unfold="yes" ONLY when one of these named triggers applies to that change:
 
 - SMALL — the changed body is about ten lines or fewer; a fold would trade a click
-  for almost nothing hidden.
+  for almost nothing hidden. This is a convenience, not a must-see, so it yields to a
+  tight rating (see "Trigger vs. rating" below).
 - SUBTLE — its logic is the thing to check: edge cases, ordering, off-by-one,
   error/retry paths, concurrency, tricky conditionals a summary could hide.
 - HIDDEN EFFECT — the signature doesn't reveal a mutation, side effect, or
@@ -150,8 +154,6 @@ rather than restating it. Explain only THIS category's concern — don't re-expl
 the surrounding module or the rest of the PR. Name a trivial doc or wording tweak
 in a phrase; don't walk through it.
 
-A named trigger still wins over the rating: a SMALL, SUBTLE, or CORE body stays unfolded at any
-rating.
-
-Every snippet gets prose saying what it is and why — one clause for a routine one, no more than
-the change earns.
+Trigger vs. rating: SUBTLE, HIDDEN EFFECT, and CORE are must-see — the reviewer needs that code,
+so they stay unfolded at any rating, even Skim. SMALL is only a convenience, so the rating wins
+over it: a SMALL body unfolds on Read-closely but folds on Read-through or Skim.

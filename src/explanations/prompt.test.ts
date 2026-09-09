@@ -183,7 +183,7 @@ describe("buildReviewPrompt", () => {
     expect(prompt).toMatch(/forwarding facade methods/i);
     expect(prompt).toMatch(/whole test files \(unless the tests are this category's subject\)/i);
     expect(prompt).toMatch(/Match depth to this category's rating\s*\(Read through\)/i);
-    expect(prompt).toMatch(/Don't flag a correctly-unfolded SMALL, SUBTLE, or CORE body/i);
+    expect(prompt).toMatch(/SUBTLE, HIDDEN EFFECT, and CORE bodies are must-see — never flag/i);
     expect(prompt).toMatch(/trivial change earns a proportionate phrase/i);
     expect(prompt).toMatch(/no duplication — flag a fact restated elsewhere/i);
   });
