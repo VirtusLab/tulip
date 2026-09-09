@@ -161,7 +161,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     // this only ever refines the diff — everything downstream sees more, smaller changes. Only
     // classification is given the split diff; grouping/explain/render inherit the sub-changes via
     // the classification result, and the file-level uses of `diff` below stay on the original.
-    logger.info("splitting large changes...");
+    logger.info("phase 2: splitting large changes...");
     const splitDiff = await runPhase("splitting large changes", () =>
       doSplitLargeChanges(
         { diff, categories: categoryReview.categories },
