@@ -1,23 +1,47 @@
 {
-  "name": "tulip",
+  "name": "@virtuslab/tulip",
   "version": "0.1.0",
-  "private": true,
   "description": "Explains GitHub PRs to reviewers using LLMs.",
+  "license": "Apache-2.0",
+  "author": "Adam Warski",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VirtusLab/tulip.git"
+  },
+  "homepage": "https://github.com/VirtusLab/tulip#readme",
+  "bugs": "https://github.com/VirtusLab/tulip/issues",
+  "keywords": [
+    "pull-request",
+    "code-review",
+    "llm",
+    "claude",
+    "github",
+    "cli"
+  ],
   "engines": {
     "node": ">=24"
   },
   "bin": {
     "tulip": "./dist/cli/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build:dist": "pnpm clean && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
     "dev": "tsx src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "prepublishOnly": "pnpm build:dist"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
