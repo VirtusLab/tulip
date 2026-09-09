@@ -1,37 +1,49 @@
 import { describe, expect, it } from "vitest";
 import { parseSnippetRefs, type SnippetRef, serializeSnippetRef } from "./markup.js";
 
-const REF: SnippetRef = {
+const MODIFICATION: SnippetRef = {
   path: "src/fetch.ts",
-  side: "head",
-  lines: { start: 10, end: 14 },
+  base: { start: 8, end: 9 },
+  head: { start: 10, end: 14 },
   unfold: true,
 };
 
 describe("serializeSnippetRef / parseSnippetRefs", () => {
-  it("round-trips a single ref through serialize then parse", () => {
-    const markup = serializeSnippetRef(REF);
-    expect(markup).toBe('{{snippet path="src/fetch.ts" side="head" lines="10-14" unfold="yes"}}');
+  it("round-trips a modification (both sides) through serialize then parse", () => {
+    const markup = serializeSnippetRef(MODIFICATION);
+    expect(markup).toBe('{{snippet path="src/fetch.ts" base="8-9" head="10-14" unfold="yes"}}');
 
     const matches = parseSnippetRefs(markup);
     expect(matches).toHaveLength(1);
-    expect(matches[0]?.ref).toEqual(REF);
+    expect(matches[0]?.ref).toEqual(MODIFICATION);
     expect(matches[0]?.start).toBe(0);
     expect(matches[0]?.end).toBe(markup.length);
   });
 
-  it('serializes unfold: false as unfold="no"', () => {
-    const markup = serializeSnippetRef({ ...REF, unfold: false });
-    expect(markup).toContain('unfold="no"');
-    expect(parseSnippetRefs(markup)[0]?.ref.unfold).toBe(false);
+  it("serializes and parses a head-only ref (an addition), omitting the absent base", () => {
+    const ref: SnippetRef = { path: "src/a.ts", head: { start: 1, end: 3 }, unfold: true };
+    const markup = serializeSnippetRef(ref);
+    expect(markup).toBe('{{snippet path="src/a.ts" head="1-3" unfold="yes"}}');
+    expect(parseSnippetRefs(markup)[0]?.ref).toEqual(ref);
+  });
+
+  it("serializes and parses a base-only ref (a deletion), omitting the absent head", () => {
+    const ref: SnippetRef = { path: "src/a.ts", base: { start: 1, end: 3 }, unfold: false };
+    const markup = serializeSnippetRef(ref);
+    expect(markup).toBe('{{snippet path="src/a.ts" base="1-3" unfold="no"}}');
+    expect(parseSnippetRefs(markup)[0]?.ref).toEqual(ref);
+  });
+
+  it("parses tolerantly regardless of attribute order", () => {
+    const markup = '{{snippet head="10-14" unfold="yes" path="src/fetch.ts" base="8-9"}}';
+    expect(parseSnippetRefs(markup)[0]?.ref).toEqual(MODIFICATION);
   });
 
   it("extracts multiple refs embedded in surrounding markdown, with correct positions", () => {
-    const first = serializeSnippetRef(REF);
+    const first = serializeSnippetRef(MODIFICATION);
     const second = serializeSnippetRef({
       path: "src/fetch.test.ts",
-      side: "base",
-      lines: { start: 1, end: 3 },
+      base: { start: 1, end: 3 },
       unfold: false,
     });
     const markdown = `# Explanation\n\nSome prose.\n\n${first}\n\nMore prose.\n\n${second}\n`;
@@ -44,28 +56,28 @@ describe("serializeSnippetRef / parseSnippetRefs", () => {
     expect(matches[1]?.ref.path).toBe("src/fetch.test.ts");
   });
 
-  it("ignores a tag with an invalid side value", () => {
-    const markdown = '{{snippet path="a.ts" side="front" lines="1-2" unfold="yes"}}';
+  it("leaves a tag with neither base nor head in place (returns nothing)", () => {
+    const markdown = '{{snippet path="a.ts" unfold="yes"}}';
     expect(parseSnippetRefs(markdown)).toEqual([]);
   });
 
-  it("ignores a tag with a non-numeric line range", () => {
-    const markdown = '{{snippet path="a.ts" side="head" lines="one-two" unfold="yes"}}';
+  it("leaves a tag with a malformed head range in place", () => {
+    const markdown = '{{snippet path="a.ts" head="one-two" unfold="yes"}}';
     expect(parseSnippetRefs(markdown)).toEqual([]);
   });
 
-  it("ignores a tag with a backwards line range", () => {
-    const markdown = '{{snippet path="a.ts" side="head" lines="10-5" unfold="yes"}}';
+  it("leaves a tag with a backwards base range in place", () => {
+    const markdown = '{{snippet path="a.ts" base="10-5" unfold="yes"}}';
     expect(parseSnippetRefs(markdown)).toEqual([]);
   });
 
-  it("ignores a tag with an invalid unfold value", () => {
-    const markdown = '{{snippet path="a.ts" side="head" lines="1-2" unfold="maybe"}}';
+  it("leaves a tag with an invalid unfold value in place", () => {
+    const markdown = '{{snippet path="a.ts" head="1-2" unfold="maybe"}}';
     expect(parseSnippetRefs(markdown)).toEqual([]);
   });
 
   it("ignores a tag that isn't alone on its own line", () => {
-    const markdown = `See this: ${serializeSnippetRef(REF)} for details.`;
+    const markdown = `See this: ${serializeSnippetRef(MODIFICATION)} for details.`;
     expect(parseSnippetRefs(markdown)).toEqual([]);
   });
 

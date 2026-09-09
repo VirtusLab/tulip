@@ -6,7 +6,7 @@ Here's what happened with the new categories you proposed:
 
 - id: ch1
   file: src/fetch.ts (modified)
-  side: head, lines 10-12
+  lines: head 10-12
   diff:
   +line1
   +line2
@@ -14,7 +14,7 @@ Here's what happened with the new categories you proposed:
 
 - id: ch2
   file: src/fetch.ts (modified)
-  side: head, lines 10-12
+  lines: head 10-12
   diff:
   +line1
   +line2

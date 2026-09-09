@@ -8,10 +8,8 @@ function change(id: string): ClassifiableChange {
     id,
     path: `src/${id}.ts`,
     status: "modified",
-    side: "head",
-    range: { start: 1, end: 1 },
+    head: { range: { start: 1, end: 1 }, lines: ["+line"] },
     excerpt: "+line",
-    lines: ["+line"],
   };
 }
 

@@ -1,5 +1,6 @@
 import type { ChangeOwner } from "../classification/group.js";
-import type { ClassifiableChange } from "../classification/types.js";
+import { type ClassifiableChange, changeLocationRanges } from "../classification/types.js";
+import { changeDiffLines } from "../diff/change.js";
 import { renderPrompt } from "../prompts/loader.js";
 import { ATTENTION_LABEL } from "../rendering/attention-badge.js";
 import type { ExplainCategoryInput, ReviewIssue, ReviewPromptInput } from "./types.js";
@@ -38,14 +39,16 @@ function formatChange(
   diffThreshold: number,
   secondary: SecondaryRefContext,
 ): string {
-  const location = `${change.path} (${change.status}), side ${change.side}, lines ${change.range.start}-${change.range.end}${secondaryAnnotation(change, secondary)}`;
-  // Uses `change.lines` — the full, untruncated diff — never `change.excerpt`, which phase 2
-  // (classification) truncates by character count for cheap-model prompts (see
+  const location = `${change.path} (${change.status}), ${changeLocationRanges(change)}${secondaryAnnotation(change, secondary)}`;
+  // Uses the change's own sides — the full, untruncated combined diff — never `change.excerpt`,
+  // which phase 2 (classification) truncates by character count for cheap-model prompts (see
   // src/classification/excerpt.ts). That truncation is unrelated to this threshold and would
-  // otherwise wrongly hide changes that are well within it.
-  const size = change.range.end - change.range.start + 1;
+  // otherwise wrongly hide changes that are well within it. The size threshold is the total number
+  // of diff lines across both sides (docs/adr/0018), so a modification's base+head both count.
+  const lines = changeDiffLines(change);
+  const size = lines.length;
   if (size <= diffThreshold) {
-    return `- ${location}\n  diff:\n  ${change.lines.join("\n  ")}`;
+    return `- ${location}\n  diff:\n  ${lines.join("\n  ")}`;
   }
   return `- ${location}\n  (diff omitted: ${size} lines, over the ${diffThreshold}-line threshold —
   reference it by file/side/line-range in your explanation instead of quoting it)`;
@@ -107,7 +110,7 @@ export function buildExplainPrompt(input: ExplainCategoryInput): string {
 }
 
 function formatChangeLocation(change: ClassifiableChange): string {
-  return `- ${change.path}, side ${change.side}, lines ${change.range.start}-${change.range.end}`;
+  return `- ${change.path}, ${changeLocationRanges(change)}`;
 }
 
 /**

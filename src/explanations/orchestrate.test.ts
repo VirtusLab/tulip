@@ -23,7 +23,7 @@ function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessRe
 }
 
 function change(id: string, path: string, range = { start: 1, end: 3 }): ClassifiableChange {
-  return { id, path, status: "modified", side: "head", range, excerpt: "+line", lines: ["+line"] };
+  return { id, path, status: "modified", head: { range, lines: ["+line"] }, excerpt: "+line" };
 }
 
 function categorySet(
@@ -50,7 +50,10 @@ function ownersFor(sets: CategoryChangeSet[]): Map<string, ChangeOwner> {
 }
 
 function refFor(c: ClassifiableChange): string {
-  return serializeSnippetRef({ path: c.path, side: c.side, lines: c.range, unfold: true });
+  if (!c.head) {
+    throw new Error("test change has no head side");
+  }
+  return serializeSnippetRef({ path: c.path, head: c.head.range, unfold: true });
 }
 
 describe("explainCategories", () => {
@@ -371,8 +374,7 @@ describe("explainCategories", () => {
       const match = /Category (\d+)/.exec(promptText);
       const ref = serializeSnippetRef({
         path: `src/file${match?.[1]}.ts`,
-        side: "head",
-        lines: { start: 1, end: 3 },
+        head: { start: 1, end: 3 },
         unfold: true,
       });
       return envelope({ markdown: `explanation\n\n${ref}` }, "explain-session");

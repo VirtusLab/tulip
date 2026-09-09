@@ -4,13 +4,13 @@ Here is the next batch of changes to classify. The categories to use are:
 
 - id: ch1
   file: src/fetch.ts (modified)
-  side: head, lines 10-12
+  lines: head 10-12
   diff:
   +line1
   +line2
 
 - id: ch2
   file: src/fetch.ts (modified)
-  side: head, lines 10-12
+  lines: head 10-12
   diff:
   +onlyline

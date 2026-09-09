@@ -13,10 +13,8 @@ function change(overrides: Partial<ClassifiableChange> = {}): ClassifiableChange
     id: "c1",
     path: "src/fetch.ts",
     status: "modified",
-    side: "head",
-    range: { start: 10, end: 14 },
+    head: { range: { start: 10, end: 14 }, lines: ["+line"] },
     excerpt: "+line",
-    lines: ["+line"],
     ...overrides,
   };
 }
@@ -36,8 +34,7 @@ describe("findUnreferencedChanges", () => {
   it("treats a change as covered when a single snippet ref spans its whole range", () => {
     const ref = serializeSnippetRef({
       path: "src/fetch.ts",
-      side: "head",
-      lines: { start: 5, end: 20 },
+      head: { start: 5, end: 20 },
       unfold: true,
     });
 
@@ -47,14 +44,12 @@ describe("findUnreferencedChanges", () => {
   it("treats a change as covered when adjacent/overlapping refs together span its range", () => {
     const first = serializeSnippetRef({
       path: "src/fetch.ts",
-      side: "head",
-      lines: { start: 10, end: 12 },
+      head: { start: 10, end: 12 },
       unfold: true,
     });
     const second = serializeSnippetRef({
       path: "src/fetch.ts",
-      side: "head",
-      lines: { start: 12, end: 14 },
+      head: { start: 12, end: 14 },
       unfold: false,
     });
 
@@ -68,8 +63,7 @@ describe("findUnreferencedChanges", () => {
   it("flags a change only partially covered by a ref", () => {
     const ref = serializeSnippetRef({
       path: "src/fetch.ts",
-      side: "head",
-      lines: { start: 10, end: 12 },
+      head: { start: 10, end: 12 },
       unfold: true,
     });
 
@@ -79,8 +73,7 @@ describe("findUnreferencedChanges", () => {
   it("ignores a ref for a different file", () => {
     const ref = serializeSnippetRef({
       path: "src/other.ts",
-      side: "head",
-      lines: { start: 1, end: 100 },
+      head: { start: 1, end: 100 },
       unfold: true,
     });
 
@@ -90,8 +83,7 @@ describe("findUnreferencedChanges", () => {
   it("ignores a ref for the same file but the wrong side", () => {
     const ref = serializeSnippetRef({
       path: "src/fetch.ts",
-      side: "base",
-      lines: { start: 1, end: 100 },
+      base: { start: 1, end: 100 },
       unfold: true,
     });
 
@@ -103,8 +95,7 @@ describe("verifySnippetCoverage", () => {
   it("returns immediately when every change is already referenced", async () => {
     const ref = serializeSnippetRef({
       path: "src/fetch.ts",
-      side: "head",
-      lines: { start: 10, end: 14 },
+      head: { start: 10, end: 14 },
       unfold: true,
     });
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
@@ -122,8 +113,7 @@ describe("verifySnippetCoverage", () => {
       expect(input).toContain("10-14");
       const ref = serializeSnippetRef({
         path: "src/fetch.ts",
-        side: "head",
-        lines: { start: 10, end: 14 },
+        head: { start: 10, end: 14 },
         unfold: true,
       });
       return envelope({ markdown: `amended\n\n${ref}` }, "session-2");

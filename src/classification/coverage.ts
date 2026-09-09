@@ -9,6 +9,7 @@ import { buildCoverageRepairPrompt } from "./prompt.js";
 import {
   type CategoryAssignment,
   type ClassifiableChange,
+  changeLocationRanges,
   IGNORE_CATEGORY,
   NONE_CATEGORY,
 } from "./types.js";
@@ -24,7 +25,7 @@ export class IncompleteCoverageError extends Error {
 
   constructor(uncovered: ClassifiableChange[]) {
     const ranges = uncovered
-      .map((change) => `${change.path} (${change.side} ${change.range.start}-${change.range.end})`)
+      .map((change) => `${change.path} (${changeLocationRanges(change)})`)
       .join(", ");
     super(
       `${uncovered.length} change(s) still uncovered by any category after ` +

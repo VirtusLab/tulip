@@ -21,10 +21,8 @@ function change(overrides: Partial<ClassifiableChange> = {}): ClassifiableChange
     id: "c1",
     path: "src/fetch.ts",
     status: "modified",
-    side: "head",
-    range: { start: 10, end: 12 },
+    head: { range: { start: 10, end: 12 }, lines: ["+line1", "+line2", "+line3"] },
     excerpt: "+line1\n+line2\n+line3",
-    lines: ["+line1", "+line2", "+line3"],
     ...overrides,
   };
 }
@@ -35,7 +33,14 @@ function baseInput(overrides: Partial<ExplainCategoryInput> = {}): ExplainCatego
     prDescription: "Retries transient network failures with backoff.",
     category: CATEGORY,
     production: [change()],
-    test: [change({ id: "c2", path: "src/fetch.test.ts", excerpt: "+test1", lines: ["+test1"] })],
+    test: [
+      change({
+        id: "c2",
+        path: "src/fetch.test.ts",
+        excerpt: "+test1",
+        head: { range: { start: 10, end: 10 }, lines: ["+test1"] },
+      }),
+    ],
     changeOwners: new Map(),
     diffThreshold: 100,
     baseSha: "base-sha",
@@ -148,9 +153,12 @@ describe("explainCategory", () => {
       envelope({ markdown: "# explanation" }),
     );
 
-    // range is 10-12 (3 lines, from the `change()` helper's default) — under diffThreshold: 5.
+    // 1 diff line — under diffThreshold: 5.
     await explainCategory(
-      baseInput({ production: [change({ lines: ["+kept line"] })], diffThreshold: 5 }),
+      baseInput({
+        production: [change({ head: { range: { start: 10, end: 10 }, lines: ["+kept line"] } })],
+        diffThreshold: 5,
+      }),
       { runClaudeProcess },
     );
 
@@ -158,27 +166,26 @@ describe("explainCategory", () => {
     expect(prompt).toContain("+kept line");
   });
 
-  it("references only file/side/line-range when the true range exceeds the threshold, even if the diff itself is short", async () => {
+  it("references only file/line-range when the diff-line count exceeds the threshold", async () => {
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
-    // The diff is short, but the change's own line range (1-500) is what's measured against
-    // the threshold — a short diff must not make a genuinely huge change look quotable.
-    const shortLine = "+kept line";
+    // The threshold is the total number of diff lines (docs/adr/0018): a change with more diff
+    // lines than the threshold is referenced by location, not quoted.
+    const bigLines = Array.from({ length: 500 }, (_, i) => `+line ${i + 1}`);
 
     await explainCategory(
       baseInput({
-        production: [change({ range: { start: 1, end: 500 }, lines: [shortLine] })],
+        production: [change({ head: { range: { start: 1, end: 500 }, lines: bigLines } })],
         diffThreshold: 3,
       }),
       { runClaudeProcess },
     );
 
     const prompt = runClaudeProcess.mock.calls[0]?.[1];
-    expect(prompt).not.toContain(shortLine);
+    expect(prompt).not.toContain("+line 250");
     expect(prompt).toContain("src/fetch.ts");
-    expect(prompt).toContain("side head");
-    expect(prompt).toContain("lines 1-500");
+    expect(prompt).toContain("head 1-500");
     expect(prompt).toMatch(/omitted/);
   });
 
@@ -202,7 +209,9 @@ describe("explainCategory", () => {
     await explainCategory(
       // range is 10-12 (3 lines) — comfortably under diffThreshold: 1000.
       baseInput({
-        production: [change({ excerpt: truncatedExcerpt, lines })],
+        production: [
+          change({ excerpt: truncatedExcerpt, head: { range: { start: 10, end: 12 }, lines } }),
+        ],
         diffThreshold: 1000,
       }),
       { runClaudeProcess },

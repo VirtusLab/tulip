@@ -81,6 +81,30 @@ export function buildAlignedDiff(baseContent: string, headContent: string): Alig
   return rows;
 }
 
+/**
+ * Aligns one snippet region's own base and head lines into a fresh mini-diff (docs/adr/0018's
+ * per-region rendering), reusing {@link buildAlignedDiff}. `baseLines`/`headLines` are the raw
+ * file lines the reference spans on each side (either may be empty — an addition has no base
+ * lines, a deletion no head lines); `baseStart`/`headStart` are the 1-based file line numbers of
+ * each side's first line, used to shift the alignment's own 1-based numbering back onto the real
+ * file line numbers. Because it aligns only the reference's lines, two adjacent split pieces of one
+ * change render disjoint rows — no cross-piece overlap.
+ */
+export function buildRegionDiff(
+  baseLines: string[],
+  baseStart: number,
+  headLines: string[],
+  headStart: number,
+): AlignedRow[] {
+  const baseOffset = baseStart - 1;
+  const headOffset = headStart - 1;
+  return buildAlignedDiff(baseLines.join("\n"), headLines.join("\n")).map((row) => ({
+    ...row,
+    baseLine: row.baseLine === null ? null : row.baseLine + baseOffset,
+    headLine: row.headLine === null ? null : row.headLine + headOffset,
+  }));
+}
+
 function splitLines(value: string): string[] {
   const withoutTrailingNewline = value.endsWith("\n") ? value.slice(0, -1) : value;
   return withoutTrailingNewline === "" ? [] : withoutTrailingNewline.split("\n");

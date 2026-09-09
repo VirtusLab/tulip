@@ -1,10 +1,13 @@
 To reference source code, use this exact markup, on its own line:
 
-{{snippet path="<file path>" side="base|head" lines="<start>-<end>" unfold="yes|no"}}
+{{snippet path="<file path>" base="<start>-<end>" head="<start>-<end>" unfold="yes|no"}}
 
 - path: the file's path, exactly as given below.
-- side: "base" for the code before the PR, "head" for the code after.
-- lines: the 1-based inclusive line range, exactly as given below (e.g. "10-14").
+- base / head: the 1-based inclusive line ranges of the change, exactly as given below (e.g.
+  "10-14"). "base" is the code before the PR, "head" the code after. Include both for an in-place
+  modification, so it renders as one before/after diff; include only "head" for an addition, only
+  "base" for a deletion. At least one is required. Copy the change's own base/head ranges given
+  below into one snippet — one change is one snippet.
 - unfold: "yes" shows the snippet expanded by default; "no" shows it collapsed, to expand on
   demand. Choose by what the reviewer needs on the page — see the unfold guidance below.
 

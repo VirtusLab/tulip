@@ -1,4 +1,4 @@
-import type { ClassifiableChange } from "../classification/types.js";
+import { type ClassifiableChange, changeLocationRanges } from "../classification/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
@@ -18,7 +18,7 @@ export class SnippetCoverageError extends Error {
 
   constructor(missing: ClassifiableChange[]) {
     const ranges = missing
-      .map((change) => `${change.path} (${change.side} ${change.range.start}-${change.range.end})`)
+      .map((change) => `${change.path} (${changeLocationRanges(change)})`)
       .join(", ");
     super(
       `${missing.length} change(s) still not referenced by any snippet after ` +
@@ -41,10 +41,31 @@ export function findUnreferencedChanges(
   return changes.filter((change) => !isCovered(change, refs));
 }
 
+/**
+ * A change is covered iff each present side's range is covered by same-side refs for its path —
+ * one two-range ref covers a modification in full (docs/adr/0018). A side the change doesn't have
+ * needs no coverage.
+ */
 function isCovered(change: ClassifiableChange, refs: SnippetRef[]): boolean {
-  const sameLocation = refs.filter((ref) => ref.path === change.path && ref.side === change.side);
-  const merged = mergeRanges(sameLocation.map((ref) => ref.lines));
-  return merged.some((range) => range.start <= change.range.start && range.end >= change.range.end);
+  const samePath = refs.filter((ref) => ref.path === change.path);
+  return (
+    sideCovered(
+      change.base?.range,
+      samePath.map((ref) => ref.base),
+    ) &&
+    sideCovered(
+      change.head?.range,
+      samePath.map((ref) => ref.head),
+    )
+  );
+}
+
+function sideCovered(needed: LineRange | undefined, refRanges: (LineRange | undefined)[]): boolean {
+  if (!needed) {
+    return true;
+  }
+  const merged = mergeRanges(refRanges.filter((range): range is LineRange => range !== undefined));
+  return merged.some((range) => range.start <= needed.start && range.end >= needed.end);
 }
 
 /** Merges overlapping or adjacent ranges, sorted by start. */

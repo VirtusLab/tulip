@@ -114,8 +114,7 @@ describe("renderCategoryMarkdown", () => {
   it("turns a {{snippet}} marker into a diff block, not prose", () => {
     const ref = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const fileDiffs = new Map<string, FileDiffData>([
@@ -173,8 +172,7 @@ describe("renderCategoryMarkdown", () => {
   it("forces a {{snippet}}'s details closed when forceSnippetsCollapsed is set, even with unfold=yes", () => {
     const ref = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const fileDiffs = new Map<string, FileDiffData>([

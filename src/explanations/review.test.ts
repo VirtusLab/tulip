@@ -20,16 +20,13 @@ const CHANGE: ClassifiableChange = {
   id: "c1",
   path: "src/fetch.ts",
   status: "modified",
-  side: "head",
-  range: { start: 10, end: 14 },
+  head: { range: { start: 10, end: 14 }, lines: ["+line"] },
   excerpt: "+line",
-  lines: ["+line"],
 };
 
 const REF = serializeSnippetRef({
   path: "src/fetch.ts",
-  side: "head",
-  lines: { start: 10, end: 14 },
+  head: { start: 10, end: 14 },
   unfold: true,
 });
 

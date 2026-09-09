@@ -67,8 +67,7 @@ describe("renderPage", () => {
   it("renders the PR description's body as direct section children, like a category's, not wrapped in an extra div", () => {
     const ref = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const rows = buildAlignedDiff("a\n", "a\n");
@@ -91,8 +90,7 @@ describe("renderPage", () => {
   it("keeps headings and body content as direct children of their section, sharing the CSS grid's centered column", () => {
     const ref = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const rows = buildAlignedDiff("a\n", "a\n");
@@ -211,14 +209,12 @@ describe("renderPage", () => {
   it("defaults a test-subsection snippet to collapsed even when unfold=yes, but keeps a production one honoring unfold=yes", () => {
     const prodRef = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const testRef = serializeSnippetRef({
       path: "src/a.test.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const rows = buildAlignedDiff("a\n", "a\n");
@@ -293,8 +289,7 @@ describe("renderPage", () => {
   it("renders the intro (text before the first subsection heading) alongside the subsections, not instead of them", () => {
     const ref = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const rows = buildAlignedDiff("a\n", "a\n");
@@ -373,8 +368,7 @@ describe("renderPage", () => {
   it("substitutes a {{snippet}} marker with a side-by-side diff block", () => {
     const ref = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 2, end: 2 },
+      head: { start: 2, end: 2 },
       unfold: false,
     });
     const rows = buildAlignedDiff("a\nb\nc\n", "a\nB\nc\n");
@@ -403,8 +397,7 @@ describe("renderPage", () => {
   it("omits embedded row data for a file over the embed-size cap", () => {
     const ref = serializeSnippetRef({
       path: "src/big.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const rows = buildAlignedDiff("a\n", "a\n");
@@ -444,8 +437,7 @@ describe("renderPage", () => {
   it("carries the diff's guessed language as a data attribute for the client-side highlighter", () => {
     const ref = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const rows = buildAlignedDiff("a\n", "a\n");
@@ -565,8 +557,7 @@ describe("renderPage XSS safety", () => {
   it("escapes untrusted file content inside the embedded file-data JSON, including a closing </script> sequence", () => {
     const ref = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const rows = buildAlignedDiff(
@@ -595,8 +586,7 @@ describe("renderPage XSS safety", () => {
     const path = "src/<img src=x onerror=1>.ts";
     const ref = serializeSnippetRef({
       path,
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const rows = buildAlignedDiff("a\n", "a\n");

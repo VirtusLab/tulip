@@ -20,14 +20,14 @@ Here are the actual changes the explanation is supposed to cover — use these t
 explanation's claims, not just its internal consistency:
 
 Code and doc changes in this group (everything that ships):
-- src/fetch.ts (modified), side head, lines 10-12
+- src/fetch.ts (modified), head 10-12
   diff:
   +line1
   +line2
   +line3
 
 Test changes in this group:
-- src/fetch.test.ts (modified), side head, lines 10-12
+- src/fetch.test.ts (modified), head 10-10
   diff:
   +test1
 

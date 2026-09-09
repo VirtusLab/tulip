@@ -22,10 +22,8 @@ function change(overrides: Partial<ClassifiableChange> = {}): ClassifiableChange
     id: "c1",
     path: "src/fetch.ts",
     status: "modified",
-    side: "head",
-    range: { start: 10, end: 12 },
+    head: { range: { start: 10, end: 12 }, lines: ["+line1", "+line2", "+line3"] },
     excerpt: "+line1\n+line2\n+line3",
-    lines: ["+line1", "+line2", "+line3"],
     ...overrides,
   };
 }
@@ -35,7 +33,14 @@ const EXPLAIN_INPUT: ExplainCategoryInput = {
   prDescription: "Retries transient network failures with backoff.",
   category: CATEGORY,
   production: [change()],
-  test: [change({ id: "c2", path: "src/fetch.test.ts", excerpt: "+test1", lines: ["+test1"] })],
+  test: [
+    change({
+      id: "c2",
+      path: "src/fetch.test.ts",
+      excerpt: "+test1",
+      head: { range: { start: 10, end: 10 }, lines: ["+test1"] },
+    }),
+  ],
   changeOwners: new Map(),
   diffThreshold: 100,
   baseSha: "abc123base",
@@ -78,7 +83,12 @@ describe("buildExplainPrompt", () => {
       ...EXPLAIN_INPUT,
       production: [
         change(),
-        change({ id: "shared", path: "src/shared.ts", excerpt: "+s", lines: ["+s"] }),
+        change({
+          id: "shared",
+          path: "src/shared.ts",
+          excerpt: "+s",
+          head: { range: { start: 10, end: 10 }, lines: ["+s"] },
+        }),
       ],
       test: [],
       // "c1" is primary here (owned by this category "c1"); "shared" is owned by another.
@@ -94,7 +104,7 @@ describe("buildExplainPrompt", () => {
     expect(prompt).toContain('already explained under "Shared helpers"');
     expect(prompt).toContain('{{catref id="c3"}}');
     // The primary change (src/fetch.ts) is not annotated.
-    expect(prompt).toMatch(/src\/fetch\.ts \(modified\), side head, lines 10-12\n/);
+    expect(prompt).toMatch(/src\/fetch\.ts \(modified\), head 10-12\n/);
     expect(prompt).not.toMatch(/src\/fetch\.ts.*already explained under/);
   });
 
@@ -112,10 +122,17 @@ describe("buildExplainPrompt", () => {
     expect(buildExplainPrompt(skimInput)).toContain("Attention rating: Skim");
   });
 
-  it("renders byte-identical prompt output when a change's range is over the diff threshold", async () => {
+  it("renders byte-identical prompt output when a change's diff-line count is over the diff threshold", async () => {
     const input: ExplainCategoryInput = {
       ...EXPLAIN_INPUT,
-      production: [change({ range: { start: 1, end: 500 } })],
+      production: [
+        change({
+          head: {
+            range: { start: 1, end: 500 },
+            lines: Array.from({ length: 500 }, (_, i) => `+line ${i + 1}`),
+          },
+        }),
+      ],
       diffThreshold: 3,
     };
 

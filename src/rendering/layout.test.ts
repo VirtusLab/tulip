@@ -22,8 +22,7 @@ const CSS = readFileSync(`${import.meta.dirname}/assets/style.css`, "utf8");
 function renderIntoJsdom(): Document {
   const snippetRef = serializeSnippetRef({
     path: "src/a.ts",
-    side: "head",
-    lines: { start: 1, end: 1 },
+    head: { start: 1, end: 1 },
     unfold: true,
   });
   const rows = buildAlignedDiff("a\n", "a\n");

@@ -1,4 +1,4 @@
-import type { DiffSide, FileStatus, LineRange } from "../diff/change.js";
+import type { ChangeSideContent, FileStatus, LineRange } from "../diff/change.js";
 
 /**
  * Public domain model for phase 2 (change classification). Raw wire types and JSON schemas for
@@ -18,23 +18,45 @@ export interface CategoryAssignment {
 }
 
 /**
- * A {@link Change}, flattened with everything the classifier prompt needs: which file it came
- * from, that file's status, and a ready-to-send diff excerpt (see ./excerpt.ts).
+ * A {@link Change}, carrying everything the classifier prompt needs: which file it came from, that
+ * file's status, the change's present side(s) (`base`/`head`, mirroring `Change` — docs/adr/0018),
+ * and a ready-to-send diff excerpt (see ./excerpt.ts). At least one of `base`/`head` is present.
  */
 export interface ClassifiableChange {
   id: string;
   path: string;
   status: FileStatus;
-  side: DiffSide;
-  range: LineRange;
-  /** Diff lines for this range, `+`/`-` markers included; truncated if very large (see ./excerpt.ts). */
+  base?: ChangeSideContent;
+  head?: ChangeSideContent;
+  /** Combined diff lines (base then head), `+`/`-` markers included; truncated if very large
+   * (see ./excerpt.ts). Later phases needing the full, untruncated diff use {@link changeDiffLines}
+   * over the change's own sides instead. */
   excerpt: string;
-  /** Full, untruncated diff lines for this range — the underlying `Change.lines`, kept separate
-   * from `excerpt` so later phases can always show the real diff regardless of `excerpt`'s
-   * char-based truncation (see src/explanations/prompt.ts). */
-  lines: string[];
 }
 
 /** Sentinel category names the classifier may use instead of a real category (see spec). */
 export const IGNORE_CATEGORY = "ignore";
 export const NONE_CATEGORY = "none";
+
+/** A human-readable description of a change's present side ranges, e.g. `base 2-3, head 2-4` or
+ * `head 10-14` — used in classifier/explainer prompts and coverage error messages. */
+export function changeLocationRanges(change: Pick<ClassifiableChange, "base" | "head">): string {
+  const parts: string[] = [];
+  if (change.base) {
+    parts.push(`base ${change.base.range.start}-${change.base.range.end}`);
+  }
+  if (change.head) {
+    parts.push(`head ${change.head.range.start}-${change.head.range.end}`);
+  }
+  return parts.join(", ");
+}
+
+/** A single range to display a change at (head if present, else base) — for consumers that still
+ * need one range, e.g. the phase-1 category consultation (see ./escape-hatch.ts). */
+export function changeDisplayRange(change: Pick<ClassifiableChange, "base" | "head">): LineRange {
+  const side = change.head ?? change.base;
+  if (!side) {
+    throw new Error("A change must have at least one of base/head");
+  }
+  return side.range;
+}

@@ -25,13 +25,13 @@ Here is the first batch of changes to classify:
 
 - id: ch1
   file: src/fetch.ts (modified)
-  side: head, lines 10-12
+  lines: head 10-12
   diff:
   +line1
   +line2
 
 - id: ch2
   file: src/fetch.ts (modified)
-  side: head, lines 10-12
+  lines: head 10-12
   diff:
   +onlyline

@@ -11,8 +11,7 @@ describe("renderExplanations", () => {
   it("resolves every referenced file via the checkout and renders it into the page", async () => {
     const ref = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const checkout = {
@@ -50,8 +49,7 @@ describe("renderExplanations", () => {
   it("fetches base content from the renamed-from path for a renamed-with-changes file", async () => {
     const ref = serializeSnippetRef({
       path: "new/name.ts",
-      side: "base",
-      lines: { start: 1, end: 1 },
+      base: { start: 1, end: 1 },
       unfold: true,
     });
     const checkout = {
@@ -84,8 +82,7 @@ describe("renderExplanations", () => {
   it("renders a single head-only pane for an added file, per the fileStatuses map", async () => {
     const ref = serializeSnippetRef({
       path: "src/new.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const checkout = {
@@ -121,14 +118,12 @@ describe("renderExplanations", () => {
   it("dedupes repeated references to the same file into a single checkout read", async () => {
     const refA = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 1, end: 1 },
+      head: { start: 1, end: 1 },
       unfold: true,
     });
     const refB = serializeSnippetRef({
       path: "src/a.ts",
-      side: "head",
-      lines: { start: 2, end: 2 },
+      head: { start: 2, end: 2 },
       unfold: true,
     });
     const checkout = {

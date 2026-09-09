@@ -1,6 +1,6 @@
 import type { Category } from "../categories/types.js";
 import { renderPrompt } from "../prompts/loader.js";
-import type { ClassifiableChange } from "./types.js";
+import { type ClassifiableChange, changeLocationRanges } from "./types.js";
 
 function formatCategoryList(categories: Category[]): string {
   return categories
@@ -11,7 +11,7 @@ function formatCategoryList(categories: Category[]): string {
 function formatChange(change: ClassifiableChange): string {
   return `- id: ${change.id}
   file: ${change.path} (${change.status})
-  side: ${change.side}, lines ${change.range.start}-${change.range.end}
+  lines: ${changeLocationRanges(change)}
   diff:
   ${change.excerpt.split("\n").join("\n  ")}`;
 }

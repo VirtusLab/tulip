@@ -19,10 +19,8 @@ function change(id: string, excerpt = "+line1\n+line2"): ClassifiableChange {
     id,
     path: "src/fetch.ts",
     status: "modified",
-    side: "head",
-    range: { start: 10, end: 12 },
+    head: { range: { start: 10, end: 12 }, lines: [excerpt] },
     excerpt,
-    lines: [excerpt],
   };
 }
 

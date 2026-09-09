@@ -242,32 +242,85 @@
 
   var CONTEXT_STEP = 20;
 
-  function expandUp(container, rows, currentStart, paneMode) {
-    var newStart = Math.max(0, currentStart - CONTEXT_STEP);
-    var html = "";
-    for (let i = newStart; i < currentStart; i++) {
-      html += renderSnippetRow(rows[i], paneMode);
-    }
-    var tbody = container.querySelector(".snippet-table tbody");
-    if (tbody) {
-      tbody.insertAdjacentHTML("afterbegin", html);
-    }
-    container.setAttribute("data-start-index", String(newStart));
-    return newStart === 0;
+  // Range-based context expansion (docs/adr/0018): a snippet's own per-region rows are not a
+  // contiguous slice of the embedded whole-file rows, so expansion walks the whole-file rows by
+  // line number, not by row index. The anchor side is head if present, else base; it stops at a
+  // changed row (another change, or the seam to a sibling split piece — where nothing is hidden).
+  function isContextRow(row) {
+    return row && row.baseType === "context" && row.headType === "context";
   }
 
-  function expandDown(container, rows, currentEnd, paneMode) {
-    var newEnd = Math.min(rows.length - 1, currentEnd + CONTEXT_STEP);
+  function anchorSideOf(container) {
+    return container.hasAttribute("data-head-start") ? "head" : "base";
+  }
+
+  function lineOf(row, side) {
+    return side === "head" ? row.headLine : row.baseLine;
+  }
+
+  function indexOfLine(rows, side, line) {
+    for (let i = 0; i < rows.length; i++) {
+      if (lineOf(rows[i], side) === line) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function renderRows(rows, paneMode) {
     var html = "";
-    for (let i = currentEnd + 1; i <= newEnd; i++) {
+    for (let i = 0; i < rows.length; i++) {
       html += renderSnippetRow(rows[i], paneMode);
+    }
+    return html;
+  }
+
+  function expandUp(container, rows, paneMode) {
+    var side = anchorSideOf(container);
+    var startAttr = "data-" + side + "-start";
+    var topIdx = indexOfLine(rows, side, Number(container.getAttribute(startAttr)));
+    if (topIdx <= 0) {
+      return true;
+    }
+    var collected = [];
+    var i = topIdx - 1;
+    while (i >= 0 && collected.length < CONTEXT_STEP && isContextRow(rows[i])) {
+      collected.unshift(rows[i]);
+      i--;
+    }
+    if (collected.length === 0) {
+      return true;
     }
     var tbody = container.querySelector(".snippet-table tbody");
     if (tbody) {
-      tbody.insertAdjacentHTML("beforeend", html);
+      tbody.insertAdjacentHTML("afterbegin", renderRows(collected, paneMode));
     }
-    container.setAttribute("data-end-index", String(newEnd));
-    return newEnd === rows.length - 1;
+    container.setAttribute(startAttr, String(lineOf(collected[0], side)));
+    return i < 0 || !isContextRow(rows[i]);
+  }
+
+  function expandDown(container, rows, paneMode) {
+    var side = anchorSideOf(container);
+    var endAttr = "data-" + side + "-end";
+    var botIdx = indexOfLine(rows, side, Number(container.getAttribute(endAttr)));
+    if (botIdx < 0 || botIdx >= rows.length - 1) {
+      return true;
+    }
+    var collected = [];
+    var i = botIdx + 1;
+    while (i < rows.length && collected.length < CONTEXT_STEP && isContextRow(rows[i])) {
+      collected.push(rows[i]);
+      i++;
+    }
+    if (collected.length === 0) {
+      return true;
+    }
+    var tbody = container.querySelector(".snippet-table tbody");
+    if (tbody) {
+      tbody.insertAdjacentHTML("beforeend", renderRows(collected, paneMode));
+    }
+    container.setAttribute(endAttr, String(lineOf(collected[collected.length - 1], side)));
+    return i >= rows.length || !isContextRow(rows[i]);
   }
 
   // Github-style context expansion (task 7.3): each button reveals more surrounding lines from
@@ -290,18 +343,8 @@
         var paneMode = container.getAttribute("data-pane-mode") || "split";
         var reachedEnd =
           dir === "up"
-            ? expandUp(
-                container,
-                rows,
-                Number(container.getAttribute("data-start-index")),
-                paneMode,
-              )
-            : expandDown(
-                container,
-                rows,
-                Number(container.getAttribute("data-end-index")),
-                paneMode,
-              );
+            ? expandUp(container, rows, paneMode)
+            : expandDown(container, rows, paneMode);
         if (reachedEnd) {
           button.remove();
         }

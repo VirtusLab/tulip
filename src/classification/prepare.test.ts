@@ -41,19 +41,15 @@ describe("prepareClassifiableChanges", () => {
         id: "src/a.ts:head:1-1",
         path: "src/a.ts",
         status: "modified",
-        side: "head",
-        range: { start: 1, end: 1 },
+        head: { range: { start: 1, end: 1 }, lines: ["+new line"] },
         excerpt: "+new line",
-        lines: ["+new line"],
       },
       {
         id: "src/b.ts:head:1-2",
         path: "src/b.ts",
         status: "added",
-        side: "head",
-        range: { start: 1, end: 2 },
+        head: { range: { start: 1, end: 2 }, lines: ["+line1", "+line2"] },
         excerpt: "+line1\n+line2",
-        lines: ["+line1", "+line2"],
       },
     ]);
   });
@@ -78,7 +74,8 @@ describe("prepareClassifiableChanges", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]?.id).toBe("src/f.ts:mod:1-1:1-1");
-    expect(result[0]?.lines).toEqual(["-old", "+new"]);
+    expect(result[0]?.base).toEqual({ range: { start: 1, end: 1 }, lines: ["-old"] });
+    expect(result[0]?.head).toEqual({ range: { start: 1, end: 1 }, lines: ["+new"] });
     expect(result[0]?.excerpt).toBe("-old\n+new");
   });
 
