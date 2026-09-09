@@ -195,9 +195,7 @@ describe("explainCategory", () => {
     const truncatedExcerpt = buildExcerpt({
       id: "c1",
       path: "src/fetch.ts",
-      side: "head",
-      range: { start: 10, end: 12 },
-      lines,
+      head: { range: { start: 10, end: 12 }, lines },
     });
     expect(truncatedExcerpt).not.toBe(lines.join("\n")); // sanity: the excerpt really is truncated
 

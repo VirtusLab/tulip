@@ -9,9 +9,7 @@ function makeChange(lines: string[]): Change {
   return {
     id: "src/x.ts:head:1-1",
     path: "src/x.ts",
-    side: "head",
-    range: { start: 1, end: lines.length },
-    lines,
+    head: { range: { start: 1, end: lines.length }, lines },
   };
 }
 

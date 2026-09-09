@@ -1,10 +1,9 @@
 import {
   type Change,
-  changeId,
-  type DiffSide,
+  type ChangeSideContent,
   type FileDiff,
   type FileStatus,
-  type LineRange,
+  makeChange,
   type ParsedDiff,
 } from "./change.js";
 
@@ -158,13 +157,19 @@ function parseHunks(lines: string[], path: string): Change[] {
   return changes;
 }
 
-/** Walks one hunk's body lines, grouping consecutive `-`/`+` lines into ranges. */
-/** A run of consecutive same-side diff lines being accumulated into one {@link Change}. */
-interface PendingRun {
-  range: LineRange;
-  lines: string[];
-}
-
+/**
+ * Walks one hunk's body lines, grouping an adjacent removed-run + added-run into ONE change (a
+ * modification), per docs/adr/0018. The rule, on a single group `{ removed?, added? }`:
+ *   - context (`" "`): flush the group (a modification/deletion/addition ends here); advance both.
+ *   - `"-"`: if an added run is already open, flush first — a `-` after additions starts a new
+ *     group (so `+a -b` stays an addition then a deletion, and `-a +b -c +d` is two modifications);
+ *     otherwise append to the removed run.
+ *   - `"+"`: append to the added run; a `+` never flushes a pending removed run — the two pair into
+ *     one modification (`-a -b +c +d` is a single modification).
+ * At end, flush. `flush` builds the change from whichever side(s) are present: both → modification,
+ * base only → deletion, head only → addition. Line-number tracking is per-marker, independent of
+ * grouping.
+ */
 function parseHunkBody(
   lines: string[],
   baseStart: number,
@@ -174,18 +179,18 @@ function parseHunkBody(
   const changes: Change[] = [];
   let baseLine = baseStart;
   let headLine = headStart;
-  let removed: PendingRun | undefined;
-  let added: PendingRun | undefined;
+  let removed: ChangeSideContent | undefined;
+  let added: ChangeSideContent | undefined;
 
-  const flushRemoved = () => {
-    if (removed) {
-      changes.push(makeChange(path, "base", removed.range, removed.lines));
+  const flush = () => {
+    if (removed || added) {
+      changes.push(
+        makeChange(path, {
+          ...(removed ? { base: removed } : {}),
+          ...(added ? { head: added } : {}),
+        }),
+      );
       removed = undefined;
-    }
-  };
-  const flushAdded = () => {
-    if (added) {
-      changes.push(makeChange(path, "head", added.range, added.lines));
       added = undefined;
     }
   };
@@ -193,18 +198,18 @@ function parseHunkBody(
   for (const line of lines) {
     const marker = line[0];
     if (marker === " ") {
-      flushRemoved();
-      flushAdded();
+      flush();
       baseLine++;
       headLine++;
     } else if (marker === "-") {
-      flushAdded();
+      if (added) {
+        flush();
+      }
       removed = removed
         ? { range: { start: removed.range.start, end: baseLine }, lines: [...removed.lines, line] }
         : { range: { start: baseLine, end: baseLine }, lines: [line] };
       baseLine++;
     } else if (marker === "+") {
-      flushRemoved();
       added = added
         ? { range: { start: added.range.start, end: headLine }, lines: [...added.lines, line] }
         : { range: { start: headLine, end: headLine }, lines: [line] };
@@ -212,11 +217,6 @@ function parseHunkBody(
     }
     // Other lines (e.g. "\ No newline at end of file", or the trailing blank split artifact) are ignored.
   }
-  flushRemoved();
-  flushAdded();
+  flush();
   return changes;
-}
-
-function makeChange(path: string, side: DiffSide, range: LineRange, lines: string[]): Change {
-  return { id: changeId(path, side, range), path, side, range, lines };
 }

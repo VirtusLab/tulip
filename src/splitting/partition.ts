@@ -1,30 +1,44 @@
-import { type Change, changeId } from "../diff/change.js";
+import { type Change, type ChangeSideContent, type DiffSide, makeChange } from "../diff/change.js";
 
 /**
- * True if `change` is large enough to offer to the splitter: its line count
- * (`range.end - range.start + 1`) exceeds `threshold`. Both sides qualify, so a large deletion
- * is a candidate too (docs/adr/0016).
+ * True if `change` is large enough to offer to the splitter: its total changed line count across
+ * both sides (`base` + `head`) exceeds `threshold`. Any kind qualifies — a large addition,
+ * deletion, or in-place modification (docs/adr/0016, generalized by docs/adr/0018).
  */
 export function isSplitCandidate(change: Change, threshold: number): boolean {
-  return change.range.end - change.range.start + 1 > threshold;
+  const total = (change.base?.lines.length ?? 0) + (change.head?.lines.length ?? 0);
+  return total > threshold;
 }
 
 /**
  * Builds the partition of `change` from the LLM's interior split points — the coverage guarantee
  * of docs/adr/0016: the model only proposes where a new segment begins, and this code turns those
- * points into a gap-free, overlap-free tiling of `change.range`. No line can be dropped or
+ * points into a gap-free, overlap-free tiling of the change's range. No line can be dropped or
  * duplicated regardless of what the model returns.
  *
+ * Single-sided changes (additions, deletions) tile their one side, as before. A modification (both
+ * sides present) passes through whole here — two-axis paired splitting arrives with the
+ * `boundaries` wire in a later step (docs/adr/0018); until then a large modification stays one
+ * change.
+ *
  * `splitBefore` are 1-based side line numbers, each the first line of a new segment. They're
- * sanitized to integers strictly inside `(range.start, range.end]`, deduped and sorted; a point
- * at or before `range.start` is meaningless (it wouldn't start a new interior segment) and one
- * past `range.end` is out of range — both dropped. If none survive, `change` passes through whole
- * (returned as-is). Otherwise segments are `[start, p1-1], [p1, p2-1], …, [pk, end]`, each
- * sub-change's `lines` sliced at offset `segStart - range.start`, `side`/`path` inherited, and id
- * assigned by {@link changeId} (same format as the parser's, docs/adr/0005).
+ * sanitized to integers strictly inside `(start, end]`, deduped and sorted; a point at or before
+ * `start` is meaningless and one past `end` is out of range — both dropped. If none survive,
+ * `change` passes through whole. Otherwise segments are `[start, p1-1], [p1, p2-1], …, [pk, end]`,
+ * each sub-change's `lines` sliced at offset `segStart - start` and its id assigned by
+ * {@link makeChange}.
  */
 export function buildPartition(change: Change, splitBefore: number[]): Change[] {
-  const { start, end } = change.range;
+  if (change.base && change.head) {
+    return [change];
+  }
+  const side: DiffSide = change.head ? "head" : "base";
+  const content = change.head ?? change.base;
+  if (!content) {
+    return [change]; // Unreachable: the ≥1-side invariant guarantees one side is present.
+  }
+
+  const { start, end } = content.range;
   const points = [
     ...new Set(splitBefore.filter((p) => Number.isInteger(p) && p > start && p <= end)),
   ].sort((a, b) => a - b);
@@ -39,14 +53,11 @@ export function buildPartition(change: Change, splitBefore: number[]): Change[] 
   for (let i = 0; i < boundaries.length - 1; i++) {
     const segStart = boundaries[i] as number;
     const segEnd = (boundaries[i + 1] as number) - 1;
-    const range = { start: segStart, end: segEnd };
-    segments.push({
-      id: changeId(change.path, change.side, range),
-      path: change.path,
-      side: change.side,
-      range,
-      lines: change.lines.slice(segStart - start, segEnd - start + 1),
-    });
+    const segment: ChangeSideContent = {
+      range: { start: segStart, end: segEnd },
+      lines: content.lines.slice(segStart - start, segEnd - start + 1),
+    };
+    segments.push(makeChange(change.path, side === "head" ? { head: segment } : { base: segment }));
   }
   return segments;
 }

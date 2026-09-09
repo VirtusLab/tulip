@@ -8,9 +8,7 @@ function fileWithChange(id: string): ParsedDiff["files"][number] {
   const change: Change = {
     id,
     path: `src/${id}.ts`,
-    side: "head",
-    range: { start: 1, end: 1 },
-    lines: ["+line"],
+    head: { range: { start: 1, end: 1 }, lines: ["+line"] },
   };
   return { path: change.path, status: "modified", binary: false, changes: [change] };
 }

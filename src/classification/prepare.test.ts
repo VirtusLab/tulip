@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ParsedDiff } from "../diff/change.js";
+import { parseDiff } from "../diff/parse-diff.js";
 import { prepareClassifiableChanges } from "./prepare.js";
 
 describe("prepareClassifiableChanges", () => {
@@ -14,9 +15,7 @@ describe("prepareClassifiableChanges", () => {
             {
               id: "src/a.ts:head:1-1",
               path: "src/a.ts",
-              side: "head",
-              range: { start: 1, end: 1 },
-              lines: ["+new line"],
+              head: { range: { start: 1, end: 1 }, lines: ["+new line"] },
             },
           ],
         },
@@ -28,9 +27,7 @@ describe("prepareClassifiableChanges", () => {
             {
               id: "src/b.ts:head:1-2",
               path: "src/b.ts",
-              side: "head",
-              range: { start: 1, end: 2 },
-              lines: ["+line1", "+line2"],
+              head: { range: { start: 1, end: 2 }, lines: ["+line1", "+line2"] },
             },
           ],
         },
@@ -59,6 +56,30 @@ describe("prepareClassifiableChanges", () => {
         lines: ["+line1", "+line2"],
       },
     ]);
+  });
+
+  it("maps an in-place modification to ONE classifiable change (no duplicate before/after)", () => {
+    // The bug docs/adr/0018 fixes: a `-old`/`+new` edit used to split into two changes, each
+    // rendered as the same before/after diff. It must now be a single classifiable change whose
+    // excerpt/lines carry the combined diff.
+    const diff = parseDiff(
+      [
+        "diff --git a/src/f.ts b/src/f.ts",
+        "index 1111111..2222222 100644",
+        "--- a/src/f.ts",
+        "+++ b/src/f.ts",
+        "@@ -1,1 +1,1 @@",
+        "-old",
+        "+new",
+      ].join("\n"),
+    );
+
+    const result = prepareClassifiableChanges(diff);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe("src/f.ts:mod:1-1:1-1");
+    expect(result[0]?.lines).toEqual(["-old", "+new"]);
+    expect(result[0]?.excerpt).toBe("-old\n+new");
   });
 
   it("produces no changes for binary files (nothing to classify)", () => {

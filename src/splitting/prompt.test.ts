@@ -12,9 +12,10 @@ function candidate(): SplitCandidate {
   const change: Change = {
     id: "src/big.ts:head:10-13",
     path: "src/big.ts",
-    side: "head",
-    range: { start: 10, end: 13 },
-    lines: ["+parse a", "+parse b", "+render x", "+render y"],
+    head: {
+      range: { start: 10, end: 13 },
+      lines: ["+parse a", "+parse b", "+render x", "+render y"],
+    },
   };
   return { change, status: "added" };
 }

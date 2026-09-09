@@ -14,12 +14,14 @@ const CATEGORIES: Category[] = [{ id: "c1", name: "A", description: "first", att
 function change(path: string, side: DiffSide, start: number, count: number): Change {
   const marker = side === "head" ? "+" : "-";
   const end = start + count - 1;
+  const content = {
+    range: { start, end },
+    lines: Array.from({ length: count }, (_, i) => `${marker}line ${start + i}`),
+  };
   return {
     id: `${path}:${side}:${start}-${end}`,
     path,
-    side,
-    range: { start, end },
-    lines: Array.from({ length: count }, (_, i) => `${marker}line ${start + i}`),
+    ...(side === "head" ? { head: content } : { base: content }),
   };
 }
 

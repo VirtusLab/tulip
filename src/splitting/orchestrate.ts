@@ -3,7 +3,7 @@ import { batchBySize } from "../claude/batch.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { runSession } from "../claude/session.js";
 import { config } from "../config.js";
-import type { ParsedDiff } from "../diff/change.js";
+import { changeDiffLines, type ParsedDiff } from "../diff/change.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { buildPartition, isSplitCandidate } from "./partition.js";
 import { buildSplitPrompt, type SplitCandidate } from "./prompt.js";
@@ -22,7 +22,7 @@ export interface SplitLargeChangesDeps extends RunnerDeps {
 
 /** Full diff text of a candidate, the size unit its batches are bounded by. */
 function diffTextSize(candidate: SplitCandidate): number {
-  return candidate.change.lines.join("\n").length;
+  return changeDiffLines(candidate.change).join("\n").length;
 }
 
 /**

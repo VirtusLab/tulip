@@ -7,21 +7,30 @@ export interface LineRange {
   end: number;
 }
 
-/**
- * A single contiguous run of added or removed lines, within one file, on one side of the diff.
- * This is the addressable unit later epics classify into categories and code type; each has a
- * stable id so bookkeeping (e.g. tracking which changes have been categorized) can reference it.
- */
-export interface Change {
-  /** Stable within a parsed diff: `${path}:${side}:${start}-${end}`. */
-  id: string;
-  /** Path of the file this change belongs to, on the given `side`. */
-  path: string;
-  side: DiffSide;
+/** One side's content of a {@link Change}: the line range it spans on that side, and the raw diff
+ * lines for it — each still carrying its leading `+` (head) or `-` (base) marker. */
+export interface ChangeSideContent {
   range: LineRange;
-  /** Raw diff lines for this range, one per line, each still carrying its leading `+`/`-` marker. */
   lines: string[];
 }
+
+/**
+ * A single change within one file, carrying both sides of the diff it represents (docs/adr/0018).
+ * At least one of `base`/`head` is present (enforced by {@link makeChange}); the kind is *derived*
+ * from which sides are present, never stored — see {@link changeKind}:
+ *   - head only → an addition, base only → a deletion, both → an in-place modification.
+ * A modification's `base` (removed) and `head` (added) runs together form one before/after diff, so
+ * one change maps to exactly one rendered diff. Each change has a stable id (see {@link changeId}).
+ */
+export interface Change {
+  id: string;
+  path: string;
+  base?: ChangeSideContent;
+  head?: ChangeSideContent;
+}
+
+/** A change's derived kind (see {@link changeKind}). */
+export type ChangeKind = "addition" | "deletion" | "modification";
 
 /** How a file was touched by the PR, per the diff's file header. */
 export type FileStatus = "added" | "removed" | "modified" | "renamed";
@@ -42,10 +51,64 @@ export interface ParsedDiff {
   files: FileDiff[];
 }
 
-/** The canonical `Change.id` string for a range on one side of a file: `${path}:${side}:${start}-${end}`
- * (docs/adr/0005). The single source of this format — both the diff parser (src/diff/parse-diff.ts)
- * and the splitter (src/splitting/partition.ts) build ids through it, so sub-changes are keyed
- * identically to parser-produced ones. */
-export function changeId(path: string, side: DiffSide, range: LineRange): string {
-  return `${path}:${side}:${range.start}-${range.end}`;
+/** The present sides of a change or a change-to-be — the shape {@link changeId}/{@link makeChange}
+ * build an id and a {@link Change} from. */
+export interface ChangeSides {
+  base?: ChangeSideContent;
+  head?: ChangeSideContent;
+}
+
+/** The kind of `change`, derived from which sides are present (never stored — docs/adr/0018). */
+export function changeKind(change: ChangeSides): ChangeKind {
+  if (change.base && change.head) {
+    return "modification";
+  }
+  return change.head ? "addition" : "deletion";
+}
+
+/** A change's diff lines as one unified run: base (removed) lines first, then head (added) lines,
+ * each keeping its `+`/`-` marker. For a single-sided change this is just that side's lines. */
+export function changeDiffLines(change: ChangeSides): string[] {
+  return [...(change.base?.lines ?? []), ...(change.head?.lines ?? [])];
+}
+
+/**
+ * The canonical `Change.id` for the given present side(s) (docs/adr/0005, extended by docs/adr/0018):
+ *   - addition (head only): `${path}:head:${hs}-${he}`
+ *   - deletion (base only): `${path}:base:${bs}-${be}`
+ *   - modification (both):  `${path}:mod:${bs}-${be}:${hs}-${he}`
+ * The single source of this format — the diff parser (src/diff/parse-diff.ts) and the splitter
+ * (src/splitting/partition.ts) build ids only through here, so sub-changes are keyed identically to
+ * parser-produced ones. The id is opaque everywhere and never parsed. Throws if no side is present.
+ */
+export function changeId(path: string, sides: ChangeSides): string {
+  const { base, head } = sides;
+  if (base && head) {
+    return `${path}:mod:${base.range.start}-${base.range.end}:${head.range.start}-${head.range.end}`;
+  }
+  if (head) {
+    return `${path}:head:${head.range.start}-${head.range.end}`;
+  }
+  if (base) {
+    return `${path}:base:${base.range.start}-${base.range.end}`;
+  }
+  throw new Error(`Cannot build a change id with no side present (path: ${path})`);
+}
+
+/**
+ * Builds a {@link Change} from its present side(s), assigning the id via {@link changeId}. Enforces
+ * the model's core invariant: throws if neither `base` nor `head` is given.
+ */
+export function makeChange(path: string, sides: ChangeSides): Change {
+  if (!sides.base && !sides.head) {
+    throw new Error(`A change must have at least one of base/head (path: ${path})`);
+  }
+  const change: Change = { id: changeId(path, sides), path };
+  if (sides.base) {
+    change.base = sides.base;
+  }
+  if (sides.head) {
+    change.head = sides.head;
+  }
+  return change;
 }

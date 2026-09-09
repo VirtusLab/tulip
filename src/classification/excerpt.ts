@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import type { Change } from "../diff/change.js";
+import { type Change, changeDiffLines } from "../diff/change.js";
 
 /** Diff excerpts longer than this are truncated with a marker, to keep batch prompts bounded. */
 const MAX_EXCERPT_CHARS = config.limits.maxExcerptChars;
@@ -7,10 +7,11 @@ const TRUNCATION_MARKER = "\n… (excerpt truncated)";
 
 /**
  * Renders a change's raw diff lines (each still carrying its `+`/`-` marker) as a single excerpt
- * string suitable for a classification prompt, truncating very large excerpts with a marker.
+ * string suitable for a classification prompt, truncating very large excerpts with a marker. For a
+ * modification the excerpt is the combined base-then-head run (see {@link changeDiffLines}).
  */
 export function buildExcerpt(change: Change): string {
-  const full = change.lines.join("\n");
+  const full = changeDiffLines(change).join("\n");
   if (full.length <= MAX_EXCERPT_CHARS) {
     return full;
   }
