@@ -32,8 +32,11 @@ function modChange(baseCount: number, headCount: number): Change {
 }
 
 const sideOf = (c: Change): ChangeSideContent => (c.head ?? c.base) as ChangeSideContent;
-const head = (n: number): SplitBoundary => ({ head: n });
-const base = (n: number): SplitBoundary => ({ base: n });
+const head = (line: number): SplitBoundary => ({ side: "head", line });
+const base = (line: number): SplitBoundary => ({ side: "base", line });
+/** The derived kind of a change: modification (both sides), addition (head), or deletion (base). */
+const kindOf = (c: Change): "mod" | "add" | "del" =>
+  c.base && c.head ? "mod" : c.head ? "add" : "del";
 
 describe("isSplitCandidate", () => {
   it("is true only when the total line count exceeds the threshold", () => {
@@ -70,13 +73,20 @@ describe("buildPartition — single-sided", () => {
   });
 
   it("ignores a boundary carrying the wrong side", () => {
-    // A head change with only base coordinates → nothing usable → whole.
+    // A head-only change with a base-side boundary → nothing usable → whole.
     const c = change(10, 20);
     expect(buildPartition(c, [base(15)])).toEqual([c]);
   });
 
-  it("drops out-of-range and non-integer points, normalizes order and duplicates", () => {
-    const parts = buildPartition(change(10, 20), [head(21), head(17), head(13), head(13), head(5)]);
+  it("drops out-of-range, non-integer and duplicate points, normalizing order", () => {
+    const parts = buildPartition(change(10, 20), [
+      head(21), // > end → dropped
+      head(17),
+      head(13),
+      head(13), // duplicate
+      head(5), // < start → dropped
+      head(15.5), // non-integer → dropped
+    ]);
     expect(parts.map((p) => sideOf(p).range)).toEqual([
       { start: 10, end: 12 },
       { start: 13, end: 16 },
@@ -98,67 +108,73 @@ describe("buildPartition — single-sided", () => {
   });
 });
 
-describe("buildPartition — modification (two-axis)", () => {
+describe("buildPartition — modification (single-axis cut)", () => {
   it("passes a modification through whole when there are no usable boundaries", () => {
     const c = modChange(3, 2);
     expect(buildPartition(c, [])).toEqual([c]);
   });
 
-  it("tiles both axes exactly from paired boundaries (reconstructs each side)", () => {
-    const c = modChange(10, 8);
-    const parts = buildPartition(c, [
-      { base: 4, head: 3 },
-      { base: 7, head: 6 },
+  it("cuts inside the head run → a modification then an addition", () => {
+    // base 1-3, head 1-4; cut before head line 3 keeps head 1-2 with the deletions.
+    const parts = buildPartition(modChange(3, 4), [head(3)]);
+    expect(parts.map((p) => [p.id, kindOf(p)])).toEqual([
+      ["src/x.ts:mod:1-3:1-2", "mod"],
+      ["src/x.ts:head:3-4", "add"],
     ]);
+  });
 
-    expect(parts).toHaveLength(3);
-    // Both axes tile exactly: concatenated sub-change lines equal the originals.
+  it("cuts inside the base run → a deletion then a modification", () => {
+    // base 1-4, head 1-3; cut before base line 3 leaves base 1-2 as a pure deletion.
+    const parts = buildPartition(modChange(4, 3), [base(3)]);
+    expect(parts.map((p) => [p.id, kindOf(p)])).toEqual([
+      ["src/x.ts:base:1-2", "del"],
+      ["src/x.ts:mod:3-4:1-3", "mod"],
+    ]);
+  });
+
+  it("keeps the junction cut {head, headStart} → a deletion then an addition (Issue #1 guardrail)", () => {
+    // The head's first line is a legal, non-first boundary: it peels the deletions off.
+    const parts = buildPartition(modChange(3, 4), [head(1)]);
+    expect(parts.map((p) => [p.id, kindOf(p)])).toEqual([
+      ["src/x.ts:base:1-3", "del"],
+      ["src/x.ts:head:1-4", "add"],
+    ]);
+  });
+
+  it("cuts on both a base and a head line → deletion, modification, addition", () => {
+    const parts = buildPartition(modChange(4, 4), [base(3), head(3)]);
+    expect(parts.map((p) => [p.id, kindOf(p)])).toEqual([
+      ["src/x.ts:base:1-2", "del"],
+      ["src/x.ts:mod:3-4:1-2", "mod"],
+      ["src/x.ts:head:3-4", "add"],
+    ]);
+  });
+
+  it("is uncapped: three pieces from a base-2 / head-30 change (no shorter-side cap)", () => {
+    // The old two-axis splitter capped segment count at the shorter side (2 base lines → 2
+    // segments max). The single-axis cut has no such cap.
+    const parts = buildPartition(modChange(2, 30), [head(10), head(20)]);
+    expect(parts.map((p) => [p.id, kindOf(p)])).toEqual([
+      ["src/x.ts:mod:1-2:1-9", "mod"],
+      ["src/x.ts:head:10-19", "add"],
+      ["src/x.ts:head:20-30", "add"],
+    ]);
+  });
+
+  it("reconstructs both axes exactly: slice base lines rebuild the base, head the head", () => {
+    const c = modChange(5, 6);
+    const parts = buildPartition(c, [base(3), head(2), head(5)]);
     expect(parts.flatMap((p) => p.base?.lines ?? [])).toEqual(c.base?.lines);
     expect(parts.flatMap((p) => p.head?.lines ?? [])).toEqual(c.head?.lines);
-    // Every segment has both sides → a modification.
-    for (const part of parts) {
-      expect(part.base).toBeDefined();
-      expect(part.head).toBeDefined();
-    }
-    expect(parts.map((p) => [p.base?.range, p.head?.range])).toEqual([
-      [
-        { start: 1, end: 3 },
-        { start: 1, end: 2 },
-      ],
-      [
-        { start: 4, end: 6 },
-        { start: 3, end: 5 },
-      ],
-      [
-        { start: 7, end: 10 },
-        { start: 6, end: 8 },
-      ],
-    ]);
   });
 
-  it("assigns each modification segment a mod id", () => {
-    const parts = buildPartition(modChange(4, 4), [{ base: 3, head: 3 }]);
-    expect(parts.map((p) => p.id)).toEqual(["src/x.ts:mod:1-2:1-2", "src/x.ts:mod:3-4:3-4"]);
-  });
-
-  it("drops boundaries missing a side, out of range, or not strictly advancing on both axes", () => {
+  it("drops a boundary on an absent side and one out of range", () => {
     const c = modChange(4, 4);
     const parts = buildPartition(c, [
-      base(2), // missing head → dropped
-      { base: 3, head: 3 }, // kept
-      { base: 5, head: 5 }, // out of range → dropped
-      { base: 4, head: 3 }, // head not advancing past 3 → dropped
+      base(6), // > base end → dropped
+      head(5), // > head end → dropped
+      head(3), // kept
     ]);
-    // Only {3,3} survives → two segments.
-    expect(parts.map((p) => [p.base?.range, p.head?.range])).toEqual([
-      [
-        { start: 1, end: 2 },
-        { start: 1, end: 2 },
-      ],
-      [
-        { start: 3, end: 4 },
-        { start: 3, end: 4 },
-      ],
-    ]);
+    expect(parts.map((p) => p.id)).toEqual(["src/x.ts:mod:1-4:1-2", "src/x.ts:head:3-4"]);
   });
 });

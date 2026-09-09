@@ -65,7 +65,7 @@ describe("splitLargeChanges", () => {
     const small = change("src/a.ts", "head", 200, 2);
     const diff: ParsedDiff = { files: [file([big, small])] };
     const runClaudeProcess = mockProcess({
-      splits: [{ changeId: big.id, boundaries: [{ head: 50 }] }],
+      splits: [{ changeId: big.id, boundaries: [{ side: "head", line: 50 }] }],
     });
 
     const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
@@ -92,8 +92,8 @@ describe("splitLargeChanges", () => {
     const diff: ParsedDiff = { files: [file([big])] };
     const runClaudeProcess = mockProcess({
       splits: [
-        { changeId: "src/nope.ts:head:1-2", boundaries: [{ head: 99 }] },
-        { changeId: big.id, boundaries: [{ head: 70 }] },
+        { changeId: "src/nope.ts:head:1-2", boundaries: [{ side: "head", line: 99 }] },
+        { changeId: big.id, boundaries: [{ side: "head", line: 70 }] },
       ],
     });
 
@@ -115,7 +115,7 @@ describe("splitLargeChanges", () => {
       call++;
       if (call === 1) {
         return envelope({
-          splits: [{ changeId: changes[0]?.id ?? "", boundaries: [{ head: 50 }] }],
+          splits: [{ changeId: changes[0]?.id ?? "", boundaries: [{ side: "head", line: 50 }] }],
         });
       }
       throw new Error("boom");
@@ -153,8 +153,8 @@ describe("splitLargeChanges", () => {
     };
     const runClaudeProcess = mockProcess({
       splits: [
-        { changeId: baseSide.id, boundaries: [{ base: 40 }] },
-        { changeId: headSide.id, boundaries: [{ head: 60 }] },
+        { changeId: baseSide.id, boundaries: [{ side: "base", line: 40 }] },
+        { changeId: headSide.id, boundaries: [{ side: "head", line: 60 }] },
       ],
     });
 
@@ -171,7 +171,7 @@ describe("splitLargeChanges", () => {
     ]);
   });
 
-  it("splits a large in-place modification into paired sub-modifications", () => {
+  it("splits a large in-place modification at a head cut", () => {
     const modification: Change = {
       id: "src/a.ts:mod:1-70:1-70",
       path: "src/a.ts",
@@ -180,14 +180,16 @@ describe("splitLargeChanges", () => {
     };
     const diff: ParsedDiff = { files: [file([modification])] };
     const runClaudeProcess = mockProcess({
-      splits: [{ changeId: modification.id, boundaries: [{ base: 30, head: 30 }] }],
+      splits: [{ changeId: modification.id, boundaries: [{ side: "head", line: 30 }] }],
     });
 
     return splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess }).then(
       (result) => {
+        // Head cut before line 30: the deletions stay with head 1-29 (a modification), head 30-70
+        // becomes a pure addition.
         expect(result.files[0]?.changes.map((c) => c.id)).toEqual([
-          "src/a.ts:mod:1-29:1-29",
-          "src/a.ts:mod:30-70:30-70",
+          "src/a.ts:mod:1-70:1-29",
+          "src/a.ts:head:30-70",
         ]);
       },
     );
@@ -197,7 +199,7 @@ describe("splitLargeChanges", () => {
     const big = change("src/a.ts", "head", 1, 130);
     const diff: ParsedDiff = { files: [file([big])] };
     const runClaudeProcess = mockProcess({
-      splits: [{ changeId: big.id, boundaries: [{ head: 50 }] }],
+      splits: [{ changeId: big.id, boundaries: [{ side: "head", line: 50 }] }],
     });
     const usage = createUsageLedger();
 

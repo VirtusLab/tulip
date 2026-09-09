@@ -31,8 +31,8 @@ function formatCandidate({ change, status }: SplitCandidate): string {
   const header = `- changeId: ${change.id}
   file: ${change.path} (${status})`;
   if (change.base && change.head) {
-    // Modification: show both sides' numbered lines so the model can place paired base/head
-    // split boundaries across them (docs/adr/0018).
+    // Modification: show both sides' numbered lines (the unified sequence) so the model can place
+    // each single-side {side, line} cut against them (docs/adr/0018).
     return `${header}
   base lines ${change.base.range.start}-${change.base.range.end}:
 ${formatNumberedLines(change.base)}

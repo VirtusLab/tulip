@@ -14,18 +14,19 @@ For each change, decide whether it spans more than one category's concern. If it
 return the boundaries where a new concern begins — the first line of each new segment. If
 the change is a single coherent concern, return an empty list.
 
-Each boundary is an object:
-- For a change with only one side, give that side's line number: `{ "head": N }` for an
-  addition, `{ "base": N }` for a deletion.
-- For a change with both sides (a modification), give BOTH the base and head line where
-  the next concern begins: `{ "base": B, "head": H }` — so the removed and added lines
-  stay paired. Which deletions go with which additions is exactly your call.
+Each boundary is one line on one side — `{ "side": "base"|"head", "line": N }` — meaning
+"start a new piece before this line". `side` is mandatory: base and head line numbers are
+different scales and can overlap, so a bare line is ambiguous. For a change with only one
+side, every boundary is on that side. For a change with both sides (a modification), a cut
+at the head's first line (`{ "side": "head", "line": <first head line> }`) peels the removed
+lines into their own piece — deletions before it, additions after; a cut placed elsewhere
+keeps the surrounding removed and added lines together in one piece.
 
 Rules:
 - Return only boundaries, never ranges. Every line stays covered automatically; you never
   assign lines to segments yourself.
 - A boundary is the first line of a new segment. Do not return a change's first line as a
-  boundary (it already starts the first segment). Boundaries must strictly advance.
+  boundary (it already starts the first segment); a cut at the head's first line is fine.
 - Prefer few, meaningful boundaries over many small ones: split only where the concern
   genuinely changes.
 
