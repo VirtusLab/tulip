@@ -16,6 +16,10 @@ it.
 Tulip uses the headless `claude` CLI to do the analysis. No API key needed, just
 a logged-in Claude Code.
 
+![A generated explanation with a Mermaid diagram of the changed flow](screens/diagram.png)
+
+![A prose explanation interleaved with a syntax-highlighted side-by-side diff](screens/code.png)
+
 ## How it works
 
 Tulip fetches the PR and runs it through a few LLM passes, each using a model
