@@ -58,7 +58,10 @@ async function defaultRunGh(args: string[]): Promise<string> {
 }
 
 async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> {
-  const repo = `${pr.owner}/${pr.repo}`;
+  // `gh` accepts the `HOST/OWNER/REPO` form, routing to the credentials for that host — so a
+  // self-hosted GitHub Enterprise PR resolves once the user has run `gh auth login --hostname
+  // <host>`. Redundant but valid for github.com.
+  const repo = `${pr.host}/${pr.owner}/${pr.repo}`;
   const [viewJson, diff] = await Promise.all([
     runGh(["pr", "view", String(pr.number), "--repo", repo, "--json", GH_VIEW_FIELDS]),
     runGh(["pr", "diff", String(pr.number), "--repo", repo]),
@@ -84,6 +87,12 @@ async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> 
   };
 }
 
+/** REST API base for a host: github.com's dedicated `api.github.com`, or GitHub Enterprise
+ * Server's `https://<host>/api/v3`. */
+function apiBaseUrl(host: string): string {
+  return host === "github.com" ? "https://api.github.com" : `https://${host}/api/v3`;
+}
+
 const FILES_PER_PAGE = 100;
 
 async function fetchViaHttp(
@@ -91,7 +100,7 @@ async function fetchViaHttp(
   fetchUrl: typeof fetch,
   token: string | undefined,
 ): Promise<PrMetadata> {
-  const prApiUrl = `https://api.github.com/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`;
+  const prApiUrl = `${apiBaseUrl(pr.host)}/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`;
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
   const [prJson, diff, files] = await Promise.all([

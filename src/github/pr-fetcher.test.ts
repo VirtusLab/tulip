@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fetchPrMetadata } from "./pr-fetcher.js";
 import type { PrRef } from "./pr-url.js";
 
-const PR: PrRef = { owner: "owner", repo: "repo", number: 42 };
+const PR: PrRef = { host: "github.com", owner: "owner", repo: "repo", number: 42 };
 
 const GH_VIEW_JSON = JSON.stringify({
   title: "Add feature",
@@ -42,10 +42,60 @@ describe("fetchPrMetadata", () => {
       "view",
       "42",
       "--repo",
-      "owner/repo",
+      "github.com/owner/repo",
       "--json",
       "title,body,files,baseRefName,baseRefOid,headRefName,headRefOid",
     ]);
+  });
+
+  it("passes a host-qualified repo to gh for a self-hosted host", async () => {
+    const runGh = vi.fn(async (args: string[]) => {
+      if (args[1] === "view") return GH_VIEW_JSON;
+      if (args[1] === "diff") return GH_DIFF;
+      throw new Error(`unexpected gh args: ${args.join(" ")}`);
+    });
+
+    await fetchPrMetadata({ ...PR, host: "git.xyz.com" }, { runGh });
+
+    expect(runGh).toHaveBeenCalledWith(
+      expect.arrayContaining(["--repo", "git.xyz.com/owner/repo"]),
+    );
+  });
+
+  it("uses the GitHub Enterprise /api/v3 base for the HTTP fallback on a self-hosted host", async () => {
+    const runGh = vi.fn(async () => {
+      throw new Error("gh: command not found");
+    });
+    const seen: string[] = [];
+    const fetchUrl = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const href = url.toString();
+      seen.push(href);
+      const headers = new Headers(init?.headers);
+      if (headers.get("Accept") === "application/vnd.github.v3.diff") {
+        return new Response(GH_DIFF, { status: 200 });
+      }
+      if (href.endsWith("/pulls/42")) {
+        return jsonResponse({
+          title: "t",
+          body: null,
+          base: { ref: "main", sha: "base-sha" },
+          head: { ref: "feature", sha: "head-sha" },
+        });
+      }
+      if (href.includes("/pulls/42/files")) {
+        return jsonResponse([{ filename: "src/a.ts" }]);
+      }
+      throw new Error(`unexpected url: ${href}`);
+    });
+
+    await fetchPrMetadata(
+      { ...PR, host: "git.xyz.com" },
+      { runGh, fetchUrl: fetchUrl as unknown as typeof fetch },
+    );
+
+    expect(
+      seen.every((href) => href.startsWith("https://git.xyz.com/api/v3/repos/owner/repo/pulls/42")),
+    ).toBe(true);
   });
 
   it("falls back to the HTTP API when gh is unavailable", async () => {

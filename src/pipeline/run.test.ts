@@ -20,7 +20,7 @@ vi.mock("../version.js", () => ({
   formatVersion: vi.fn(() => "Tulip 9.9.9 (test123, built now)"),
 }));
 
-const PR: PrRef = { owner: "octo", repo: "widgets", number: 42 };
+const PR: PrRef = { host: "github.com", owner: "octo", repo: "widgets", number: 42 };
 
 const ADDED_FILE_DIFF = [
   "diff --git a/src/new.ts b/src/new.ts",

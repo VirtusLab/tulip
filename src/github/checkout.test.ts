@@ -8,7 +8,7 @@ import { config } from "../config.js";
 import { createCheckout } from "./checkout.js";
 import type { PrRef } from "./pr-url.js";
 
-const PR: PrRef = { owner: "owner", repo: "repo", number: 1 };
+const PR: PrRef = { host: "github.com", owner: "owner", repo: "repo", number: 1 };
 const REVISIONS = { base: { sha: "base-sha" }, head: { sha: "head-sha" } };
 const DEPTH = String(config.limits.checkoutFetchDepth);
 
@@ -37,6 +37,19 @@ describe("createCheckout", () => {
       dir,
     );
     expect(runGit).toHaveBeenNthCalledWith(5, ["checkout", "head-sha"], dir);
+  });
+
+  it("clones from a self-hosted GitHub Enterprise host", async () => {
+    const runGit = vi.fn(async () => "");
+    const enterprise: PrRef = { ...PR, host: "git.xyz.com" };
+
+    await createCheckout(enterprise, REVISIONS, { runGit, mkdtemp: async () => "/tmp/t" });
+
+    expect(runGit).toHaveBeenNthCalledWith(
+      2,
+      ["remote", "add", "origin", "https://git.xyz.com/owner/repo.git"],
+      "/tmp/t",
+    );
   });
 
   it("reads file content at base and head via git show", async () => {

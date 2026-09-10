@@ -2,16 +2,27 @@ import { describe, expect, it } from "vitest";
 import { parsePrUrl } from "./pr-url.js";
 
 describe("parsePrUrl", () => {
-  it("parses owner, repo and number from a valid URL", () => {
+  it("parses host, owner, repo and number from a github.com URL", () => {
     expect(parsePrUrl("https://github.com/owner/repo/pull/123")).toEqual({
+      host: "github.com",
       owner: "owner",
       repo: "repo",
       number: 123,
     });
   });
 
+  it("parses a self-hosted GitHub Enterprise URL", () => {
+    expect(parsePrUrl("https://git.xyz.com/owner/repo/pull/7")).toEqual({
+      host: "git.xyz.com",
+      owner: "owner",
+      repo: "repo",
+      number: 7,
+    });
+  });
+
   it("accepts a trailing slash", () => {
     expect(parsePrUrl("https://github.com/owner/repo/pull/123/")).toEqual({
+      host: "github.com",
       owner: "owner",
       repo: "repo",
       number: 123,
@@ -19,7 +30,6 @@ describe("parsePrUrl", () => {
   });
 
   it.each([
-    "https://gitlab.com/owner/repo/pull/123",
     "https://github.com/owner/repo/issues/123",
     "https://github.com/owner/repo",
     "not-a-url",

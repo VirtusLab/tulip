@@ -9,7 +9,7 @@ import {
 } from "./args.js";
 
 const VALID_URL = "https://github.com/owner/repo/pull/123";
-const VALID_PR = { owner: "owner", repo: "repo", number: 123 };
+const VALID_PR = { host: "github.com", owner: "owner", repo: "repo", number: 123 };
 const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;
 
 describe("parseCliArgs", () => {
@@ -54,7 +54,6 @@ describe("parseCliArgs", () => {
   });
 
   it.each([
-    "https://gitlab.com/owner/repo/pull/123",
     "https://github.com/owner/repo/issues/123",
     "https://github.com/owner/repo",
     "not-a-url",

@@ -70,6 +70,11 @@ to open.
   PR data when available; Tulip falls back to the GitHub REST API otherwise
   (set `GITHUB_TOKEN` to raise the unauthenticated rate limit)
 
+Self-hosted **GitHub Enterprise Server** URLs (e.g.
+`https://git.example.com/owner/repo/pull/7`) work too. Authenticate that host
+once with `gh auth login --hostname git.example.com`; the REST fallback uses the
+host's `/api/v3` endpoint with `GITHUB_TOKEN`.
+
 ## Install
 
 ```sh

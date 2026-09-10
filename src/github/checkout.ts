@@ -49,7 +49,7 @@ export async function createCheckout(
   const dir = await (options.mkdtemp ?? defaultMkdtemp)();
   const depth = String(config.limits.checkoutFetchDepth);
 
-  const remoteUrl = `https://github.com/${pr.owner}/${pr.repo}.git`;
+  const remoteUrl = `https://${pr.host}/${pr.owner}/${pr.repo}.git`;
   try {
     await runGit(["init"], dir);
     await runGit(["remote", "add", "origin", remoteUrl], dir);
