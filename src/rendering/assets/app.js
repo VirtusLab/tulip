@@ -277,7 +277,7 @@
 
   function expandUp(container, rows, paneMode) {
     var side = anchorSideOf(container);
-    var startAttr = "data-" + side + "-start";
+    var startAttr = `data-${side}-start`;
     var topIdx = indexOfLine(rows, side, Number(container.getAttribute(startAttr)));
     if (topIdx <= 0) {
       return true;
@@ -301,7 +301,7 @@
 
   function expandDown(container, rows, paneMode) {
     var side = anchorSideOf(container);
-    var endAttr = "data-" + side + "-end";
+    var endAttr = `data-${side}-end`;
     var botIdx = indexOfLine(rows, side, Number(container.getAttribute(endAttr)));
     if (botIdx < 0 || botIdx >= rows.length - 1) {
       return true;
