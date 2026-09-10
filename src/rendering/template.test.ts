@@ -152,6 +152,39 @@ describe("renderPage", () => {
     expect(sections[1]?.id).toBe("category-1");
   });
 
+  it("renders a category's file tree at the top, before its body, and omits it when no files", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [
+        explanation({
+          files: [
+            { path: "src/auth/login.ts", isTest: false },
+            { path: "src/auth/login.test.ts", isTest: true },
+          ],
+        }),
+        explanation({
+          category: { id: "c2", name: "Other", description: "", attention: "normal" },
+        }),
+      ],
+    });
+    const root = parse(html);
+    const sections = root.querySelectorAll(".category");
+    const tree = sections[0]?.querySelector(".file-tree");
+    expect(tree).not.toBeNull();
+    expect(tree?.querySelector(".dir")?.text).toContain("src/auth");
+    expect(tree?.querySelector(".file-tag")?.text).toBe("test");
+    // The tree precedes the first subsection within the section's own markup.
+    const sectionHtml = sections[0]?.outerHTML ?? "";
+    expect(sectionHtml.indexOf('class="file-tree"')).toBeLessThan(
+      sectionHtml.indexOf('class="subsection'),
+    );
+    // A category with no files renders no tree.
+    expect(sections[1]?.querySelector(".file-tree")).toBeNull();
+  });
+
   it("renders each category's attention badge in its section heading, with the right label and weight class", () => {
     const html = renderPage({
       prTitle: "t",

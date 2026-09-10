@@ -203,6 +203,49 @@ describe("explainCategories", () => {
     expect(runClaudeProcess).toHaveBeenCalledTimes(2);
   });
 
+  it("populates files from primary changes only, marking test-only paths", async () => {
+    const category: Category = {
+      id: "c2",
+      name: "Mixed",
+      description: "A primary and a secondary change.",
+      attention: "normal",
+    };
+    const primary = change("owned", "src/owned.ts");
+    const primaryTest = change("owned-test", "src/owned.test.ts");
+    const secondary = change("shared", "src/shared.ts");
+    const input: ExplainCategoriesInput = {
+      prTitle: "t",
+      prDescription: "d",
+      diffThreshold: 100,
+      baseSha: "base-sha",
+      headSha: "head-sha",
+      changeOwners: new Map([
+        ["owned", { ownerCategoryId: "c2", ownerTitle: "Mixed" }],
+        ["owned-test", { ownerCategoryId: "c2", ownerTitle: "Mixed" }],
+        ["shared", { ownerCategoryId: "c1", ownerTitle: "Other" }],
+      ]),
+      categorySets: [{ category, production: [primary, secondary], test: [primaryTest] }],
+    };
+
+    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+      if (promptText.includes("Reply with approved")) {
+        return envelope({ approved: true, issues: [] }, "review-session");
+      }
+      return envelope(
+        { markdown: `explanation\n\n${refFor(primary)}\n\n${refFor(primaryTest)}` },
+        "explain-session",
+      );
+    });
+
+    const results = await explainCategories(input, { runClaudeProcess });
+
+    // The secondary change's file (src/shared.ts) is excluded; the test change is marked.
+    expect(results[0]?.files).toEqual([
+      { path: "src/owned.test.ts", isTest: true },
+      { path: "src/owned.ts", isTest: false },
+    ]);
+  });
+
   it("runs an all-secondary category but skips its review loop (docs/adr/0015)", async () => {
     // Every change is owned earlier (this category owns none), so it is not dropped and still
     // produces backlink output — but the sonnet review+amend cycle is skipped.

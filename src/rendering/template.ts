@@ -2,6 +2,7 @@ import type { CategoryExplanation } from "../explanations/types.js";
 import { renderAttentionBadge } from "./attention-badge.js";
 import { escapeHtml, escapeInlineScript } from "./escape.js";
 import type { FileDiffData } from "./file-diffs.js";
+import { renderFileTree } from "./file-tree.js";
 import { categoryId, PR_DESCRIPTION_ID, subsectionId } from "./ids.js";
 import { type MarkdownRenderContext, renderCategoryMarkdown } from "./markdown.js";
 import {
@@ -127,6 +128,11 @@ function renderCategorySection(
   // rule instead of each call site picking its own incidental spacing.
   const heading = `<h2>${escapeHtml(category.name)}${renderAttentionBadge(category.attention)}</h2><p class="category-description">${escapeHtml(category.description)}</p>`;
 
+  // The file tree orients the reader before the prose: which files this category explains and how
+  // they sit in the project layout (see ./file-tree.ts). Empty for an all-secondary category
+  // (docs/adr/0015), which renders no tree.
+  const tree = renderFileTree(explanation.files ?? []);
+
   // The intro (anything before the first recognized subsection heading) must render
   // unconditionally, alongside any subsections — not only when there are no subsections.
   // Dropping it silently discarded prose/mermaid/snippet content that happened to precede a
@@ -139,7 +145,8 @@ function renderCategorySection(
     .join("\n");
   const body = [introHtml, subsectionsHtml].filter((part) => part !== "").join("\n");
 
-  return `<section id="${categoryId(index)}" class="category page-section">\n${heading}\n${body}\n</section>`;
+  const head = tree === "" ? heading : `${heading}\n${tree}`;
+  return `<section id="${categoryId(index)}" class="category page-section">\n${head}\n${body}\n</section>`;
 }
 
 function renderSubsection(

@@ -319,6 +319,62 @@ main pre.mermaid {
   margin-top: var(--space-1);
 }
 
+/* Compact file tree at the top of a category (./file-tree.ts): which files the category explains
+   and how they sit in the project layout. Boxed and labeled ("Relevant files") so it reads as
+   distinct orienting metadata, not content. */
+.file-tree-box {
+  margin: var(--space-2) 0;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.file-tree-title {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.file-tree {
+  font-family: var(--font-mono);
+  font-size: var(--code-font-size);
+  color: var(--muted);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.file-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 1.1rem;
+  border-left: 1px solid var(--border);
+  margin-left: 0.3rem;
+}
+.file-tree li {
+  margin: 0.1rem 0;
+}
+.file-tree .dir {
+  font-weight: 600;
+  color: var(--fg);
+}
+.file-tree .file {
+  color: var(--muted);
+}
+.file-tag {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.02rem 0.4rem;
+  margin-inline: 0.4rem;
+  vertical-align: middle;
+}
+
 /* Per-category attention badge (docs/adr/0010) — next to the name in a category's own h2
    (./template.ts) and inline before its label in the TOC (./toc.ts). Never shown on a
    Production/Test subsection. Three weights communicate the level without relying on color

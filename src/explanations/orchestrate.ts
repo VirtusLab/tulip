@@ -1,5 +1,6 @@
 import { type CategoryChangeSet, type ChangeOwner, isPrimary } from "../classification/group.js";
 import { createLogger } from "../logging/logger.js";
+import type { CategoryFile } from "../rendering/file-tree.js";
 import { verifySnippetCoverage } from "./coverage.js";
 import { explainCategory } from "./explain.js";
 import { verifyMermaidDiagrams } from "./mermaid-verify.js";
@@ -161,10 +162,22 @@ async function explainOneCategory(
     );
 
     logger.info(`finished explaining category "${set.category.name}"`);
-    return { category: set.category, markdown: verified.markdown };
+    return { category: set.category, markdown: verified.markdown, files: primaryFiles(input, set) };
   } catch (error) {
     throw new CategoryExplanationError(set.category.name, error);
   }
+}
+
+/** The files this category explains — its primary-owned changes only (docs/adr/0015), deduped by
+ * path — for the category's file tree. A path is marked test iff it appears only among primary
+ * test changes (a file with any primary production change is production). */
+function primaryFiles(input: ExplainCategoriesInput, set: CategoryChangeSet): CategoryFile[] {
+  const primary = (change: { id: string }) =>
+    isPrimary(input.changeOwners, change.id, set.category.id);
+  const productionPaths = new Set(set.production.filter(primary).map((change) => change.path));
+  const testPaths = new Set(set.test.filter(primary).map((change) => change.path));
+  const paths = [...new Set([...productionPaths, ...testPaths])].sort();
+  return paths.map((path) => ({ path, isTest: !productionPaths.has(path) }));
 }
 
 /** Runs the review+amend loop, unless this is an all-secondary category (`allSecondary`: it owns

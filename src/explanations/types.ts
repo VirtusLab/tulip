@@ -1,6 +1,7 @@
 import type { Category } from "../categories/types.js";
 import type { ChangeOwner } from "../classification/group.js";
 import type { ClassifiableChange } from "../classification/types.js";
+import type { CategoryFile } from "../rendering/file-tree.js";
 
 /**
  * Public domain model for phase 3 (category explanations). Wire types and JSON schemas for
@@ -48,4 +49,8 @@ export interface ReviewPromptInput extends ExplainCategoryInput {
 export interface CategoryExplanation {
   category: Category;
   markdown: string;
+  /** The files this category explains (its primary-owned changes — docs/adr/0015), deduped by
+   * path, for the file tree rendered at the top of the category (see src/rendering/file-tree.js).
+   * Optional so fixtures that don't exercise the tree can omit it; defaults to no tree. */
+  files?: CategoryFile[];
 }
