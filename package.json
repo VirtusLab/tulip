@@ -1,6 +1,6 @@
 {
   "name": "@virtuslab/tulip",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Explains GitHub PRs in a human-friendly way, using LLMs.",
   "license": "Apache-2.0",
   "author": "Adam Warski",
