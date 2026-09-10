@@ -16,9 +16,12 @@ it.
 Tulip uses the headless `claude` CLI to do the analysis. No API key needed, just
 a logged-in Claude Code.
 
-![A generated explanation with a Mermaid diagram of the changed flow](screens/diagram.png)
+<p align="center">
+  <a href="screens/diagram.png"><img src="screens/diagram.png" alt="A generated explanation with a Mermaid diagram of the changed flow" width="380"></a>
+  <a href="screens/code.png"><img src="screens/code.png" alt="A prose explanation interleaved with a syntax-highlighted side-by-side diff" width="380"></a>
+</p>
 
-![A prose explanation interleaved with a syntax-highlighted side-by-side diff](screens/code.png)
+<sub>Click a screenshot to view it full size.</sub>
 
 ## How it works
 
