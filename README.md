@@ -1,18 +1,25 @@
 # Tulip
 
-Tulip turns a GitHub pull request into a review-friendly web page. Instead of a
-flat list of file diffs, it groups the changes by what they do, ranks each group
-by how closely you should read it, and explains each one in plain prose — with
-diagrams and inline code — as a single self-contained HTML page you open in a
-browser.
+Tulip explains GitHub PRs - categorizing and prioritizing the changes - and
+presenting them on a web page as prose, diagrams, and code.
 
-It drives the `claude` CLI to do the analysis, so no API key is needed beyond a
-logged-in Claude Code.
+Every code change appears *somewhere* in the explanation, so nothing slips past
+you. Yet you don't have to wade through it all: instead of digging through piles
+of code to find the logic that matters, you can focus on the algorithms, the
+design choices, the core functionality. The explanations are top-down: a
+high-level overview first, then down into the code.
+
+And if you don't know the codebase at all, the prose and the generated diagrams
+may be enough on their own to understand the PR well enough to accept or reject
+it.
+
+Tulip uses the headless `claude` CLI to do the analysis. No API key needed, just
+a logged-in Claude Code.
 
 ## How it works
 
 Tulip fetches the PR and runs it through a few LLM passes, each using a model
-sized to the job:
+sized to the job (Haiku, Sonnet, or Opus):
 
 1. **Fetch & check out.** Get the PR (title, description, diff) via `gh` (or the
    GitHub API), check out its head revision, and write the full diff plus the
