@@ -62,7 +62,8 @@ to open.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) LTS (>= 24) and [pnpm](https://pnpm.io/)
+- [Node.js](https://nodejs.org/) LTS (>= 24) — its bundled `npm` installs Tulip;
+  [pnpm](https://pnpm.io/) is only needed to build from source
 - A logged-in [`claude`](https://claude.com/product/claude-code) CLI on `PATH` —
   Tulip drives it to analyze the PR
 - Optionally, the [`gh`](https://cli.github.com/) CLI, logged in — used to fetch
@@ -72,10 +73,12 @@ to open.
 ## Install
 
 ```sh
-pnpm install
-pnpm build
-pnpm add -g .
+npm install -g @virtuslab/tulip
+# or: pnpm add -g @virtuslab/tulip
 ```
+
+This puts a `tulip` command on your `PATH`. To run from source instead, see
+[Development](#development).
 
 ## Usage
 
@@ -104,6 +107,8 @@ pnpm lint         # check formatting/lint rules (biome)
 pnpm lint:fix     # auto-fix formatting/lint issues
 pnpm dev <PR URL> # run the CLI from source, no build step (tsx)
 ```
+
+To put your local build on `PATH` as `tulip`, run `pnpm add -g .` after `pnpm build`.
 
 Design decisions are recorded as ADRs in `docs/adr/`; the LLM prompts live as
 plain text in `src/prompts/`.
