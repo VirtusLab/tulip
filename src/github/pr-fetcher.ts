@@ -26,7 +26,10 @@ export interface PrFetcherDeps {
   githubToken?: string;
 }
 
-const GH_VIEW_FIELDS = "title,body,files,baseRefName,baseRefOid,headRefName,headRefOid";
+// `baseRefOid` is deliberately absent: older `gh` versions don't expose it as a `pr view` field
+// (they fail the whole call with "Unknown JSON field"), while `headRefOid` is available. The base
+// SHA is fetched separately via `gh api` — see `fetchBaseSha`.
+const GH_VIEW_FIELDS = "title,body,files,baseRefName,headRefName,headRefOid";
 
 /**
  * Fetches a PR's title, description, changed files and unified diff.
@@ -62,9 +65,10 @@ async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> 
   // self-hosted GitHub Enterprise PR resolves once the user has run `gh auth login --hostname
   // <host>`. Redundant but valid for github.com.
   const repo = `${pr.host}/${pr.owner}/${pr.repo}`;
-  const [viewJson, diff] = await Promise.all([
+  const [viewJson, diff, baseSha] = await Promise.all([
     runGh(["pr", "view", String(pr.number), "--repo", repo, "--json", GH_VIEW_FIELDS]),
     runGh(["pr", "diff", String(pr.number), "--repo", repo]),
+    fetchBaseSha(pr, runGh),
   ]);
 
   const parsed = JSON.parse(viewJson) as {
@@ -72,7 +76,6 @@ async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> 
     body: string;
     files: { path: string }[];
     baseRefName: string;
-    baseRefOid: string;
     headRefName: string;
     headRefOid: string;
   };
@@ -82,9 +85,24 @@ async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> 
     body: parsed.body,
     files: parsed.files.map((file) => file.path),
     diff,
-    base: { ref: parsed.baseRefName, sha: parsed.baseRefOid },
+    base: { ref: parsed.baseRefName, sha: baseSha },
     head: { ref: parsed.headRefName, sha: parsed.headRefOid },
   };
+}
+
+/** The PR base's commit SHA, via the REST endpoint's `.base.sha` — the base branch tip, the same
+ * value the (version-gated) `baseRefOid` field would give. `gh api` reuses gh's auth and, with
+ * `--hostname`, targets the PR's host, so this stays correct for GitHub Enterprise. */
+async function fetchBaseSha(pr: PrRef, runGh: CommandRunner): Promise<string> {
+  const out = await runGh([
+    "api",
+    "--hostname",
+    pr.host,
+    `repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`,
+    "--jq",
+    ".base.sha",
+  ]);
+  return out.trim();
 }
 
 /** REST API base for a host: github.com's dedicated `api.github.com`, or GitHub Enterprise

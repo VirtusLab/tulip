@@ -9,11 +9,21 @@ const GH_VIEW_JSON = JSON.stringify({
   body: "Does a thing",
   files: [{ path: "src/a.ts" }, { path: "src/b.ts" }],
   baseRefName: "main",
-  baseRefOid: "base-sha",
   headRefName: "feature",
   headRefOid: "head-sha",
 });
 const GH_DIFF = "diff --git a/src/a.ts b/src/a.ts\n";
+
+/** Handles the three `gh` subcommands `fetchViaGh` runs: `pr view`, `pr diff`, and the `gh api`
+ * call for the base SHA (older gh lacks the `baseRefOid` view field). */
+function ghRunner(baseSha = "base-sha") {
+  return vi.fn(async (args: string[]) => {
+    if (args[0] === "api") return baseSha;
+    if (args[1] === "view") return GH_VIEW_JSON;
+    if (args[1] === "diff") return GH_DIFF;
+    throw new Error(`unexpected gh args: ${args.join(" ")}`);
+  });
+}
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 });
@@ -21,11 +31,7 @@ function jsonResponse(body: unknown): Response {
 
 describe("fetchPrMetadata", () => {
   it("fetches via gh when it succeeds", async () => {
-    const runGh = vi.fn(async (args: string[]) => {
-      if (args[1] === "view") return GH_VIEW_JSON;
-      if (args[1] === "diff") return GH_DIFF;
-      throw new Error(`unexpected gh args: ${args.join(" ")}`);
-    });
+    const runGh = ghRunner();
 
     const result = await fetchPrMetadata(PR, { runGh });
 
@@ -37,6 +43,8 @@ describe("fetchPrMetadata", () => {
       base: { ref: "main", sha: "base-sha" },
       head: { ref: "feature", sha: "head-sha" },
     });
+    // The view no longer requests baseRefOid (unsupported on older gh); the base SHA comes from
+    // `gh api .base.sha`.
     expect(runGh).toHaveBeenCalledWith([
       "pr",
       "view",
@@ -44,21 +52,28 @@ describe("fetchPrMetadata", () => {
       "--repo",
       "github.com/owner/repo",
       "--json",
-      "title,body,files,baseRefName,baseRefOid,headRefName,headRefOid",
+      "title,body,files,baseRefName,headRefName,headRefOid",
+    ]);
+    expect(runGh).toHaveBeenCalledWith([
+      "api",
+      "--hostname",
+      "github.com",
+      "repos/owner/repo/pulls/42",
+      "--jq",
+      ".base.sha",
     ]);
   });
 
-  it("passes a host-qualified repo to gh for a self-hosted host", async () => {
-    const runGh = vi.fn(async (args: string[]) => {
-      if (args[1] === "view") return GH_VIEW_JSON;
-      if (args[1] === "diff") return GH_DIFF;
-      throw new Error(`unexpected gh args: ${args.join(" ")}`);
-    });
+  it("passes a host-qualified repo and hostname to gh for a self-hosted host", async () => {
+    const runGh = ghRunner();
 
     await fetchPrMetadata({ ...PR, host: "git.xyz.com" }, { runGh });
 
     expect(runGh).toHaveBeenCalledWith(
       expect.arrayContaining(["--repo", "git.xyz.com/owner/repo"]),
+    );
+    expect(runGh).toHaveBeenCalledWith(
+      expect.arrayContaining(["api", "--hostname", "git.xyz.com", "repos/owner/repo/pulls/42"]),
     );
   });
 
