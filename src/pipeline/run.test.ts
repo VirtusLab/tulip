@@ -156,13 +156,19 @@ function baseDeps(order: string[] = []) {
       order.push("render");
       return { dir: "/tmp/tulip-render", indexPath: "/tmp/tulip-render/index.html" };
     }),
+    checkGhAuth: vi.fn(async (): Promise<void> => {
+      order.push("gh-auth");
+    }),
+    serveForReview: vi.fn(async (): Promise<void> => {
+      order.push("serve");
+    }),
     openInBrowser: vi.fn(async (): Promise<void> => {}),
     logger: { info: vi.fn(), debug: vi.fn() },
   };
 }
 
 function options(overrides: Partial<PipelineOptions> = {}): PipelineOptions {
-  return { pr: PR, diffThreshold: 400, verbose: false, open: true, ...overrides };
+  return { pr: PR, diffThreshold: 400, verbose: false, open: true, serve: false, ...overrides };
 }
 
 function infoLines(deps: PipelineDeps): string[] {
@@ -741,5 +747,72 @@ describe("run", () => {
     expect(
       debugLines.some((line) => line.includes("auto-open") && line.includes("spawn open ENOENT")),
     ).toBe(true);
+  });
+
+  it("in serve mode, preflights gh auth before fetching, renders with serve, and serves the dir", async () => {
+    const order: string[] = [];
+    const deps = baseDeps(order);
+
+    await run(options({ serve: true }), deps);
+
+    expect(deps.checkGhAuth).toHaveBeenCalledWith(PR.host);
+    expect(order.indexOf("gh-auth")).toBeLessThan(order.indexOf("fetch"));
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({ serve: true }),
+      expect.anything(),
+    );
+    expect(deps.serveForReview).toHaveBeenCalledTimes(1);
+    expect(deps.serveForReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dir: "/tmp/tulip-render",
+        prUrl: "https://github.com/octo/widgets/pull/42",
+        categoryNames: ["Greeting"],
+        open: true,
+        logger: deps.logger,
+        openInBrowser: deps.openInBrowser,
+      }),
+    );
+    // Serve mode opens the http:// URL via the server, never the index file directly.
+    expect(deps.openInBrowser).not.toHaveBeenCalledWith("/tmp/tulip-render/index.html");
+  });
+
+  it("in serve mode, a failed gh-auth preflight aborts before fetching and never serves", async () => {
+    const deps = baseDeps();
+    deps.checkGhAuth = vi.fn(async () => {
+      throw new Error("gh is not authenticated for github.com; run `gh auth login`");
+    });
+
+    await run(options({ serve: true }), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.fetchPrMetadata).not.toHaveBeenCalled();
+    expect(deps.serveForReview).not.toHaveBeenCalled();
+    const lines = infoLines(deps);
+    expect(lines.some((line) => line.includes("gh is not authenticated"))).toBe(true);
+  });
+
+  it("without serve, opens the index file and never checks gh auth or serves", async () => {
+    const deps = baseDeps();
+
+    await run(options({ serve: false }), deps);
+
+    expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
+    expect(deps.serveForReview).not.toHaveBeenCalled();
+    expect(deps.checkGhAuth).not.toHaveBeenCalled();
+  });
+
+  it("uses the PR's host in the serve-mode URL, not a hardcoded github.com", async () => {
+    const deps = baseDeps();
+    const pr: PrRef = { host: "git.xyz.com", owner: "octo", repo: "widgets", number: 42 };
+
+    await run(options({ pr, serve: true }), deps);
+
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({ prUrl: "https://git.xyz.com/octo/widgets/pull/42" }),
+      expect.anything(),
+    );
+    expect(deps.serveForReview).toHaveBeenCalledWith(
+      expect.objectContaining({ prUrl: "https://git.xyz.com/octo/widgets/pull/42" }),
+    );
   });
 });

@@ -10,11 +10,13 @@ import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
 import { createCheckout, type PrCheckout } from "../github/checkout.js";
+import { checkGhAuth } from "../github/gh-auth.js";
 import { materializeChangeArtifacts } from "../github/materialize.js";
 import { fetchPrMetadata, type PrMetadata } from "../github/pr-fetcher.js";
 import type { PrRef } from "../github/pr-url.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
+import { serveForReview } from "../serve/server.js";
 import { splitLargeChanges } from "../splitting/orchestrate.js";
 import { formatVersion } from "../version.js";
 
@@ -27,6 +29,9 @@ export interface PipelineOptions {
   verbose: boolean;
   /** Auto-open the rendered page in the default browser when done. */
   open: boolean;
+  /** Run a local review server that posts per-category PR comments via `gh` (docs/adr/0019),
+   * instead of rendering a static page and exiting. */
+  serve: boolean;
 }
 
 /** Opens `path` (a local file) in the user's default browser. Rejects if the opener binary is
@@ -45,6 +50,8 @@ export interface PipelineDeps {
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
   renderExplanations?: typeof renderExplanations;
+  checkGhAuth?: typeof checkGhAuth;
+  serveForReview?: typeof serveForReview;
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
    * never actually spawns a browser. */
   openInBrowser?: BrowserOpener;
@@ -81,10 +88,12 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
+  const doCheckGhAuth = deps.checkGhAuth ?? checkGhAuth;
+  const doServeForReview = deps.serveForReview ?? serveForReview;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
-  const { owner, repo, number } = options.pr;
-  const prUrl = `https://github.com/${owner}/${repo}/pull/${number}`;
+  const { host, owner, repo, number } = options.pr;
+  const prUrl = `https://${host}/${owner}/${repo}/pull/${number}`;
 
   logger.info(formatVersion());
   logger.info(`Processing PR ${prUrl}`);
@@ -95,6 +104,13 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
   let checkout: PrCheckout | undefined;
   try {
+    // Serve mode has no posting fallback, so a broken `gh` makes it pointless: fail fast here,
+    // before any fetch/checkout/LLM work. Not wrapped in runPhase — checkGhAuth's message is
+    // already actionable and must reach the user verbatim via describeFailure.
+    if (options.serve) {
+      await doCheckGhAuth(host);
+    }
+
     logger.info(`fetching ${owner}/${repo}#${number}...`);
     const metadata = await runPhase("fetching PR", () => doFetchPrMetadata(options.pr));
 
@@ -209,7 +225,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     // Safe: this phase only runs once "creating checkout" (above) has already succeeded, so
     // `checkout` is always assigned by this point — TypeScript just can't see that across the
     // try/finally.
-    const { indexPath } = await runPhase("rendering", () =>
+    const { dir, indexPath } = await runPhase("rendering", () =>
       doRenderExplanations(
         {
           prTitle: metadata.title,
@@ -217,13 +233,27 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           prUrl,
           explanations,
           renamedFrom,
+          serve: options.serve,
         },
         { checkout: checkout as PrCheckout, logger },
       ),
     );
     logger.debug(`rendered output at ${indexPath}`);
 
-    if (options.open) {
+    const categoryNames = explanations.map((explanation) => explanation.category.name);
+
+    if (options.serve) {
+      // Serves the rendered dir over http://, opens it (honoring --no-open), and blocks until
+      // Ctrl+C; on resolve the finally below cleans up the checkout, as in the static path.
+      await doServeForReview({
+        dir,
+        prUrl,
+        categoryNames,
+        open: options.open,
+        logger,
+        openInBrowser: doOpenInBrowser,
+      });
+    } else if (options.open) {
       try {
         await doOpenInBrowser(indexPath);
       } catch (error) {

@@ -20,11 +20,16 @@ describe("parseCliArgs", () => {
       diffThreshold: DEFAULT_DIFF_THRESHOLD,
       verbose: false,
       open: true,
+      serve: false,
     });
   });
 
   it("accepts --no-open, disabling auto-open", () => {
     expect(parseCliArgs([VALID_URL, "--no-open"]).open).toBe(false);
+  });
+
+  it("accepts --serve", () => {
+    expect(parseCliArgs([VALID_URL, "--serve"]).serve).toBe(true);
   });
 
   it("accepts --diff-threshold and parses it as an integer", () => {
@@ -34,6 +39,7 @@ describe("parseCliArgs", () => {
       diffThreshold: 800,
       verbose: false,
       open: true,
+      serve: false,
     });
   });
 
