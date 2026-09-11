@@ -275,10 +275,12 @@ main img {
 main pre.mermaid {
   display: flex;
   justify-content: center;
-  /* A comfortable diagram width, wider than prose but not the whole full-bleed track (a small
-     diagram stretched across ~1400px reads as sparse). Capped below the track, so center the
-     block in its track like a code block. */
-  max-width: min(100%, 900px);
+  /* An explicit width, not just max-width: the svg inside sizes with `width: 100%`, so a flex
+     container left to shrink-wrap would collapse to the svg's tiny min-content and the percentage
+     would resolve against that (the diagram stayed tiny). A definite width gives the percentage
+     something to fill. `min(100%, 900px)` keeps it comfortable — wider than prose, not the whole
+     ~1400px bleed (which reads as sparse) — and responsive on narrow screens. */
+  width: min(100%, 900px);
   justify-self: center;
 }
 
