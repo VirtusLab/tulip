@@ -97,11 +97,26 @@ Example:
 tulip https://github.com/owner/repo/pull/123
 ```
 
-Flags: `--diff-threshold <n>`, `--verbose`. Run `tulip --help` for details, or
-`tulip --version` for the build.
+Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`. Run `tulip
+--help` for details, or `tulip --version` for the build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser.
+
+### Reviewing on the page
+
+```sh
+tulip <PR URL> --serve
+```
+
+`--serve` runs a local server that hosts the page and opens it (unless
+`--no-open`), adding a box under each category. Type a note and click **Post to
+GitHub** to post it as a PR comment, prefixed with the category name. Each box
+posts its own comment. Ctrl+C stops the server.
+
+This needs an authenticated `gh` CLI for the PR's host (self-hosted included) —
+`gh auth login --hostname <host>`; Tulip checks this before starting. Comments
+are posted via `gh`, so they come from your GitHub account.
 
 ## Development
 
