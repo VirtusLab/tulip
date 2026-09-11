@@ -275,11 +275,24 @@ main img {
 main pre.mermaid {
   display: flex;
   justify-content: center;
-  /* Opt out of the 1100px code-readability cap on `main pre` above: a diagram isn't code, so it
-     gets the full full-bleed column width like a diff `.snippet` (a `<div>`, which never hit that
-     cap). Without this, a diagram wider than 1100px was cramped into the capped box and overflowed
-     to the right — reading as left-aligned even though the svg itself was centered. */
-  max-width: none;
+  /* A comfortable diagram width, wider than prose but not the whole full-bleed track (a small
+     diagram stretched across ~1400px reads as sparse). Capped below the track, so center the
+     block in its track like a code block. */
+  max-width: min(100%, 900px);
+  justify-self: center;
+}
+
+/* Mermaid's `useMaxWidth` default caps each rendered svg at its own natural width via an inline
+   `max-width`, so a small diagram renders tiny inside the wider block above. Override that cap
+   (a stylesheet `!important` beats the inline style) and let the svg fill the block; its viewBox
+   scales the drawing up. A diagram naturally wider than the block scales down to fit instead —
+   no overflow either way. */
+main pre.mermaid svg {
+  width: 100%;
+  height: auto;
+  /* biome-ignore lint/complexity/noImportantStyles: the target is mermaid's own inline
+     `max-width` on the runtime-generated svg; only `!important` outranks an inline style. */
+  max-width: none !important;
 }
 
 /* margin-bottom is the only place a top-level child of one of the shared grid containers (see

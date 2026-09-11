@@ -254,22 +254,21 @@ describe("style.css layout — mermaid diagram centering (real CSS, real DOM)", 
     }
   });
 
-  it("doesn't override mermaid's own inline max-width on a large diagram's rendered svg", () => {
+  it("overrides mermaid's inline natural-width cap so a small diagram fills the block", () => {
     const doc = renderIntoJsdom();
     const pre = doc.querySelector("pre.mermaid");
     if (!pre) {
       throw new Error("expected a pre.mermaid placeholder in the fixture");
     }
-    // Simulates what assets/app.js's setupMermaid does at runtime: mermaid replaces the
-    // placeholder's text content with a rendered <svg width="100%" style="max-width: ...px">
-    // (see mermaid's `useMaxWidth` config, default on) — a diagram whose natural size exceeds
-    // the container should keep growing to the container's width, capped only by that inline
-    // style, never by a competing rule from this stylesheet.
-    pre.innerHTML = '<svg width="100%" style="max-width: 900px;" height="200"></svg>';
+    // Mermaid (useMaxWidth default) replaces the placeholder with an <svg width="100%"
+    // style="max-width: <naturalWidth>px">, which pins a small diagram to its tiny natural width.
+    // The stylesheet's `!important` must beat that inline cap so the svg scales up to fill the
+    // block instead of rendering tiny.
+    pre.innerHTML = '<svg width="100%" style="max-width: 300px;" height="200"></svg>';
     const svg = pre.querySelector("svg");
     if (!svg) {
       throw new Error("expected the inserted svg");
     }
-    expect(getComputedStyle(svg).maxWidth).toBe("900px");
+    expect(getComputedStyle(svg).maxWidth).toBe("none");
   });
 });
