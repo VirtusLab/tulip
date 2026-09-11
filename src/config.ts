@@ -98,4 +98,15 @@ export const config = {
      * src/github/checkout.ts. */
     checkoutFetchDepth: 50,
   },
+
+  /** Limits for the opt-in `--serve` review server (docs/adr/0019) — see src/serve/server.ts. */
+  serve: {
+    /** Max chars in a single review comment's text. Under GitHub's 65 536-char comment limit and
+     * well under ARG_MAX (the body is passed as one `gh` argv element). */
+    maxCommentChars: 60_000,
+    /** Max bytes read from a `POST /api/comment` request body. Must exceed the worst-case JSON for
+     * a max-length `text` — control chars escape to `\u00XX` (~6 bytes/unit), so ~360 KB for 60 000
+     * units; 512 KB clears it. Tune together with `maxCommentChars`. */
+    maxRequestBodyBytes: 512 * 1024,
+  },
 } as const;
