@@ -304,4 +304,28 @@ describe("serveForReview lifecycle", () => {
     expect(process.listenerCount("SIGINT")).toBe(sigintBefore);
     expect(process.listenerCount("SIGTERM")).toBe(sigtermBefore);
   });
+
+  it("closes idle keep-alive connections on shutdown so close() resolves promptly", async () => {
+    const closeIdle = vi.spyOn(http.Server.prototype, "closeIdleConnections");
+    try {
+      const done = serveForReview({
+        dir,
+        prUrl: PR_URL,
+        categoryNames: CATEGORY_NAMES,
+        postComment: vi.fn(async () => "url"),
+        logger: { info: vi.fn(), debug: vi.fn() },
+        open: false,
+        openInBrowser: vi.fn(async () => {}),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      process.emit("SIGINT");
+      await done;
+
+      // Without this, close() would wait out the browser's keep-alive socket before resolving.
+      expect(closeIdle).toHaveBeenCalled();
+    } finally {
+      closeIdle.mockRestore();
+    }
+  });
 });

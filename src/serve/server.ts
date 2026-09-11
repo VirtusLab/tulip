@@ -240,7 +240,24 @@ export function serveForReview(opts: ServeOptions): Promise<void> {
   const server = createReviewServer(opts);
 
   return new Promise<void>((resolve, reject) => {
-    server.on("error", reject);
+    const shutdown = () => {
+      process.off("SIGINT", shutdown);
+      process.off("SIGTERM", shutdown);
+      // Close idle keep-alive sockets (e.g. the still-open browser page) first, so close()'s
+      // callback fires promptly instead of waiting out keepAliveTimeout — otherwise Ctrl+C appears
+      // to hang, and a second Ctrl+C during the wait would hit Node's default handler and hard-exit
+      // before the caller's checkout cleanup runs.
+      server.closeIdleConnections();
+      server.close(() => resolve());
+    };
+
+    server.on("error", (error) => {
+      // A listen failure never reaches `shutdown`, so drop the handlers here too — they'd otherwise
+      // leak across repeated in-process runs (tests).
+      process.off("SIGINT", shutdown);
+      process.off("SIGTERM", shutdown);
+      reject(error);
+    });
     server.listen(0, "127.0.0.1", () => {
       const { port } = server.address() as AddressInfo;
       const url = `http://127.0.0.1:${port}`;
@@ -252,11 +269,6 @@ export function serveForReview(opts: ServeOptions): Promise<void> {
       }
     });
 
-    const shutdown = () => {
-      process.off("SIGINT", shutdown);
-      process.off("SIGTERM", shutdown);
-      server.close(() => resolve());
-    };
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
   });
