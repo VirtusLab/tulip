@@ -27,6 +27,10 @@ export interface PageInput {
    * existing tests) don't need to supply one; defaults to a plain "Tulip" so the footer always
    * renders something. Real production output always sets it (see ./render.ts). */
   generatedBy?: string;
+  /** Serve mode (docs/adr/0019): when true, each category section gets a review box that posts a
+   * per-category PR comment via the local server's `/api/comment` (see ./assets/app.js). Default
+   * (false/omitted) renders the static page with no boxes — byte-for-byte unchanged. */
+  serve?: boolean;
 }
 
 const EMPTY_SECTIONS: CategorySections = { intro: "", subsections: [] };
@@ -61,7 +65,13 @@ export function renderPage(input: PageInput): string {
   const description = renderCategoryMarkdown(input.prDescription, ctx);
   const sections = input.explanations
     .map((explanation, index) =>
-      renderCategorySection(explanation, index, parsedSections[index] ?? EMPTY_SECTIONS, ctx),
+      renderCategorySection(
+        explanation,
+        index,
+        parsedSections[index] ?? EMPTY_SECTIONS,
+        ctx,
+        input.serve ?? false,
+      ),
     )
     .join("\n");
 
@@ -121,6 +131,7 @@ function renderCategorySection(
   index: number,
   sections: CategorySections,
   ctx: MarkdownRenderContext,
+  serve: boolean,
 ): string {
   const { category } = explanation;
   // No literal space before the badge: .attention-badge's own margin-inline (style.css) supplies
@@ -144,9 +155,24 @@ function renderCategorySection(
     .map((subsection, subsectionIndex) => renderSubsection(subsection, index, subsectionIndex, ctx))
     .join("\n");
   const body = [introHtml, subsectionsHtml].filter((part) => part !== "").join("\n");
+  // Serve mode appends the review box after the category body (docs/adr/0019); the static page
+  // gets nothing here, keeping its output unchanged.
+  const bodyWithBox = serve ? `${body}\n${renderReviewBox(index)}` : body;
 
   const head = tree === "" ? heading : `${heading}\n${tree}`;
-  return `<section id="${categoryId(index)}" class="category page-section">\n${head}\n${body}\n</section>`;
+  return `<section id="${categoryId(index)}" class="category page-section">\n${head}\n${bodyWithBox}\n</section>`;
+}
+
+/** Serve-mode review box for one category (docs/adr/0019) — fully static markup, nothing
+ * user-supplied to escape. `index` is the category's array position, matching `categoryId(index)`
+ * and the `categoryIndex` the server validates. ./assets/app.js's `setupReviewBoxes` wires the
+ * submit to POST `/api/comment`. */
+function renderReviewBox(index: number): string {
+  return `<form class="review-box" data-category-index="${index}">
+<textarea class="review-text" rows="3" placeholder="Add a review comment for this category…"></textarea>
+<div class="review-actions"><button type="submit" class="review-submit">Post to GitHub</button></div>
+<p class="review-status" role="status"></p>
+</form>`;
 }
 
 function renderSubsection(

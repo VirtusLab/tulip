@@ -421,11 +421,66 @@
     document.querySelectorAll(".snippet[data-lang]").forEach(highlightSnippetContainer);
   }
 
+  // Serve mode only (docs/adr/0019): each `.review-box` (./template.ts's renderReviewBox) posts a
+  // per-category PR comment to the local server's `/api/comment`. A no-op on the static page,
+  // which renders no boxes. Deliberately placed AFTER setupHighlighting and OUTSIDE the
+  // snippet-row block mirrored byte-for-byte in ./snippets.ts (snippets.test.ts's parity test
+  // evaluates that block, bounded by `var SNIPPET_ESCAPES`..`function loadFileData`, in Node).
+  function setupReviewBoxes() {
+    document.querySelectorAll(".review-box").forEach((form) => {
+      var textarea = form.querySelector(".review-text");
+      var button = form.querySelector(".review-submit");
+      var status = form.querySelector(".review-status");
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        status.classList.remove("error");
+        var categoryIndex = Number(form.getAttribute("data-category-index"));
+        var text = textarea.value;
+        if (!text.trim()) {
+          status.textContent = "Write a comment before posting.";
+          return;
+        }
+        button.disabled = true;
+        status.textContent = "Posting…";
+        fetch("/api/comment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ categoryIndex: categoryIndex, text: text }),
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error("request failed");
+            }
+            return response.json();
+          })
+          .then((data) => {
+            status.textContent = "Posted ✓ ";
+            // Build the link element-wise — never assign untrusted text to innerHTML.
+            var link = document.createElement("a");
+            link.href = data.url;
+            link.textContent = "view comment";
+            link.target = "_blank";
+            link.rel = "noopener";
+            status.appendChild(link);
+            textarea.value = "";
+          })
+          .catch(() => {
+            status.textContent = "Could not post the comment. Try again.";
+            status.classList.add("error");
+          })
+          .finally(() => {
+            button.disabled = false;
+          });
+      });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     setupThemeToggle();
     setupToc();
     setupMermaid();
     setupSnippetExpansion();
     setupHighlighting();
+    setupReviewBoxes();
   });
 })();

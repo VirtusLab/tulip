@@ -120,6 +120,17 @@ describe("style.css", () => {
     // likely place a remote URL would sneak back in).
     expect(css).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
   });
+
+  it("styles the serve-mode review box with theme tokens only", () => {
+    for (const selector of [".review-box", ".review-status"]) {
+      expect(css).toContain(selector);
+    }
+    // Themed with this page's CSS variables (theme-aware in both light and dark).
+    const reviewSection = css.slice(css.indexOf(".review-box"));
+    expect(reviewSection).toMatch(/var\(--/);
+    // No external URLs sneaking into the new rules.
+    expect(reviewSection).not.toMatch(/https?:\/\//);
+  });
 });
 
 describe("app.js", () => {
@@ -150,5 +161,13 @@ describe("app.js", () => {
 
   it("references no external network resources", () => {
     expect(js).not.toMatch(/https?:\/\//);
+  });
+
+  it("wires up the serve-mode review boxes posting to the local API, outside the parity slice", () => {
+    expect(js).toContain("setupReviewBoxes");
+    expect(js).toContain("/api/comment");
+    // Must live after the byte-mirrored snippet-row block (which the parity test evaluates,
+    // ending at `function loadFileData`) — otherwise it would break that Node evaluation.
+    expect(js.indexOf("setupReviewBoxes")).toBeGreaterThan(js.indexOf("function loadFileData"));
   });
 });

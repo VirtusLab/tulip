@@ -18,6 +18,8 @@ export interface RenderInput {
    * `FileDiff.previousPath`) — lets snippet base content be fetched from the right revision path
    * for a renamed-with-changes file. Defaults to no renames. */
   renamedFrom?: Map<string, string>;
+  /** Serve mode (docs/adr/0019): renders a per-category review box. Default false (static page). */
+  serve?: boolean;
 }
 
 export interface RenderDeps extends AssembleDeps {
@@ -53,6 +55,7 @@ export async function renderExplanations(
     explanations: input.explanations,
     fileDiffs,
     generatedBy: formatVersion((deps.getBuildInfo ?? getBuildInfo)()),
+    serve: input.serve ?? false,
   });
 
   return assembleOutput(page, { ...deps, logger });

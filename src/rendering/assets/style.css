@@ -747,6 +747,73 @@ main table:not(.snippet-table) th {
   font-weight: 600;
 }
 
+/* Serve-mode review box (docs/adr/0019) — one per category, posting a PR comment via the local
+   server. Full-bleed like `.snippet` (grid-column 1 / -1) so it isn't pinned to the narrow prose
+   column. Theme-aware through the same tokens as the rest of the page; no external resources.
+   Placed before the highlight.js theme block because a later test (assets.test.ts) slices the
+   stylesheet from the highlight theme's opening rule to its end and forbids --remove-fg there —
+   .review-status.error uses it legitimately. */
+.review-box {
+  grid-column: 1 / -1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: var(--space-2);
+}
+
+.review-text {
+  display: block;
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: var(--space-1);
+  resize: vertical;
+}
+
+.review-text:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.review-actions {
+  margin-top: var(--space-1);
+}
+
+.review-submit {
+  background: var(--accent);
+  color: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+
+.review-submit:hover {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+.review-submit:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.review-status {
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.review-status.error {
+  color: var(--remove-fg);
+}
+
 /* highlight.js theme — written against this page's own palette (rather than one of
    highlight.js's bundled theme stylesheets) so highlighted code, diff +/- colors and the rest
    of the UI stay one cohesive palette in both light and dark, and so a theme toggle needs no
