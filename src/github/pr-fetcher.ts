@@ -1,6 +1,8 @@
 import { config } from "../config.js";
-import { runCommand } from "./exec.js";
+import { type CommandRunner, defaultRunGh } from "./gh.js";
 import type { PrRef } from "./pr-url.js";
+
+export type { CommandRunner };
 
 /** Metadata needed to analyze a PR: what it's about, which files it touches, and its diff. */
 export interface PrMetadata {
@@ -13,9 +15,6 @@ export interface PrMetadata {
   base: { ref: string; sha: string };
   head: { ref: string; sha: string };
 }
-
-/** Runs a `gh` subcommand (e.g. `["pr", "view", ...]`) and returns its stdout. Mockable in tests. */
-export type CommandRunner = (args: string[]) => Promise<string>;
 
 export interface PrFetcherDeps {
   /** Defaults to invoking the `gh` binary on PATH. */
@@ -54,10 +53,6 @@ export async function fetchPrMetadata(pr: PrRef, deps: PrFetcherDeps = {}): Prom
       );
     }
   }
-}
-
-async function defaultRunGh(args: string[]): Promise<string> {
-  return runCommand("gh", args);
 }
 
 async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> {
