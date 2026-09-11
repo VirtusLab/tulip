@@ -247,6 +247,10 @@ pre code {
    screens, but well beyond the prose measure. */
 main pre {
   max-width: min(100%, 1100px);
+  /* The block spans the full-bleed grid track (grid-column 1 / -1), but its max-width caps it
+     below the track width, so the default `justify-self: stretch` resolves to `start` and pins it
+     left, misaligned with the centered prose. Center it within the track instead. */
+  justify-self: center;
 }
 
 main img {

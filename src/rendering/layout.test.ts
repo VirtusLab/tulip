@@ -103,10 +103,12 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
     expect(gridColumn(snippet)).toBe("1 / -1");
   });
 
-  it("gives a nested <pre> (fenced code) the full-width span", () => {
+  it("gives a nested <pre> (fenced code) the full-width span, centered in its track", () => {
     const doc = renderIntoJsdom();
     const pre = doc.querySelector("#category-0 > pre");
     expect(gridColumn(pre)).toBe("1 / -1");
+    // Capped by max-width below the track width, so it must center rather than pin left.
+    expect(getComputedStyle(pre as Element).justifySelf).toBe("center");
   });
 
   it("gives a .subsection the full-width span", () => {
