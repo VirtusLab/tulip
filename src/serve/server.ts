@@ -184,7 +184,8 @@ async function handleComment(
     return;
   }
 
-  const body = `**${opts.categoryNames[categoryIndex as number]}**\n\n${trimmed}`;
+  const category = opts.categoryNames[categoryIndex as number];
+  const body = `*Comment from Tulip's PR explanation, for the category: ${category}*\n\n${trimmed}`;
   try {
     const url = await postComment(opts.prUrl, body);
     sendJson(res, 200, { url });

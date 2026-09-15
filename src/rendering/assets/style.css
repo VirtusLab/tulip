@@ -753,8 +753,9 @@ main table:not(.snippet-table) th {
    Placed before the highlight.js theme block because a later test (assets.test.ts) slices the
    stylesheet from the highlight theme's opening rule to its end and forbids --remove-fg there —
    .review-status.error uses it legitimately. */
+/* No `grid-column: 1 / -1` — the box stays in the section's centered prose column (the grid's
+   default for a direct child), so it's the same width as the category's text, not full-bleed. */
 .review-box {
-  grid-column: 1 / -1;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;

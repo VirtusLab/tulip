@@ -116,6 +116,24 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
     const subsection = doc.querySelector(".subsection");
     expect(gridColumn(subsection)).toBe("1 / -1");
   });
+
+  it("keeps a serve-mode review box in the centered prose column (same width as the text)", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      serve: true,
+      explanations: [
+        {
+          category: { id: "c1", name: "Auth", description: "d", attention: "normal" },
+          markdown: "Body.",
+        },
+      ],
+    });
+    const doc = loadIntoJsdom(html);
+    expect(gridColumn(doc.querySelector(".review-box"))).toBe("2");
+  });
 });
 
 describe("style.css layout — spacing/alignment fixes (real CSS, real DOM)", () => {

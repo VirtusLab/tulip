@@ -111,7 +111,10 @@ describe("createReviewServer POST /api/comment", () => {
       url: "https://github.com/owner/repo/pull/42#issuecomment-1",
     });
     expect(postComment).toHaveBeenCalledTimes(1);
-    expect(postComment).toHaveBeenCalledWith(PR_URL, "**Bug fixes**\n\nlooks good");
+    expect(postComment).toHaveBeenCalledWith(
+      PR_URL,
+      "*Comment from Tulip's PR explanation, for the category: Bug fixes*\n\nlooks good",
+    );
   });
 
   it("rejects a categoryIndex out of range with 400 and posts nothing", async () => {
