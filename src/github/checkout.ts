@@ -81,11 +81,33 @@ export async function createCheckout(
 
 /** Isolates `git` from the operator's own `~/.gitconfig` and system config while it operates on
  * an untrusted PR's checkout — e.g. so a malicious PR's `.gitattributes` can't invoke an
- * operator-configured smudge/textconv filter/driver during fetch or checkout. */
-const GIT_ISOLATION_ENV = { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
+ * operator-configured smudge/textconv filter/driver during fetch or checkout.
+ *
+ * That also drops the operator's credential helpers, so a private repo would prompt for a
+ * username and password on the terminal (and hang under `--serve`). Re-add just the credentials
+ * via `GIT_CONFIG_*` env vars, from the same sources the PR fetch uses: `gh` if installed and
+ * logged in, then `GITHUB_TOKEN`. `GIT_TERMINAL_PROMPT=0` turns a missing credential into a
+ * fast, clear fetch error instead of a prompt. */
+export function gitIsolationEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const helpers = ["!gh auth git-credential"];
+  if (env.GITHUB_TOKEN) {
+    helpers.push('!f() { test "$1" = get && printf "username=x-access-token\\npassword=%s\\n" "$GITHUB_TOKEN"; }; f');
+  }
+  const result: Record<string, string> = {
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_TERMINAL_PROMPT: "0",
+    GIT_CONFIG_COUNT: String(helpers.length),
+  };
+  helpers.forEach((helper, i) => {
+    result[`GIT_CONFIG_KEY_${i}`] = "credential.helper";
+    result[`GIT_CONFIG_VALUE_${i}`] = helper;
+  });
+  return result;
+}
 
 async function defaultRunGit(args: string[], cwd: string): Promise<string> {
-  return runCommand("git", args, { cwd, env: GIT_ISOLATION_ENV });
+  return runCommand("git", args, { cwd, env: gitIsolationEnv() });
 }
 
 async function defaultRm(dir: string): Promise<void> {

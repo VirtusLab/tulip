@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { config } from "../config.js";
-import { createCheckout } from "./checkout.js";
+import { createCheckout, gitIsolationEnv } from "./checkout.js";
 import type { PrRef } from "./pr-url.js";
 
 const PR: PrRef = { host: "github.com", owner: "owner", repo: "repo", number: 1 };
@@ -177,5 +177,24 @@ describe("createCheckout (hermetic: real git against a local fixture repo, no ne
 
     await checkout.cleanup();
     checkoutDir = undefined;
+  });
+});
+
+describe("gitIsolationEnv", () => {
+  it("keeps git off the operator's config but lends it gh's credentials", () => {
+    const env = gitIsolationEnv({});
+    expect(env.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+    expect(env.GIT_CONFIG_NOSYSTEM).toBe("1");
+    expect(env.GIT_TERMINAL_PROMPT).toBe("0");
+    expect(env.GIT_CONFIG_COUNT).toBe("1");
+    expect(env.GIT_CONFIG_KEY_0).toBe("credential.helper");
+    expect(env.GIT_CONFIG_VALUE_0).toBe("!gh auth git-credential");
+  });
+
+  it("adds a GITHUB_TOKEN helper after gh when the token is set", () => {
+    const env = gitIsolationEnv({ GITHUB_TOKEN: "t" });
+    expect(env.GIT_CONFIG_COUNT).toBe("2");
+    expect(env.GIT_CONFIG_KEY_1).toBe("credential.helper");
+    expect(env.GIT_CONFIG_VALUE_1).toContain("$GITHUB_TOKEN");
   });
 });

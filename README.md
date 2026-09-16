@@ -68,7 +68,9 @@ to open.
   Tulip drives it to analyze the PR
 - Optionally, the [`gh`](https://cli.github.com/) CLI, logged in — used to fetch
   PR data when available; Tulip falls back to the GitHub REST API otherwise
-  (set `GITHUB_TOKEN` to raise the unauthenticated rate limit)
+  (set `GITHUB_TOKEN` to raise the unauthenticated rate limit). Private repos
+  need one or the other: the checkout's `git fetch` authenticates with `gh`'s
+  credentials or `GITHUB_TOKEN`, never with your own git credential helpers.
 
 Self-hosted **GitHub Enterprise Server** URLs (e.g.
 `https://git.example.com/owner/repo/pull/7`) work too. Authenticate that host
