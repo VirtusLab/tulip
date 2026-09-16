@@ -6,11 +6,20 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { config } from "../config.js";
 import { createCheckout } from "./checkout.js";
+import { gitCredentialArgs } from "./git-auth.js";
 import type { PrRef } from "./pr-url.js";
 
 const PR: PrRef = { host: "github.com", owner: "owner", repo: "repo", number: 1 };
-const REVISIONS = { base: { sha: "base-sha" }, head: { sha: "head-sha" } };
+const BASE_SHA = "1".repeat(40);
+const HEAD_SHA = "2".repeat(40);
+const REVISIONS = { base: { sha: BASE_SHA }, head: { sha: HEAD_SHA } };
 const DEPTH = String(config.limits.checkoutFetchDepth);
+
+const ISOLATION_ENV = { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
+const NO_PROMPT_ENV = { GIT_TERMINAL_PROMPT: "0" };
+// Placement and ordering are asserted here; what the helpers do is tested against real git in
+// git-auth.test.ts.
+const CREDENTIAL_ARGS = gitCredentialArgs("github.com");
 
 describe("createCheckout", () => {
   it("inits a repo, adds the origin remote, shallow-fetches both revisions, and checks out head", async () => {
@@ -19,24 +28,71 @@ describe("createCheckout", () => {
 
     await createCheckout(PR, REVISIONS, { runGit, mkdtemp });
 
+    // init/remote/checkout run isolated from the operator's git config; fetch runs with it (that's
+    // where credential helpers live), with Tulip's helpers appended, and never prompts on the tty.
     const dir = "/tmp/tulip-abc123";
-    expect(runGit).toHaveBeenNthCalledWith(1, ["init"], dir);
+    expect(runGit).toHaveBeenNthCalledWith(1, ["init"], dir, ISOLATION_ENV);
     expect(runGit).toHaveBeenNthCalledWith(
       2,
       ["remote", "add", "origin", "https://github.com/owner/repo.git"],
       dir,
+      ISOLATION_ENV,
     );
     expect(runGit).toHaveBeenNthCalledWith(
       3,
-      ["fetch", "--depth", DEPTH, "origin", "base-sha"],
+      [...CREDENTIAL_ARGS, "fetch", "--depth", DEPTH, "origin", BASE_SHA],
       dir,
+      NO_PROMPT_ENV,
     );
     expect(runGit).toHaveBeenNthCalledWith(
       4,
-      ["fetch", "--depth", DEPTH, "origin", "head-sha"],
+      [...CREDENTIAL_ARGS, "fetch", "--depth", DEPTH, "origin", HEAD_SHA],
       dir,
+      NO_PROMPT_ENV,
     );
-    expect(runGit).toHaveBeenNthCalledWith(5, ["checkout", "head-sha"], dir);
+    expect(runGit).toHaveBeenNthCalledWith(5, ["checkout", HEAD_SHA], dir, ISOLATION_ENV);
+  });
+
+  it("rejects revisions that are not commit SHAs before touching git or the filesystem", async () => {
+    const runGit = vi.fn(async () => "");
+    const mkdtemp = vi.fn(async () => "/tmp/t");
+
+    await expect(
+      createCheckout(
+        PR,
+        { base: { sha: "--upload-pack=evil" }, head: { sha: HEAD_SHA } },
+        { runGit, mkdtemp },
+      ),
+    ).rejects.toThrow(/not a commit SHA/i);
+
+    expect(runGit).not.toHaveBeenCalled();
+    expect(mkdtemp).not.toHaveBeenCalled();
+  });
+
+  it("explains how to authenticate when fetch fails for lack of credentials", async () => {
+    const dir = "/tmp/tulip-abc123";
+    const runGit = vi.fn(async (args: string[]) => {
+      if (args.includes("fetch")) {
+        throw new Error(
+          "Command failed: git fetch\nfatal: could not read Username for 'https://github.com': terminal prompts disabled",
+        );
+      }
+      return "";
+    });
+    const rm = vi.fn(async () => {});
+
+    const error: Error = await createCheckout(PR, REVISIONS, {
+      runGit,
+      mkdtemp: async () => dir,
+      rm,
+    }).catch((e) => e);
+
+    expect(error.message).toMatch(
+      /git could not authenticate to https:\/\/github\.com\/owner\/repo\.git.*gh auth login.*GITHUB_TOKEN.*could not read Username/s,
+    );
+    // execFile's "Command failed: <argv>" line would bury the hint under the helper snippets.
+    expect(error.message).not.toContain("Command failed");
+    expect(rm).toHaveBeenCalledWith(dir);
   });
 
   it("clones from a self-hosted GitHub Enterprise host", async () => {
@@ -49,13 +105,14 @@ describe("createCheckout", () => {
       2,
       ["remote", "add", "origin", "https://git.xyz.com/owner/repo.git"],
       "/tmp/t",
+      ISOLATION_ENV,
     );
   });
 
   it("reads file content at base and head via git show", async () => {
     const runGit = vi.fn(async (args: string[]) => {
-      if (args[0] === "show" && args[1] === "base-sha:src/a.ts") return "base content";
-      if (args[0] === "show" && args[1] === "head-sha:src/a.ts") return "head content";
+      if (args[0] === "show" && args[1] === `${BASE_SHA}:src/a.ts`) return "base content";
+      if (args[0] === "show" && args[1] === `${HEAD_SHA}:src/a.ts`) return "head content";
       return "";
     });
     const checkout = await createCheckout(PR, REVISIONS, {
@@ -80,18 +137,18 @@ describe("createCheckout", () => {
     await expect(checkout.getFileAtBase("missing.ts")).resolves.toBeUndefined();
   });
 
-  it("removes the temp dir and rethrows if a git step fails before the checkout is usable", async () => {
+  it("removes the temp dir and rethrows a non-auth failure unchanged", async () => {
     const dir = "/tmp/tulip-abc123";
-    const failure = new Error("fatal: could not fetch head sha");
+    const failure = new Error("fatal: unable to access: Could not resolve host");
     const runGit = vi.fn(async (args: string[]) => {
-      if (args[0] === "fetch" && args.at(-1) === "head-sha") throw failure;
+      if (args.includes("fetch") && args.at(-1) === HEAD_SHA) throw failure;
       return "";
     });
     const rm = vi.fn(async () => {});
 
     await expect(
       createCheckout(PR, REVISIONS, { runGit, mkdtemp: async () => dir, rm }),
-    ).rejects.toThrow(failure);
+    ).rejects.toBe(failure);
 
     expect(rm).toHaveBeenCalledTimes(1);
     expect(rm).toHaveBeenCalledWith(dir);
@@ -116,8 +173,11 @@ describe("createCheckout", () => {
 
 const execFileAsync = promisify(execFile);
 
-async function git(args: string[], cwd: string): Promise<string> {
-  const { stdout } = await execFileAsync("git", args, { cwd });
+async function git(args: string[], cwd: string, env?: Record<string, string>): Promise<string> {
+  const { stdout } = await execFileAsync("git", args, {
+    cwd,
+    env: env ? { ...process.env, ...env } : undefined,
+  });
   return stdout.trim();
 }
 
@@ -156,13 +216,18 @@ describe("createCheckout (hermetic: real git against a local fixture repo, no ne
     const fixture = await createFixtureRepo();
     fixtureDir = fixture.dir;
 
-    // Runs real git, but redirects the `origin` remote to the local fixture repo instead of
-    // github.com — fetch then uses the filesystem transport, so no network access happens.
-    const runGit = async (args: string[], cwd: string): Promise<string> => {
+    // Runs real git with the env createCheckout chooses per step, but redirects the `origin`
+    // remote to the local fixture repo instead of github.com — fetch then uses the filesystem
+    // transport, so no network access happens.
+    const runGit = async (
+      args: string[],
+      cwd: string,
+      env: Record<string, string>,
+    ): Promise<string> => {
       const rewritten = args.map((arg) =>
         arg === `https://github.com/${PR.owner}/${PR.repo}.git` ? fixture.dir : arg,
       );
-      return git(rewritten, cwd);
+      return git(rewritten, cwd, env);
     };
 
     const checkout = await createCheckout(

@@ -8,8 +8,11 @@ export interface PrRef {
   number: number;
 }
 
+// The host is a bare hostname with an optional port. Userinfo (`user@host`) is refused: it would
+// let `https://github.com@evil.example.com/...` read as a github.com link while every request,
+// with the operator's credentials, went to evil.example.com.
 const GITHUB_PR_URL_PATTERN =
-  /^https:\/\/(?<host>[^/\s]+)\/(?<owner>[^/\s]+)\/(?<repo>[^/\s]+)\/pull\/(?<number>\d+)\/?$/;
+  /^https:\/\/(?<host>[A-Za-z0-9.-]+(?::\d+)?)\/(?<owner>[^/\s]+)\/(?<repo>[^/\s]+)\/pull\/(?<number>\d+)\/?$/;
 
 /**
  * Parses a GitHub PR URL into its parts. Accepts any host with the GitHub `/pull/<n>` shape — both
