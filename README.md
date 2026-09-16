@@ -70,6 +70,14 @@ to open.
   PR data when available; Tulip falls back to the GitHub REST API otherwise
   (set `GITHUB_TOKEN` to raise the unauthenticated rate limit)
 
+**Private repositories** also need credentials for `git fetch`. If your git
+config rewrites the host to SSH (`insteadOf`), git uses your SSH key and nothing
+else applies. Otherwise git uses the first credential helper that answers: your
+own setup first (such as the OS keychain or `gh auth setup-git`), then a
+logged-in `gh`, then `GITHUB_TOKEN`. If your own helper answers with a
+credential the host rejects, fix or clear that credential. Tulip fails with a
+hint instead of asking for a username and password on the terminal.
+
 Self-hosted **GitHub Enterprise Server** URLs (e.g.
 `https://git.example.com/owner/repo/pull/7`) work too. Authenticate that host
 once with `gh auth login --hostname git.example.com`; the REST fallback uses the

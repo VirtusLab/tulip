@@ -134,12 +134,13 @@ maintain or trust.
 - Explain/review prompts drop the "read-only git commands" wording; they still tell the session
   its cwd is the head checkout and give both SHAs (for reference / correlating with the diffs
   already in the prompt), but no longer imply it can run git itself.
-- `createCheckout`'s own git calls (init/remote/fetch/checkout — code-driven, not
+- `createCheckout`'s own git calls (init/remote/checkout/show — code-driven, not
   model-driven) are separately isolated from the operator's `~/.gitconfig`/system config via
   `GIT_CONFIG_NOSYSTEM=1`/`GIT_CONFIG_GLOBAL=/dev/null`, so a malicious PR's `.gitattributes`
   can't invoke an operator-configured smudge/textconv filter during checkout. This was already
   planned (finding 6 of the same review) and is orthogonal to the Bash-grant question — it holds
-  regardless of whether sessions ever get git access again.
+  regardless of whether sessions ever get git access again. Isolating `fetch` as well removed the
+  operator's credential helpers and broke private repositories; ADR 0020 exempts it.
 
 ### Consequences
 

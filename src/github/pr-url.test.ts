@@ -20,6 +20,10 @@ describe("parsePrUrl", () => {
     });
   });
 
+  it("accepts a port in a self-hosted host", () => {
+    expect(parsePrUrl("https://git.xyz.com:8443/owner/repo/pull/7")?.host).toBe("git.xyz.com:8443");
+  });
+
   it("accepts a trailing slash", () => {
     expect(parsePrUrl("https://github.com/owner/repo/pull/123/")).toEqual({
       host: "github.com",
@@ -31,6 +35,8 @@ describe("parsePrUrl", () => {
 
   it.each([
     "https://github.com/owner/repo/issues/123",
+    // Looks like github.com but `github.com` is userinfo; the real host is evil.example.com.
+    "https://github.com@evil.example.com/owner/repo/pull/1",
     "https://github.com/owner/repo",
     "not-a-url",
   ])("returns undefined for an invalid URL: %s", (url) => {
