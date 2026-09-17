@@ -284,18 +284,12 @@ main pre.mermaid {
   justify-self: center;
 }
 
-/* Mermaid's `useMaxWidth` default caps each rendered svg at its own natural width via an inline
-   `max-width`, so a small diagram renders tiny inside the wider block above. Override that cap
-   (a stylesheet `!important` beats the inline style) and let the svg fill the block; its viewBox
-   scales the drawing up. A diagram naturally wider than the block scales down to fit instead —
-   no overflow either way. */
-main pre.mermaid svg {
-  width: 100%;
-  height: auto;
-  /* biome-ignore lint/complexity/noImportantStyles: the target is mermaid's own inline
-     `max-width` on the runtime-generated svg; only `!important` outranks an inline style. */
-  max-width: none !important;
-}
+/* Mermaid's `useMaxWidth` default caps each rendered svg at its natural width via an inline
+   `max-width`, and at that width the diagram's text is the body font size (app.js sets mermaid's
+   fontSize from it). Nothing here overrides the cap: an earlier `max-width: none !important`
+   scaled small diagrams up to fill the block, and their text with them — several sizes larger
+   than the prose (docs/adr/0011 amendment). A diagram naturally wider than the block still
+   scales down to fit, mermaid's own behavior. */
 
 /* margin-bottom is the only place a top-level child of one of the shared grid containers (see
    the `:where(...)` reset below) is a section boundary, not a grid item, so a genuine
