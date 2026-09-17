@@ -272,21 +272,21 @@ describe("style.css layout — mermaid diagram centering (real CSS, real DOM)", 
     }
   });
 
-  it("overrides mermaid's inline natural-width cap so a small diagram fills the block", () => {
+  it("keeps mermaid's inline natural-width cap so a diagram renders at its natural size", () => {
     const doc = renderIntoJsdom();
     const pre = doc.querySelector("pre.mermaid");
     if (!pre) {
       throw new Error("expected a pre.mermaid placeholder in the fixture");
     }
     // Mermaid (useMaxWidth default) replaces the placeholder with an <svg width="100%"
-    // style="max-width: <naturalWidth>px">, which pins a small diagram to its tiny natural width.
-    // The stylesheet's `!important` must beat that inline cap so the svg scales up to fill the
-    // block instead of rendering tiny.
+    // style="max-width: <naturalWidth>px">. At that natural width the diagram's text is the
+    // body font size; scaling the svg past it scales the text too (docs/adr/0011 amendment), so
+    // the stylesheet must leave the inline cap alone.
     pre.innerHTML = '<svg width="100%" style="max-width: 300px;" height="200"></svg>';
     const svg = pre.querySelector("svg");
     if (!svg) {
       throw new Error("expected the inserted svg");
     }
-    expect(getComputedStyle(svg).maxWidth).toBe("none");
+    expect(getComputedStyle(svg).maxWidth).toBe("300px");
   });
 });

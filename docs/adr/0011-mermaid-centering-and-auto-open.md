@@ -79,6 +79,17 @@ step; opening a browser is a side effect belonging to orchestration, and keeping
 - `PipelineDeps` gains an injectable `openInBrowser` dependency (defaults to the real spawn-based
   implementation), so the test suite never actually spawns a browser.
 
+## Amendment: diagrams render at natural size
+
+Section 1's `max-width: none !important` override on the svg made a small diagram fill the
+900px block. Mermaid lays a diagram out with 16px text and reports that layout's width as the
+svg's natural width; scaling the svg past it scales the text too, so a small diagram's labels
+came out several sizes larger than the prose. The override is removed: the svg keeps mermaid's
+inline natural-width cap and sits centered in the block by the flex rule, at 1:1. `app.js` sets
+mermaid's `fontSize` theme variable from the page's computed body font size, so the two stay
+equal if the body font changes. A diagram wider than the block still scales down to fit (mermaid's
+`useMaxWidth` behavior), preferred over sideways scrolling in prose.
+
 ## References
 
 - ADR 0009 (rendering fixes batch 2) — the mermaid-centering attempt this ADR replaces, and the

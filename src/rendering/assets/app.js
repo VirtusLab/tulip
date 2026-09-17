@@ -126,6 +126,9 @@
       clusterBorder: v("--border", "#d8dee4"),
       edgeLabelBackground: v("--bg", "#ffffff"),
       fontFamily: v("--font-sans", "sans-serif"),
+      // Rendered 1:1 (style.css leaves mermaid's natural-width cap in place), so this is the
+      // size diagram text actually shows at — the same as the prose around it.
+      fontSize: getComputedStyle(document.body).fontSize || "16px",
     };
   }
 

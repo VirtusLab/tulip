@@ -163,6 +163,12 @@ describe("app.js", () => {
     expect(js).not.toMatch(/https?:\/\//);
   });
 
+  it("sizes mermaid's text from the page's body font size", () => {
+    const start = js.indexOf("function mermaidThemeVariables");
+    const end = js.indexOf("\n  function ", start + 1);
+    expect(js.slice(start, end)).toMatch(/fontSize:.*getComputedStyle\(document\.body\)\.fontSize/);
+  });
+
   it("wires up the serve-mode review boxes posting to the local API, outside the parity slice", () => {
     expect(js).toContain("setupReviewBoxes");
     expect(js).toContain("/api/comment");
