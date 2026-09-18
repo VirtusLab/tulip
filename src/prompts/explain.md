@@ -114,9 +114,12 @@ lines):
 
 Say each thing once within this explanation. Point back to your own earlier
 snippet rather than re-slicing the same file; state a fact once and refer back
-rather than restating it. Explain only THIS category's concern — don't re-explain
-the surrounding module or the rest of the PR. Name a trivial doc or wording tweak
-in a phrase; don't walk through it.
+rather than restating it. When several changes in one file belong together, put
+their snippets one directly after another with nothing between them — they then
+render as one block, with the unchanged lines between them collapsed. Explain
+only THIS category's concern — don't re-explain the surrounding module or the
+rest of the PR. Name a trivial doc or wording tweak in a phrase; don't walk
+through it.
 
 Trigger vs. rating: SUBTLE, HIDDEN EFFECT, and CORE are must-see — the reviewer needs that code,
 so they stay unfolded at any rating, even Skim. SMALL is only a convenience, so the rating wins
