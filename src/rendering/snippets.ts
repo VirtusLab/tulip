@@ -10,8 +10,6 @@ import {
   type SnippetPaneMode,
 } from "./snippet-blocks.js";
 
-export type { SnippetPaneMode } from "./snippet-blocks.js";
-
 /**
  * Renders a run of `{{snippet}}` refs to one file (consecutive in the markdown — see
  * ./markdown.ts) as one diff block: a collapsible `<details>` holding the refs' regions in file

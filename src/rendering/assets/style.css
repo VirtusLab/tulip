@@ -700,7 +700,7 @@ main pre.mermaid {
 
 /* Gap rows (see ./snippets.ts's renderGapRow): the hidden-range controls between, above and
    below a block's regions. The cell overrides the table's `white-space: pre`. */
-.snippet-gap td {
+.snippet-table .snippet-gap td {
   text-align: center;
   white-space: normal;
   background: var(--surface);

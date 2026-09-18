@@ -37,7 +37,7 @@ describe("style.css", () => {
   });
 
   it("styles gap rows and their inline buttons, and no longer ships the old full-width expander", () => {
-    expect(css).toMatch(/\.snippet-gap td\s*\{[^}]*text-align:\s*center/);
+    expect(css).toMatch(/\.snippet-table \.snippet-gap td\s*\{[^}]*text-align:\s*center/);
     expect(css).toMatch(/\.snippet-gap-btn\s*\{/);
     expect(css).not.toMatch(/\.snippet-expand\s*\{/);
   });

@@ -105,6 +105,17 @@ describe("buildSnippetPieces — runs", () => {
     expect(pieces.map((p) => p.kind)).toEqual(["block", "fallback", "block"]);
   });
 
+  it("splits the run at a ref to a different path, even when both load fine", () => {
+    const other = "src/b.ts";
+    const diffs = new Map<string, FileDiffData>([
+      [PATH, { rows: modifiedFile(10, [3]), embeddable: true }],
+      [other, { rows: modifiedFile(10, [8]), embeddable: true }],
+    ]);
+    const refs: SnippetRef[] = [modRef(3), { ...modRef(8), path: other }];
+    const pieces = buildSnippetPieces(refs, diffs, false);
+    expect(pieces.map((p) => p.kind)).toEqual(["block", "block"]);
+  });
+
   it("makes every ref a fallback when the file has no diff data", () => {
     const pieces = buildSnippetPieces([modRef(3), modRef(8)], new Map(), false);
     expect(pieces.map((p) => p.kind)).toEqual(["fallback", "fallback"]);

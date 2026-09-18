@@ -88,6 +88,9 @@ export function buildSnippetPieces(
       });
       continue;
     }
+    if (current[0] && current[0].ref.path !== ref.path) {
+      flush();
+    }
     if (current.some((earlier) => refsOverlap(earlier.ref, ref))) {
       flush();
     }

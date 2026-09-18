@@ -307,7 +307,8 @@
     } else {
       revealFrom = from;
       revealTo = to;
-      where = position === "top" ? "afterend" : "beforebegin";
+      // Side doesn't matter: the whole range is revealed and the gap row is removed right after.
+      where = "beforebegin";
       from = to + 1;
     }
     gapRow.insertAdjacentHTML(where, renderRows(rows.slice(revealFrom, revealTo + 1), paneMode));

@@ -52,7 +52,8 @@ interface Change { id: string; path: string; base?: ChangeSideContent; head?: Ch
   and split pieces alike. The only place with no expander is the seam between two split
   pieces of the same change, where no context is hidden (as on GitHub).
   (Amended by ADR 0021: adjacent refs now merge into one block, so contiguous split pieces
-  render with no seam and no missing expander.)
+  render with no seam and no missing expander, and any remaining seam between non-adjacent
+  pieces now has a gap row that can reveal across it, so the fix does not depend on adjacency.)
 
 ### C. Kind-agnostic splitter (generalizes ADR 0016)
 - Candidate: total changed lines `(base + head)` over `config.limits.splitThreshold`,

@@ -27,10 +27,12 @@ function ref(line: number): string {
   });
 }
 
-/** Renders a real page with a merged block for lines 10 and 30, loads it into its own JSDOM
- * window, runs the real app.js there, and fires DOMContentLoaded — one window per test, so
- * listeners never accumulate across tests. No <script src> is fetched by JSDOM. */
-function mount(): { window: JSDOM["window"]; container: Element } {
+const DEFAULT_MARKDOWN = `Intro.\n\n${ref(10)}\n\n${ref(30)}\n\n## Production code\n\nBody.\n`;
+
+/** Renders a real page from `markdown` (default: a merged block for lines 10 and 30), loads it
+ * into its own JSDOM window, runs the real app.js there, and fires DOMContentLoaded — one window
+ * per test, so listeners never accumulate across tests. No <script src> is fetched by JSDOM. */
+function mount(markdown: string = DEFAULT_MARKDOWN): { container: Element } {
   const fileDiffs = new Map<string, FileDiffData>([
     [PATH, { rows: fixtureRows(), embeddable: true }],
   ]);
@@ -42,7 +44,7 @@ function mount(): { window: JSDOM["window"]; container: Element } {
     explanations: [
       {
         category: { id: "c1", name: "C", description: "d", attention: "normal" },
-        markdown: `Intro.\n\n${ref(10)}\n\n${ref(30)}\n\n## Production code\n\nBody.\n`,
+        markdown,
       },
     ],
   });
@@ -53,7 +55,7 @@ function mount(): { window: JSDOM["window"]; container: Element } {
   if (!container) {
     throw new Error("expected a merged snippet block");
   }
-  return { window: dom.window, container };
+  return { container };
 }
 
 function headLines(container: Element): number[] {
@@ -113,6 +115,13 @@ describe("gap-row expansion in a real DOM (app.js under jsdom)", () => {
     click(container, "bottom", "all");
     expect(gap(container, "bottom")).toBeNull();
     expect(headLines(container).at(-1)).toBe(60);
+  });
+
+  it("expands a large top gap upward in steps, one step short of the file start", () => {
+    const { container } = mount(`Intro.\n\n${ref(50)}\n\n## Production code\n\nBody.\n`);
+    click(container, "top", "up");
+    expect(headLines(container)).toEqual([...Array.from({ length: 20 }, (_, i) => 30 + i), 50]);
+    expect(gap(container, "top")?.getAttribute("data-to")).toBe("28");
   });
 
   it("reveals every line exactly once after expanding everything", () => {
