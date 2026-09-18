@@ -698,23 +698,48 @@ main pre.mermaid {
   color: var(--add-fg);
 }
 
-.snippet-expand {
-  display: block;
-  width: 100%;
+/* Gap rows (see ./snippets.ts's renderGapRow): the hidden-range controls between, above and
+   below a block's regions. The cell overrides the table's `white-space: pre`. */
+.snippet-gap td {
   text-align: center;
+  white-space: normal;
   background: var(--surface);
-  border: none;
-  border-top: 1px solid var(--border);
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.75rem;
-  padding: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  user-select: none;
+}
+
+.snippet-gap-label {
+  margin: 0 0.75rem;
+}
+
+.snippet-gap-btn {
+  display: inline-block;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
   cursor: pointer;
 }
 
-.snippet-expand:hover {
+.snippet-gap-btn:hover {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+/* Gutter widths via <colgroup> too: `.snippet-wrap`'s fixed layout reads widths from the first
+   row, which may be a spanning gap row rather than a code row. */
+.snippet-col-line-no {
+  width: 3.5rem;
+}
+
+.snippet-col-marker {
+  width: 1.25rem;
 }
 
 /* GFM tables (marked's default table renderer) in prose — unstyled otherwise, a bare <table>
