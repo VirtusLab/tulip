@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 import type { SnippetRef } from "../explanations/markup.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { type AlignedRow, buildAlignedDiff } from "./line-diff.js";
-import { renderSnippetBlock, renderSnippetRow, type SnippetPaneMode } from "./snippets.js";
+import type { GapPosition, SnippetPaneMode } from "./snippet-blocks.js";
+import { EXPAND_STEP, renderGapRow, renderSnippetBlock, renderSnippetRow } from "./snippets.js";
 
 function fileDiffs(
   rows: FileDiffData["rows"],
@@ -359,14 +360,24 @@ describe("renderSnippetBlock — metadata and fallbacks", () => {
   });
 });
 
-// ./assets/app.js's `renderSnippetRow` is a hand-maintained mirror of `renderSnippetRow`
-// exported from this module (used client-side to insert context rows without a server
-// round-trip — see setupSnippetExpansion in app.js). Nothing in the type system enforces the
-// two stay identical, so this loads app.js's actual source, evaluates just its row-rendering
-// block in Node (no browser/DOM needed — `escapeHtml`/`cellTypeClass`/`renderSnippetRow` don't
-// touch `document`/`window`), and asserts both implementations produce the same HTML for the
-// same input.
-function loadClientRenderSnippetRow(): (row: AlignedRow, paneMode?: SnippetPaneMode) => string {
+interface ClientRenderers {
+  renderSnippetRow: (row: AlignedRow, paneMode?: SnippetPaneMode) => string;
+  renderGapRow: (
+    from: number,
+    to: number,
+    position: GapPosition,
+    paneMode: SnippetPaneMode,
+    embeddable: boolean,
+  ) => string;
+  EXPAND_STEP: number;
+}
+
+// ./assets/app.js's `renderSnippetRow` and `renderGapRow` are hand-maintained mirrors of the
+// functions exported from this module (the client inserts rows and re-renders gap rows without
+// a server round-trip — see setupSnippetExpansion in app.js). Nothing in the type system
+// enforces the two stay identical, so this loads app.js's actual source, evaluates just its
+// rendering block in Node (no DOM needed), and asserts both produce the same HTML.
+function loadClientRenderers(): ClientRenderers {
   const appJsPath = fileURLToPath(new URL("./assets/app.js", import.meta.url));
   const source = readFileSync(appJsPath, "utf8");
 
@@ -378,13 +389,15 @@ function loadClientRenderSnippetRow(): (row: AlignedRow, paneMode?: SnippetPaneM
     );
   }
 
-  const factory = new Function(`${source.slice(start, end)}\nreturn renderSnippetRow;`);
-  return factory() as (row: AlignedRow, paneMode?: SnippetPaneMode) => string;
+  const factory = new Function(
+    `${source.slice(start, end)}\nreturn { renderSnippetRow, renderGapRow, EXPAND_STEP };`,
+  );
+  return factory() as ClientRenderers;
 }
 
-describe("renderSnippetRow / assets/app.js parity", () => {
-  it("renders byte-identical HTML to assets/app.js's client-side row renderer", () => {
-    const clientRenderSnippetRow = loadClientRenderSnippetRow();
+describe("snippets.ts / assets/app.js parity", () => {
+  it("renders byte-identical row HTML to assets/app.js's client-side row renderer", () => {
+    const client = loadClientRenderers();
     const rows: AlignedRow[] = [
       {
         baseLine: 1,
@@ -423,10 +436,33 @@ describe("renderSnippetRow / assets/app.js parity", () => {
     const paneModes: SnippetPaneMode[] = ["split", "head-only", "base-only"];
     for (const row of rows) {
       for (const paneMode of paneModes) {
-        expect(clientRenderSnippetRow(row, paneMode)).toBe(renderSnippetRow(row, paneMode));
+        expect(client.renderSnippetRow(row, paneMode)).toBe(renderSnippetRow(row, paneMode));
       }
-      // Default parameter (no explicit paneMode) must also match, on both sides.
-      expect(clientRenderSnippetRow(row)).toBe(renderSnippetRow(row));
+      expect(client.renderSnippetRow(row)).toBe(renderSnippetRow(row));
+    }
+  });
+
+  it("renders byte-identical gap rows and shares the expansion step", () => {
+    const client = loadClientRenderers();
+    expect(client.EXPAND_STEP).toBe(EXPAND_STEP);
+    const positions: GapPosition[] = ["top", "between", "bottom"];
+    const paneModes: SnippetPaneMode[] = ["split", "head-only", "base-only"];
+    const ranges: [number, number][] = [
+      [0, 0],
+      [3, 22],
+      [3, 23],
+      [40, 199],
+    ];
+    for (const [from, to] of ranges) {
+      for (const position of positions) {
+        for (const paneMode of paneModes) {
+          for (const embeddable of [true, false]) {
+            expect(client.renderGapRow(from, to, position, paneMode, embeddable)).toBe(
+              renderGapRow(from, to, position, paneMode, embeddable),
+            );
+          }
+        }
+      }
     }
   });
 });

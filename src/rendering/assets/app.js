@@ -166,6 +166,7 @@
   }
 
   var SNIPPET_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  var EXPAND_STEP = 20;
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, (ch) => SNIPPET_ESCAPES[ch]);
@@ -229,6 +230,32 @@
     var base = paneMode !== "head-only" ? baseCells(row) : "";
     var head = paneMode !== "base-only" ? headCells(row) : "";
     return `<tr>${base}${head}</tr>`;
+  }
+
+  // Mirrors ./snippets.ts's `renderGapRow` line for line — a gap row is re-rendered here after
+  // each partial expansion (see setupSnippetExpansion). Byte-identical by the parity test.
+  // biome-ignore lint: used only in parity test via new Function, not directly
+  function renderGapRow(from, to, position, paneMode, embeddable) {
+    var count = to - from + 1;
+    var unit = count === 1 ? "line" : "lines";
+    var up;
+    var down;
+    var controls = `<span class="snippet-gap-label">⋯ ${count} ${unit}</span>`;
+    if (embeddable && count <= EXPAND_STEP) {
+      controls = `<button type="button" class="snippet-gap-btn" data-dir="all">expand ${count} ${unit}</button>`;
+    } else if (embeddable) {
+      up =
+        position === "bottom"
+          ? ""
+          : `<button type="button" class="snippet-gap-btn" data-dir="up">↑ ${EXPAND_STEP}</button>`;
+      down =
+        position === "top"
+          ? ""
+          : `<button type="button" class="snippet-gap-btn" data-dir="down">↓ ${EXPAND_STEP}</button>`;
+      controls = `${up}${controls}${down}`;
+    }
+    var colspan = paneMode === "split" ? 6 : 3;
+    return `<tr class="snippet-gap" data-from="${from}" data-to="${to}" data-position="${position}"><td colspan="${colspan}">${controls}</td></tr>`;
   }
 
   function loadFileData() {

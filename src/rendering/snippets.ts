@@ -4,7 +4,7 @@ import { escapeHtml } from "./escape.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { isProseLanguage, languageForPath } from "./language.js";
 import { type AlignedRow, buildRegionDiff } from "./line-diff.js";
-import type { SnippetPaneMode } from "./snippet-blocks.js";
+import type { GapPosition, SnippetPaneMode } from "./snippet-blocks.js";
 
 export type { SnippetPaneMode } from "./snippet-blocks.js";
 
@@ -181,6 +181,44 @@ function headCells(row: AlignedRow): string {
 
 function cellTypeClass(type: AlignedRow["baseType"]): string {
   return type ? ` type-${type}` : "";
+}
+
+/** Rows one click reveals. Mirrored as `EXPAND_STEP` in ./assets/app.js. */
+export const EXPAND_STEP = 20;
+
+/**
+ * Renders a gap row: the control for a hidden range `[from, to]` of whole-file row indices
+ * (docs/adr/0021). Mirrored line-for-line in ./assets/app.js, which re-renders the row after
+ * each partial expansion — the two must stay byte-identical (see the parity test). A range of
+ * at most `EXPAND_STEP` rows gets one button revealing it all; a larger one gets a step button
+ * per direction, except that the top gap has no region above to grow from and the bottom gap
+ * none below. Over the embed cap there is nothing to reveal, so only the label renders.
+ */
+export function renderGapRow(
+  from: number,
+  to: number,
+  position: GapPosition,
+  paneMode: SnippetPaneMode,
+  embeddable: boolean,
+): string {
+  const count = to - from + 1;
+  const unit = count === 1 ? "line" : "lines";
+  let controls = `<span class="snippet-gap-label">⋯ ${count} ${unit}</span>`;
+  if (embeddable && count <= EXPAND_STEP) {
+    controls = `<button type="button" class="snippet-gap-btn" data-dir="all">expand ${count} ${unit}</button>`;
+  } else if (embeddable) {
+    const up =
+      position === "bottom"
+        ? ""
+        : `<button type="button" class="snippet-gap-btn" data-dir="up">↑ ${EXPAND_STEP}</button>`;
+    const down =
+      position === "top"
+        ? ""
+        : `<button type="button" class="snippet-gap-btn" data-dir="down">↓ ${EXPAND_STEP}</button>`;
+    controls = `${up}${controls}${down}`;
+  }
+  const colspan = paneMode === "split" ? 6 : 3;
+  return `<tr class="snippet-gap" data-from="${from}" data-to="${to}" data-position="${position}"><td colspan="${colspan}">${controls}</td></tr>`;
 }
 
 /** The `side`'s text lines whose line number falls within `range`, in file order — the reference's
