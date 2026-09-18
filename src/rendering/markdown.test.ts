@@ -1,6 +1,8 @@
+import { parse } from "node-html-parser";
 import { describe, expect, it } from "vitest";
 import { serializeSnippetRef } from "../explanations/markup.js";
 import type { FileDiffData } from "./file-diffs.js";
+import { buildAlignedDiff } from "./line-diff.js";
 import {
   type MarkdownRenderContext,
   renderCategoryMarkdown,
@@ -197,5 +199,60 @@ describe("renderCategoryMarkdown", () => {
       forceSnippetsCollapsed: true,
     });
     expect(html).not.toContain("<details open>");
+  });
+
+  describe("adjacent snippet refs", () => {
+    function diffs(): Map<string, FileDiffData> {
+      const base = Array.from({ length: 40 }, (_, i) => `l${i + 1}`);
+      const head = base.map((line, i) => (i + 1 === 5 || i + 1 === 30 ? line.toUpperCase() : line));
+      const rows = buildAlignedDiff(`${base.join("\n")}\n`, `${head.join("\n")}\n`);
+      return new Map([
+        ["src/a.ts", { rows, embeddable: true }],
+        ["src/b.ts", { rows, embeddable: true }],
+      ]);
+    }
+    const a5 = serializeSnippetRef({
+      path: "src/a.ts",
+      base: { start: 5, end: 5 },
+      head: { start: 5, end: 5 },
+      unfold: true,
+    });
+    const a30 = serializeSnippetRef({
+      path: "src/a.ts",
+      base: { start: 30, end: 30 },
+      head: { start: 30, end: 30 },
+      unfold: true,
+    });
+    const b30 = serializeSnippetRef({
+      path: "src/b.ts",
+      base: { start: 30, end: 30 },
+      head: { start: 30, end: 30 },
+      unfold: true,
+    });
+
+    it("merges refs to one file separated only by blank lines into one block", () => {
+      const html = renderCategoryMarkdown(
+        `Intro.\n\n${a5}\n\n${a30}\n\nAfter.\n`,
+        context(diffs()),
+      );
+      const root = parse(html);
+      expect(root.querySelectorAll(".snippet")).toHaveLength(1);
+      expect(root.querySelectorAll("tr.snippet-gap[data-position='between']")).toHaveLength(1);
+    });
+
+    it("keeps refs separated by prose as separate blocks", () => {
+      const html = renderCategoryMarkdown(`${a5}\n\nSome prose.\n\n${a30}\n`, context(diffs()));
+      expect(parse(html).querySelectorAll(".snippet")).toHaveLength(2);
+    });
+
+    it("keeps refs separated by an HTML comment as separate blocks", () => {
+      const html = renderCategoryMarkdown(`${a5}\n<!-- note -->\n${a30}\n`, context(diffs()));
+      expect(parse(html).querySelectorAll(".snippet")).toHaveLength(2);
+    });
+
+    it("keeps adjacent refs to different files as separate blocks", () => {
+      const html = renderCategoryMarkdown(`${a5}\n\n${b30}\n`, context(diffs()));
+      expect(parse(html).querySelectorAll(".snippet")).toHaveLength(2);
+    });
   });
 });
