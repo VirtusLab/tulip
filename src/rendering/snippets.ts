@@ -4,14 +4,9 @@ import { escapeHtml } from "./escape.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { isProseLanguage, languageForPath } from "./language.js";
 import { type AlignedRow, buildRegionDiff } from "./line-diff.js";
+import type { SnippetPaneMode } from "./snippet-blocks.js";
 
-/**
- * Which side(s) of a diff row {@link renderSnippetRow} draws: `"split"` renders both base and head
- * cells, github split-diff style. `"head-only"`/`"base-only"` render just one side's three cells —
- * used for a snippet reference that has only that side (an addition or a deletion, docs/adr/0018),
- * so a two-pane split would always leave one pane blank.
- */
-export type SnippetPaneMode = "split" | "head-only" | "base-only";
+export type { SnippetPaneMode } from "./snippet-blocks.js";
 
 /** The pane mode a reference's present sides call for (docs/adr/0018): both sides → the two-pane
  * split; a head-only reference (an addition) → head-only; a base-only reference (a deletion) →
