@@ -63,7 +63,7 @@ export function renderCategoryMarkdown(
     start: match.start,
     end: match.end,
     render: () =>
-      renderSnippetBlock(match.ref, ctx.fileDiffs, options.forceSnippetsCollapsed ?? false),
+      renderSnippetBlock([match.ref], ctx.fileDiffs, options.forceSnippetsCollapsed ?? false),
   }));
 
   return renderWithSegments(source, [...mermaidSegments, ...snippetSegments]);

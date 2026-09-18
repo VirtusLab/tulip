@@ -447,7 +447,7 @@ describe("renderPage", () => {
     const root = parse(html);
     const embedded = JSON.parse(root.querySelector("#tulip-file-data")?.text ?? "{}");
     expect(embedded["src/big.ts"]).toBeUndefined();
-    expect(root.querySelectorAll(".snippet-expand")).toHaveLength(0);
+    expect(root.querySelectorAll(".snippet-gap-btn")).toHaveLength(0);
   });
 
   it("carries a highlight.js language-class hook for a fenced code block in prose", () => {
