@@ -21,8 +21,8 @@ two split pieces of one change had no expander (ADR 0018).
   longer side's trailing lines in a gap. Hidden ranges are computed with a running cursor over
   the regions in file order, so overlapping or nested row ranges (split pieces straddle paired
   rows) never re-expose a region's rows. Refs whose line ranges overlap split the run.
-- **Gap rows own their range.** Each hidden range is a `tr.snippet-gap` with `data-from`,
-  `data-to` and `data-position`. A click reveals up to 20 rows from the end the button points
+- **Gap rows own their range.** Each hidden range is a `tr.snippet-gap` with `data-from-row`,
+  `data-to-row` and `data-position`. A click reveals up to 20 rows from the end the button points
   at, and the row re-renders or disappears when empty. Expansion therefore continues to the
   file edge or the next region, and crosses changes that belong to other blocks, showing them
   as add/remove rows as GitHub does. A gap of at most 20 rows gets one "expand N lines" button.

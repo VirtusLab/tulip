@@ -7,7 +7,7 @@ import {
 import type { FileDiffData } from "./file-diffs.js";
 import { findMermaidFences, renderMermaidPlaceholder } from "./mermaid.js";
 import { renderWithSegments, type Segment } from "./segments.js";
-import { renderSnippetBlock } from "./snippets.js";
+import { renderSnippetRun } from "./snippets.js";
 
 export { renderProseMarkdown } from "./prose.js";
 
@@ -65,7 +65,7 @@ export function renderCategoryMarkdown(
       start: run[0]?.start ?? 0,
       end: run[run.length - 1]?.end ?? 0,
       render: () =>
-        renderSnippetBlock(
+        renderSnippetRun(
           run.map((match) => match.ref),
           ctx.fileDiffs,
           options.forceSnippetsCollapsed ?? false,
@@ -83,7 +83,7 @@ export function renderCategoryMarkdown(
  * snippets on purpose. Grouping is textual only; whether a run's refs can actually merge is
  * decided by ./snippets.ts.
  */
-export function groupAdjacentRefs(source: string, matches: SnippetRefMatch[]): SnippetRefMatch[][] {
+function groupAdjacentRefs(source: string, matches: SnippetRefMatch[]): SnippetRefMatch[][] {
   const runs: SnippetRefMatch[][] = [];
   for (const match of matches) {
     const run = runs[runs.length - 1];

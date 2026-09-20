@@ -42,6 +42,9 @@
      kept as its own variable so every code surface (snippet cells, prose fences, summaries)
      agrees on it. */
   --code-font-size: 0.8125rem;
+  /* Diff gutter columns; the <colgroup> and the cells must agree (see .snippet-col-*). */
+  --snippet-line-no-width: 3.5rem;
+  --snippet-marker-width: 1.25rem;
 
   /* Small, shared vertical-rhythm scale (docs/adr/0009: the page read as too airy — main's own
      padding, .page-section's padding and h2's margin-top all stacked on top of each other, plus
@@ -657,7 +660,7 @@ main pre.mermaid {
 }
 
 .snippet-line-no {
-  width: 3.5rem;
+  width: var(--snippet-line-no-width);
   text-align: right;
   color: var(--muted);
   user-select: none;
@@ -669,7 +672,7 @@ main pre.mermaid {
    below — color alone is easy to miss (task: diffs don't show which lines changed at a
    glance). Narrow and non-selectable so copy-pasting a row's code doesn't pick up the marker. */
 .snippet-marker {
-  width: 1.25rem;
+  width: var(--snippet-marker-width);
   padding: 0.05rem 0;
   text-align: center;
   color: var(--muted);
@@ -735,11 +738,11 @@ main pre.mermaid {
 /* Gutter widths via <colgroup> too: `.snippet-wrap`'s fixed layout reads widths from the first
    row, which may be a spanning gap row rather than a code row. */
 .snippet-col-line-no {
-  width: 3.5rem;
+  width: var(--snippet-line-no-width);
 }
 
 .snippet-col-marker {
-  width: 1.25rem;
+  width: var(--snippet-marker-width);
 }
 
 /* GFM tables (marked's default table renderer) in prose — unstyled otherwise, a bare <table>

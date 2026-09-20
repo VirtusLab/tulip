@@ -165,6 +165,7 @@
     document.addEventListener("tulip:theme-change", render);
   }
 
+  // --- mirrored from snippets.ts: BEGIN --- (byte-identical; see snippets.test.ts's parity test)
   var SNIPPET_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   var EXPAND_STEP = 20;
 
@@ -234,28 +235,28 @@
 
   // Mirrors ./snippets.ts's `renderGapRow` line for line — a gap row is re-rendered here after
   // each partial expansion (see setupSnippetExpansion). Byte-identical by the parity test.
-  function renderGapRow(from, to, position, paneMode, embeddable) {
-    var count = to - from + 1;
+  function renderGapRow(fromRow, toRow, position, paneMode, embeddable) {
+    var count = toRow - fromRow + 1;
     var unit = count === 1 ? "line" : "lines";
-    var up;
-    var down;
-    var controls = `<span class="snippet-gap-label">⋯ ${count} ${unit}</span>`;
+    var label = `<span class="snippet-gap-label">⋯ ${count} ${unit}</span>`;
+    var controls = label;
     if (embeddable && count <= EXPAND_STEP) {
       controls = `<button type="button" class="snippet-gap-btn" data-dir="all">expand ${count} ${unit}</button>`;
     } else if (embeddable) {
-      up =
+      const up =
         position === "bottom"
           ? ""
           : `<button type="button" class="snippet-gap-btn" data-dir="up">↑ ${EXPAND_STEP}</button>`;
-      down =
+      const down =
         position === "top"
           ? ""
           : `<button type="button" class="snippet-gap-btn" data-dir="down">↓ ${EXPAND_STEP}</button>`;
-      controls = `${up}${controls}${down}`;
+      controls = `${up}${label}${down}`;
     }
     var colspan = paneMode === "split" ? 6 : 3;
-    return `<tr class="snippet-gap" data-from="${from}" data-to="${to}" data-position="${position}"><td colspan="${colspan}">${controls}</td></tr>`;
+    return `<tr class="snippet-gap" data-from-row="${fromRow}" data-to-row="${toRow}" data-position="${position}"><td colspan="${colspan}">${controls}</td></tr>`;
   }
+  // --- mirrored from snippets.ts: END ---
 
   function loadFileData() {
     var el = document.getElementById("tulip-file-data");
@@ -277,46 +278,35 @@
     return html;
   }
 
-  // Gap-row expansion (docs/adr/0021). Every control is a `tr.snippet-gap` owning a hidden
-  // range [from, to] of whole-file row indices. A click reveals up to EXPAND_STEP rows from the
-  // end the button points at, shrinks the range, and re-renders the row — or removes it once
-  // nothing is hidden. Revealed rows come from the page-embedded whole-file data, so a change
-  // that isn't part of this block shows as add/remove rows, as expanded context does on GitHub.
+  // Gap-row expansion (docs/adr/0021). Every control is a `tr.snippet-gap` owning a hidden range
+  // [fromRow, toRow] of whole-file row indices. A click reveals up to EXPAND_STEP rows, shrinks
+  // the range, and re-renders the row — or removes it once nothing is hidden. Revealed rows come
+  // from the page-embedded whole-file data, so a change that isn't part of this block shows as
+  // add/remove rows, as expanded context does on GitHub.
   function expandGap(gapRow, rows, paneMode, dir) {
-    var from = Number(gapRow.getAttribute("data-from"));
-    var to = Number(gapRow.getAttribute("data-to"));
-    var position = gapRow.getAttribute("data-position") || "between";
-    if (!(from <= to)) {
-      gapRow.remove();
-      return;
-    }
-    var revealFrom;
-    var revealTo;
-    var where;
-    if (dir === "up") {
-      // The range's tail sits right above the region below the gap row.
-      revealFrom = Math.max(from, to - EXPAND_STEP + 1);
-      revealTo = to;
-      where = "afterend";
-      to = revealFrom - 1;
-    } else if (dir === "down") {
-      revealFrom = from;
-      revealTo = Math.min(to, from + EXPAND_STEP - 1);
-      where = "beforebegin";
-      from = revealTo + 1;
+    var fromRow = Number(gapRow.getAttribute("data-from-row"));
+    var toRow = Number(gapRow.getAttribute("data-to-row"));
+    var position = gapRow.getAttribute("data-position");
+    // "up" grows the region below the gap upward: it reveals the range's tail and inserts it
+    // below this row. "down" grows the region above downward: the range's head, inserted above
+    // this row. "all" is a "down" that fits in one step.
+    var up = dir === "up";
+    var revealFrom = up ? Math.max(fromRow, toRow - EXPAND_STEP + 1) : fromRow;
+    var revealTo = up ? toRow : Math.min(toRow, fromRow + EXPAND_STEP - 1);
+    var insertAt = up ? "afterend" : "beforebegin";
+    gapRow.insertAdjacentHTML(insertAt, renderRows(rows.slice(revealFrom, revealTo + 1), paneMode));
+    if (up) {
+      toRow = revealFrom - 1;
     } else {
-      revealFrom = from;
-      revealTo = to;
-      // Side doesn't matter: the whole range is revealed and the gap row is removed right after.
-      where = "beforebegin";
-      from = to + 1;
+      fromRow = revealTo + 1;
     }
-    gapRow.insertAdjacentHTML(where, renderRows(rows.slice(revealFrom, revealTo + 1), paneMode));
-    if (from > to) {
-      gapRow.remove();
-      return;
+    if (fromRow <= toRow) {
+      // Only an embeddable file has buttons, so the re-rendered row is embeddable too.
+      gapRow.insertAdjacentHTML(
+        "beforebegin",
+        renderGapRow(fromRow, toRow, position, paneMode, true),
+      );
     }
-    gapRow.insertAdjacentHTML("beforebegin", renderGapRow(from, to, position, paneMode, true));
     gapRow.remove();
   }
 

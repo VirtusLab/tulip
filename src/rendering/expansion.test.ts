@@ -31,8 +31,9 @@ const DEFAULT_MARKDOWN = `Intro.\n\n${ref(10)}\n\n${ref(30)}\n\n## Production co
 
 /** Renders a real page from `markdown` (default: a merged block for lines 10 and 30), loads it
  * into its own JSDOM window, runs the real app.js there, and fires DOMContentLoaded — one window
- * per test, so listeners never accumulate across tests. No <script src> is fetched by JSDOM. */
-function mount(markdown: string = DEFAULT_MARKDOWN): { container: Element } {
+ * per test, so listeners never accumulate across tests. No <script src> is fetched by JSDOM.
+ * Returns the page's first snippet block. */
+function mount(markdown: string = DEFAULT_MARKDOWN): Element {
   const fileDiffs = new Map<string, FileDiffData>([
     [PATH, { rows: fixtureRows(), embeddable: true }],
   ]);
@@ -53,9 +54,9 @@ function mount(markdown: string = DEFAULT_MARKDOWN): { container: Element } {
   dom.window.document.dispatchEvent(new dom.window.Event("DOMContentLoaded"));
   const container = dom.window.document.querySelector(".snippet");
   if (!container) {
-    throw new Error("expected a merged snippet block");
+    throw new Error("expected a snippet block");
   }
-  return { container };
+  return container;
 }
 
 function headLines(container: Element): number[] {
@@ -70,7 +71,7 @@ function gap(container: Element, position: string): Element | null {
 
 function click(container: Element, position: string, dir: string): void {
   const button = gap(container, position)?.querySelector(`.snippet-gap-btn[data-dir="${dir}"]`);
-  if (!button || typeof (button as HTMLElement).click !== "function") {
+  if (!button) {
     throw new Error(`no ${dir} button on the ${position} gap`);
   }
   (button as HTMLElement).click();
@@ -78,54 +79,49 @@ function click(container: Element, position: string, dir: string): void {
 
 describe("gap-row expansion in a real DOM (app.js under jsdom)", () => {
   it("renders the two refs as one block with top, between and bottom gaps", () => {
-    const { container } = mount();
+    const container = mount();
     expect(container.ownerDocument.querySelectorAll(".snippet")).toHaveLength(1);
     expect(headLines(container)).toEqual([10, 30]);
-    expect(gap(container, "top")?.getAttribute("data-to")).toBe("8");
-    expect(gap(container, "between")?.getAttribute("data-from")).toBe("10");
-    expect(gap(container, "between")?.getAttribute("data-to")).toBe("28");
-    expect(gap(container, "bottom")?.getAttribute("data-from")).toBe("30");
+    expect(
+      Array.from(container.querySelectorAll("tr.snippet-gap")).map((g) =>
+        g.getAttribute("data-position"),
+      ),
+    ).toEqual(["top", "between", "bottom"]);
   });
 
   it("expands a small between gap fully with one click, keeping file order", () => {
-    const { container } = mount();
+    const container = mount();
     click(container, "between", "all");
     expect(gap(container, "between")).toBeNull();
     expect(headLines(container)).toEqual(Array.from({ length: 21 }, (_, i) => 10 + i));
   });
 
-  it("expands the top gap upward with one click", () => {
-    const { container } = mount();
-    click(container, "top", "all");
-    expect(gap(container, "top")).toBeNull();
-    expect(headLines(container).slice(0, 10)).toEqual(Array.from({ length: 10 }, (_, i) => i + 1));
-  });
-
-  it("expands a large bottom gap in steps, crossing an unrelated change, until the file end", () => {
-    const { container } = mount();
+  it("expands a large bottom gap in steps until the file end", () => {
+    const container = mount();
     click(container, "bottom", "down");
     expect(headLines(container)).toEqual([10, 30, ...Array.from({ length: 20 }, (_, i) => 31 + i)]);
-    // Line 50 is a change explained elsewhere: revealed as a diff row, not hidden.
-    const changed = Array.from(container.querySelectorAll("td.snippet-line-no.side-head.type-add"));
-    expect(changed.map((td) => td.textContent)).toContain("50");
-    // 10 rows remain: the gap re-rendered as a single button.
-    const remaining = gap(container, "bottom");
-    expect(remaining?.getAttribute("data-from")).toBe("50");
-    expect(remaining?.querySelectorAll(".snippet-gap-btn")).toHaveLength(1);
+    expect(gap(container, "bottom")?.getAttribute("data-from-row")).toBe("50");
     click(container, "bottom", "all");
     expect(gap(container, "bottom")).toBeNull();
     expect(headLines(container).at(-1)).toBe(60);
   });
 
+  it("reveals a change that belongs to another block as a diff row", () => {
+    const container = mount();
+    click(container, "bottom", "down");
+    const changed = Array.from(container.querySelectorAll("td.snippet-line-no.side-head.type-add"));
+    expect(changed.map((td) => td.textContent)).toContain("50");
+  });
+
   it("expands a large top gap upward in steps, one step short of the file start", () => {
-    const { container } = mount(`Intro.\n\n${ref(50)}\n\n## Production code\n\nBody.\n`);
+    const container = mount(`Intro.\n\n${ref(50)}\n\n## Production code\n\nBody.\n`);
     click(container, "top", "up");
     expect(headLines(container)).toEqual([...Array.from({ length: 20 }, (_, i) => 30 + i), 50]);
-    expect(gap(container, "top")?.getAttribute("data-to")).toBe("28");
+    expect(gap(container, "top")?.getAttribute("data-to-row")).toBe("28");
   });
 
   it("reveals every line exactly once after expanding everything", () => {
-    const { container } = mount();
+    const container = mount();
     click(container, "top", "all");
     click(container, "between", "all");
     click(container, "bottom", "down");

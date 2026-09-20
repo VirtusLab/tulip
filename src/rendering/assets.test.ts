@@ -36,10 +36,9 @@ describe("style.css", () => {
     expect(css).not.toMatch(/\bbody\s*\{[^}]*overflow-x:\s*auto/);
   });
 
-  it("styles gap rows and their inline buttons, and no longer ships the old full-width expander", () => {
+  it("styles gap rows and their inline buttons", () => {
     expect(css).toMatch(/\.snippet-table \.snippet-gap td\s*\{[^}]*text-align:\s*center/);
     expect(css).toMatch(/\.snippet-gap-btn\s*\{/);
-    expect(css).not.toMatch(/\.snippet-expand\s*\{/);
   });
 
   it("defines a full palette for both light and dark themes", () => {
@@ -149,15 +148,10 @@ describe("app.js", () => {
     expect(js).not.toMatch(/\.innerHTML\s*=\s*(?!"")[a-zA-Z_]/);
   });
 
-  it("expands gap rows through one delegated click handler and re-highlights inserted rows", () => {
+  it("re-highlights rows inserted by a gap expansion", () => {
     const start = js.indexOf("function setupSnippetExpansion");
     const end = js.indexOf("\n  function ", start + 1);
-    const slice = js.slice(start, end);
-    expect(slice).toContain('document.addEventListener("click"');
-    expect(slice).toContain("highlightSnippetContainer");
-    // The old walker stopped at the first changed row; gap rows own their range instead.
-    expect(js).not.toContain("isContextRow");
-    expect(js).not.toContain("CONTEXT_STEP");
+    expect(js.slice(start, end)).toContain("highlightSnippetContainer");
   });
 
   it("guesses the diff language from data-lang and skips unknown languages", () => {

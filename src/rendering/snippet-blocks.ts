@@ -21,10 +21,12 @@ export interface SnippetRegion {
   lines: number;
 }
 
-/** An inclusive range of whole-file row indices a control can reveal (docs/adr/0021). */
+/** An inclusive range of whole-file row indices — not line numbers — a control can reveal
+ * (docs/adr/0021). Gaps never overlap a region's row range or each other; see the cursor in
+ * `assembleBlock`. */
 export interface SnippetGap {
-  from: number;
-  to: number;
+  fromRow: number;
+  toRow: number;
   position: GapPosition;
 }
 
@@ -38,20 +40,24 @@ export interface SnippetBlock {
   paneMode: SnippetPaneMode;
   /** Regions and non-empty gaps, in render order. */
   items: SnippetItem[];
-  /** The regions alone, in file order. */
-  regions: SnippetRegion[];
   embeddable: boolean;
   open: boolean;
 }
 
+/** The block's regions alone, in file order. */
+export function blockRegions(block: SnippetBlock): SnippetRegion[] {
+  return block.items.flatMap((item) => (item.kind === "region" ? [item.region] : []));
+}
+
+/** `reason` is plain text for the renderer to escape. */
 export type SnippetPiece =
   | { kind: "block"; block: SnippetBlock }
   | { kind: "fallback"; ref: SnippetRef; reason: string };
 
 /**
- * Turns a run of refs (consecutive in the markdown, same path — see ./markdown.ts) into the
- * pieces to render: normally one block. The run splits at a ref that can't be rendered (a
- * fallback notice in its place) and at a ref whose line ranges overlap an earlier ref's, so the
+ * Turns a run of refs (consecutive in the markdown, all to one path — ./markdown.ts groups them)
+ * into the pieces to render: normally one block. The run splits at a ref that can't be rendered
+ * (a fallback notice in its place) and at a ref whose line ranges overlap an earlier ref's, so the
  * same lines are never drawn twice; pieces on either side of a split do not re-merge.
  */
 export function buildSnippetPieces(
@@ -59,25 +65,31 @@ export function buildSnippetPieces(
   fileDiffs: Map<string, FileDiffData>,
   forceCollapsed: boolean,
 ): SnippetPiece[] {
-  const pieces: SnippetPiece[] = [];
-  let current: SnippetRegion[] = [];
-  let currentData: FileDiffData | undefined;
+  const first = refs[0];
+  if (!first) {
+    return [];
+  }
+  const data = fileDiffs.get(first.path);
+  if (!data) {
+    return refs.map(
+      (ref): SnippetPiece => ({
+        kind: "fallback",
+        ref,
+        reason: `${ref.path} could not be loaded.`,
+      }),
+    );
+  }
 
+  const pieces: SnippetPiece[] = [];
+  let run: SnippetRegion[] = [];
   const flush = () => {
-    if (current.length > 0 && currentData) {
-      pieces.push({ kind: "block", block: assembleBlock(current, currentData, forceCollapsed) });
+    if (run.length > 0) {
+      pieces.push({ kind: "block", block: assembleBlock(first.path, run, data, forceCollapsed) });
     }
-    current = [];
-    currentData = undefined;
+    run = [];
   };
 
   for (const ref of refs) {
-    const data = fileDiffs.get(ref.path);
-    if (!data) {
-      flush();
-      pieces.push({ kind: "fallback", ref, reason: `${ref.path} could not be loaded.` });
-      continue;
-    }
     const region = buildRegion(ref, data.rows);
     if (!region) {
       flush();
@@ -88,14 +100,10 @@ export function buildSnippetPieces(
       });
       continue;
     }
-    if (current[0] && current[0].ref.path !== ref.path) {
+    if (run.some((earlier) => refsOverlap(earlier.ref, ref))) {
       flush();
     }
-    if (current.some((earlier) => refsOverlap(earlier.ref, ref))) {
-      flush();
-    }
-    current.push(region);
-    currentData = data;
+    run.push(region);
   }
   flush();
   return pieces;
@@ -104,32 +112,21 @@ export function buildSnippetPieces(
 function buildRegion(ref: SnippetRef, rows: AlignedRow[]): SnippetRegion | undefined {
   const baseLines = ref.base ? sideLines(rows, "base", ref.base) : [];
   const headLines = ref.head ? sideLines(rows, "head", ref.head) : [];
-  if (baseLines.length === 0 && headLines.length === 0) {
-    return undefined;
-  }
-  let firstRow = -1;
-  let lastRow = -1;
-  rows.forEach((row, index) => {
-    if (rowHoldsRef(row, ref)) {
-      if (firstRow === -1) {
-        firstRow = index;
-      }
-      lastRow = index;
-    }
-  });
-  if (firstRow === -1) {
+  const firstRow = rows.findIndex((row) => rowHoldsRef(row, ref));
+  if (firstRow === -1 || (baseLines.length === 0 && headLines.length === 0)) {
     return undefined;
   }
   return {
     ref,
     rows: buildRegionDiff(baseLines, ref.base?.start ?? 1, headLines, ref.head?.start ?? 1),
     firstRow,
-    lastRow,
+    lastRow: rows.findLastIndex((row) => rowHoldsRef(row, ref)),
     lines: Math.max(baseLines.length, headLines.length),
   };
 }
 
 function assembleBlock(
+  path: string,
   regions: SnippetRegion[],
   data: FileDiffData,
   forceCollapsed: boolean,
@@ -142,19 +139,18 @@ function assembleBlock(
   // A running cursor, not `previous.lastRow + 1`: row ranges of neighbouring regions may overlap
   // (split pieces straddle paired rows) or nest, and a gap must never re-expose a region's rows.
   const items: SnippetItem[] = [];
-  let next = 0;
+  let nextRow = 0;
   sorted.forEach((region, index) => {
-    pushGap(items, next, region.firstRow - 1, index === 0 ? "top" : "between", data.embeddable);
+    pushGap(items, nextRow, region.firstRow - 1, index === 0 ? "top" : "between", data.embeddable);
     items.push({ kind: "region", region });
-    next = Math.max(next, region.lastRow + 1);
+    nextRow = Math.max(nextRow, region.lastRow + 1);
   });
-  pushGap(items, next, data.rows.length - 1, "bottom", data.embeddable);
+  pushGap(items, nextRow, data.rows.length - 1, "bottom", data.embeddable);
 
   return {
-    path: sorted[0]?.ref.path ?? "",
+    path,
     paneMode: paneModeForRows(data.rows),
     items,
-    regions: sorted,
     embeddable: data.embeddable,
     open: sorted.some((region) => region.ref.unfold) && !forceCollapsed,
   };
@@ -164,18 +160,18 @@ function assembleBlock(
  * since the file's rows aren't on the page to reveal anything above or below. */
 function pushGap(
   items: SnippetItem[],
-  from: number,
-  to: number,
+  fromRow: number,
+  toRow: number,
   position: GapPosition,
   embeddable: boolean,
 ): void {
-  if (from > to) {
+  if (fromRow > toRow) {
     return;
   }
   if (!embeddable && position !== "between") {
     return;
   }
-  items.push({ kind: "gap", gap: { from, to, position } });
+  items.push({ kind: "gap", gap: { fromRow, toRow, position } });
 }
 
 /** Single-pane only when the whole file is single-sided: a single-pane row renders no cells for

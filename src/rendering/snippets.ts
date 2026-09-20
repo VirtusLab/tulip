@@ -4,6 +4,7 @@ import type { FileDiffData } from "./file-diffs.js";
 import { isProseLanguage, languageForPath } from "./language.js";
 import type { AlignedRow } from "./line-diff.js";
 import {
+  blockRegions,
   buildSnippetPieces,
   type GapPosition,
   type SnippetBlock,
@@ -22,7 +23,7 @@ import {
  * `forceCollapsed` overrides every ref's `unfold` to collapsed — set by ./markdown.ts for a
  * "## Test code" subsection (see ./sections.ts).
  */
-export function renderSnippetBlock(
+export function renderSnippetRun(
   refs: SnippetRef[],
   fileDiffs: Map<string, FileDiffData>,
   forceCollapsed = false,
@@ -40,8 +41,8 @@ function renderBlock(block: SnippetBlock): string {
       item.kind === "region"
         ? item.region.rows.map((row) => renderSnippetRow(row, block.paneMode)).join("")
         : renderGapRow(
-            item.gap.from,
-            item.gap.to,
+            item.gap.fromRow,
+            item.gap.toRow,
             item.gap.position,
             block.paneMode,
             block.embeddable,
@@ -49,9 +50,10 @@ function renderBlock(block: SnippetBlock): string {
     )
     .join("");
 
-  const ranges = block.regions.map((region) => refRanges(region.ref)).join("; ");
-  const lines = block.regions.reduce((sum, region) => sum + region.lines, 0);
-  const summary = `${escapeHtml(block.path)} — ${ranges} (${lines} line${lines === 1 ? "" : "s"})`;
+  const regions = blockRegions(block);
+  const ranges = regions.map((region) => refRanges(region.ref)).join("; ");
+  const lines = regions.reduce((sum, region) => sum + region.lines, 0);
+  const summary = `${escapeHtml(block.path)} — ${ranges} (${pluralLines(lines)})`;
 
   // Language is guessed from the path only (a small, fixed lookup table — see ./language.ts),
   // never from file content, so it can't be steered by attacker-controlled text. It rides on
@@ -94,11 +96,16 @@ function refRanges(ref: SnippetRef): string {
   return parts.join(", ");
 }
 
+function pluralLines(count: number): string {
+  return `${count} line${count === 1 ? "" : "s"}`;
+}
+
+/** `message` may quote the ref's path, which the model wrote: escaped here, never upstream. */
 function renderFallback(ref: SnippetRef, message: string): string {
   const baseLen = ref.base ? ref.base.end - ref.base.start + 1 : 0;
   const headLen = ref.head ? ref.head.end - ref.head.start + 1 : 0;
   const lines = Math.max(baseLen, headLen);
-  return `<div class="snippet snippet-unavailable">${message} (${escapeHtml(ref.path)}, ${refRanges(ref)} (${lines} line${lines === 1 ? "" : "s"}))</div>`;
+  return `<div class="snippet snippet-unavailable">${escapeHtml(message)} (${escapeHtml(ref.path)}, ${refRanges(ref)} — ${pluralLines(lines)})</div>`;
 }
 
 /**
@@ -144,7 +151,7 @@ function cellTypeClass(type: AlignedRow["baseType"]): string {
 export const EXPAND_STEP = 20;
 
 /**
- * Renders a gap row: the control for a hidden range `[from, to]` of whole-file row indices
+ * Renders a gap row: the control for a hidden range `[fromRow, toRow]` of whole-file row indices
  * (docs/adr/0021). Mirrored line-for-line in ./assets/app.js, which re-renders the row after
  * each partial expansion — the two must stay byte-identical (see the parity test). A range of
  * at most `EXPAND_STEP` rows gets one button revealing it all; a larger one gets a step button
@@ -152,15 +159,16 @@ export const EXPAND_STEP = 20;
  * none below. Over the embed cap there is nothing to reveal, so only the label renders.
  */
 export function renderGapRow(
-  from: number,
-  to: number,
+  fromRow: number,
+  toRow: number,
   position: GapPosition,
   paneMode: SnippetPaneMode,
   embeddable: boolean,
 ): string {
-  const count = to - from + 1;
+  const count = toRow - fromRow + 1;
   const unit = count === 1 ? "line" : "lines";
-  let controls = `<span class="snippet-gap-label">⋯ ${count} ${unit}</span>`;
+  const label = `<span class="snippet-gap-label">⋯ ${count} ${unit}</span>`;
+  let controls = label;
   if (embeddable && count <= EXPAND_STEP) {
     controls = `<button type="button" class="snippet-gap-btn" data-dir="all">expand ${count} ${unit}</button>`;
   } else if (embeddable) {
@@ -172,8 +180,8 @@ export function renderGapRow(
       position === "top"
         ? ""
         : `<button type="button" class="snippet-gap-btn" data-dir="down">↓ ${EXPAND_STEP}</button>`;
-    controls = `${up}${controls}${down}`;
+    controls = `${up}${label}${down}`;
   }
   const colspan = paneMode === "split" ? 6 : 3;
-  return `<tr class="snippet-gap" data-from="${from}" data-to="${to}" data-position="${position}"><td colspan="${colspan}">${controls}</td></tr>`;
+  return `<tr class="snippet-gap" data-from-row="${fromRow}" data-to-row="${toRow}" data-position="${position}"><td colspan="${colspan}">${controls}</td></tr>`;
 }

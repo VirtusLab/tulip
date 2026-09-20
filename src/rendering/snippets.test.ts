@@ -6,7 +6,7 @@ import type { SnippetRef } from "../explanations/markup.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { type AlignedRow, buildAlignedDiff } from "./line-diff.js";
 import type { GapPosition, SnippetPaneMode } from "./snippet-blocks.js";
-import { EXPAND_STEP, renderGapRow, renderSnippetBlock, renderSnippetRow } from "./snippets.js";
+import { EXPAND_STEP, renderGapRow, renderSnippetRow, renderSnippetRun } from "./snippets.js";
 
 function fileDiffs(
   rows: FileDiffData["rows"],
@@ -16,7 +16,7 @@ function fileDiffs(
   return new Map([[path, { rows, embeddable }]]);
 }
 
-describe("renderSnippetBlock — per-region alignment", () => {
+describe("renderSnippetRun — per-region alignment", () => {
   it("renders a modification (both sides) as one paired before/after row", () => {
     const rows = buildAlignedDiff("a\nb\nc\n", "a\nB\nc\n");
     const ref: SnippetRef = {
@@ -25,7 +25,7 @@ describe("renderSnippetBlock — per-region alignment", () => {
       head: { start: 2, end: 2 },
       unfold: true,
     };
-    const root = parse(renderSnippetBlock([ref], fileDiffs(rows)));
+    const root = parse(renderSnippetRun([ref], fileDiffs(rows)));
     const trs = root.querySelectorAll("tr:not(.snippet-gap)");
     expect(trs).toHaveLength(1);
     expect(trs[0]?.querySelector(".snippet-cell-base code")?.text).toBe("b");
@@ -46,7 +46,7 @@ describe("renderSnippetBlock — per-region alignment", () => {
       head: { start: 1, end: 1 },
       unfold: true,
     };
-    const trs = parse(renderSnippetBlock([ref], fileDiffs(rows))).querySelectorAll("tr");
+    const trs = parse(renderSnippetRun([ref], fileDiffs(rows))).querySelectorAll("tr");
     expect(trs).toHaveLength(3); // max(3 base, 1 head)
     expect(trs.map((tr) => tr.querySelector(".snippet-cell-base code")?.text)).toEqual([
       "a",
@@ -64,7 +64,7 @@ describe("renderSnippetBlock — per-region alignment", () => {
       head: { start: 1, end: 3 },
       unfold: true,
     };
-    const trs = parse(renderSnippetBlock([ref], fileDiffs(rows))).querySelectorAll("tr");
+    const trs = parse(renderSnippetRun([ref], fileDiffs(rows))).querySelectorAll("tr");
     expect(trs).toHaveLength(3);
     expect(trs.map((tr) => tr.querySelector(".snippet-cell-head code")?.text)).toEqual([
       "x",
@@ -89,7 +89,7 @@ describe("renderSnippetBlock — per-region alignment", () => {
       head: { start: 40, end: 40 },
       unfold: true,
     };
-    const trs = parse(renderSnippetBlock([ref], fileDiffs(rows))).querySelectorAll(
+    const trs = parse(renderSnippetRun([ref], fileDiffs(rows))).querySelectorAll(
       "tr:not(.snippet-gap)",
     );
     expect(trs).toHaveLength(1);
@@ -100,7 +100,7 @@ describe("renderSnippetBlock — per-region alignment", () => {
   it("renders an addition ref as a head-only single pane", () => {
     const rows = buildAlignedDiff("", "line1\nline2\n");
     const ref: SnippetRef = { path: "src/a.ts", head: { start: 1, end: 2 }, unfold: true };
-    const root = parse(renderSnippetBlock([ref], fileDiffs(rows)));
+    const root = parse(renderSnippetRun([ref], fileDiffs(rows)));
     expect(root.querySelector(".snippet")?.getAttribute("data-pane-mode")).toBe("head-only");
     const trs = root.querySelectorAll("tr");
     expect(trs).toHaveLength(2);
@@ -114,7 +114,7 @@ describe("renderSnippetBlock — per-region alignment", () => {
   it("renders a deletion ref as a base-only single pane", () => {
     const rows = buildAlignedDiff("line1\nline2\n", "");
     const ref: SnippetRef = { path: "src/a.ts", base: { start: 1, end: 2 }, unfold: true };
-    const root = parse(renderSnippetBlock([ref], fileDiffs(rows)));
+    const root = parse(renderSnippetRun([ref], fileDiffs(rows)));
     expect(root.querySelector(".snippet")?.getAttribute("data-pane-mode")).toBe("base-only");
     const trs = root.querySelectorAll("tr");
     expect(trs).toHaveLength(2);
@@ -131,7 +131,7 @@ describe("renderSnippetBlock — per-region alignment", () => {
     // two-sided context without going blank in a single-pane layout.
     const rows = buildAlignedDiff("a\nc\n", "a\nb\nc\n");
     const ref: SnippetRef = { path: "src/a.ts", head: { start: 2, end: 2 }, unfold: true };
-    const root = parse(renderSnippetBlock([ref], fileDiffs(rows)));
+    const root = parse(renderSnippetRun([ref], fileDiffs(rows)));
     expect(root.querySelector(".snippet")?.getAttribute("data-pane-mode")).toBe("split");
     const trs = root.querySelectorAll("tr:not(.snippet-gap)");
     expect(trs[0]?.querySelectorAll("td")).toHaveLength(6);
@@ -152,10 +152,10 @@ describe("renderSnippetBlock — per-region alignment", () => {
       head: { start: 3, end: 3 },
       unfold: true,
     };
-    const rowsA = parse(renderSnippetBlock([pieceA], fileDiffs(rows))).querySelectorAll(
+    const rowsA = parse(renderSnippetRun([pieceA], fileDiffs(rows))).querySelectorAll(
       "tr:not(.snippet-gap)",
     );
-    const rowsB = parse(renderSnippetBlock([pieceB], fileDiffs(rows))).querySelectorAll(
+    const rowsB = parse(renderSnippetRun([pieceB], fileDiffs(rows))).querySelectorAll(
       "tr:not(.snippet-gap)",
     );
     expect(rowsA.map((tr) => tr.querySelector(".snippet-cell-base code")?.text)).toEqual(["b"]);
@@ -163,7 +163,7 @@ describe("renderSnippetBlock — per-region alignment", () => {
   });
 });
 
-describe("renderSnippetBlock — fold/unfold and wrapping", () => {
+describe("renderSnippetRun — fold/unfold and wrapping", () => {
   const modRef = (unfold: boolean): SnippetRef => ({
     path: "src/a.ts",
     base: { start: 1, end: 1 },
@@ -174,7 +174,7 @@ describe("renderSnippetBlock — fold/unfold and wrapping", () => {
   it("is open by default when unfold is true", () => {
     const rows = buildAlignedDiff("a\n", "A\n");
     expect(
-      parse(renderSnippetBlock([modRef(true)], fileDiffs(rows)))
+      parse(renderSnippetRun([modRef(true)], fileDiffs(rows)))
         .querySelector("details")
         ?.hasAttribute("open"),
     ).toBe(true);
@@ -182,7 +182,7 @@ describe("renderSnippetBlock — fold/unfold and wrapping", () => {
 
   it("is collapsed by default when unfold is false, showing a line count", () => {
     const rows = buildAlignedDiff("a\n", "A\n");
-    const details = parse(renderSnippetBlock([modRef(false)], fileDiffs(rows))).querySelector(
+    const details = parse(renderSnippetRun([modRef(false)], fileDiffs(rows))).querySelector(
       "details",
     );
     expect(details?.hasAttribute("open")).toBe(false);
@@ -192,7 +192,7 @@ describe("renderSnippetBlock — fold/unfold and wrapping", () => {
   it("forces the details closed when forceCollapsed is set, even with unfold=yes", () => {
     const rows = buildAlignedDiff("a\n", "A\n");
     expect(
-      parse(renderSnippetBlock([modRef(true)], fileDiffs(rows), true))
+      parse(renderSnippetRun([modRef(true)], fileDiffs(rows), true))
         .querySelector("details")
         ?.hasAttribute("open"),
     ).toBe(false);
@@ -202,7 +202,7 @@ describe("renderSnippetBlock — fold/unfold and wrapping", () => {
     const rows = buildAlignedDiff("a\n", "A\n");
     const proseFileDiffs = new Map([["docs/readme.md", { rows, embeddable: true }]]);
     const ref: SnippetRef = { path: "docs/readme.md", head: { start: 1, end: 1 }, unfold: true };
-    const scrollDiv = parse(renderSnippetBlock([ref], proseFileDiffs)).querySelector(
+    const scrollDiv = parse(renderSnippetRun([ref], proseFileDiffs)).querySelector(
       ".snippet-scroll",
     );
     expect(scrollDiv?.classList.contains("snippet-wrap")).toBe(true);
@@ -210,7 +210,7 @@ describe("renderSnippetBlock — fold/unfold and wrapping", () => {
 
   it("keeps the scrolling (no-wrap) behavior for a code file", () => {
     const rows = buildAlignedDiff("a\n", "A\n");
-    const scrollDiv = parse(renderSnippetBlock([modRef(true)], fileDiffs(rows))).querySelector(
+    const scrollDiv = parse(renderSnippetRun([modRef(true)], fileDiffs(rows))).querySelector(
       ".snippet-scroll",
     );
     expect(scrollDiv?.classList.contains("snippet-wrap")).toBe(false);
@@ -219,14 +219,14 @@ describe("renderSnippetBlock — fold/unfold and wrapping", () => {
   it("wraps the diff table in a horizontally-scrollable container", () => {
     const rows = buildAlignedDiff("a\n", "A\n");
     expect(
-      parse(renderSnippetBlock([modRef(true)], fileDiffs(rows))).querySelector(
+      parse(renderSnippetRun([modRef(true)], fileDiffs(rows))).querySelector(
         ".snippet-scroll > .snippet-table",
       ),
     ).not.toBeNull();
   });
 });
 
-describe("renderSnippetBlock — merged regions and gap rows", () => {
+describe("renderSnippetRun — merged regions and gap rows", () => {
   /** A file of `n` lines `l1..ln`; `modified` lines are upper-cased on the head side. */
   function modifiedFile(n: number, modified: number[]): AlignedRow[] {
     const base = Array.from({ length: n }, (_, i) => `l${i + 1}`);
@@ -243,9 +243,9 @@ describe("renderSnippetBlock — merged regions and gap rows", () => {
     };
   }
 
-  it("renders two adjacent refs as one block with a between gap that owns its hidden row range", () => {
+  it("renders two adjacent refs as one block with labelled, two-way gap rows between them", () => {
     const root = parse(
-      renderSnippetBlock([modRef(5), modRef(30)], fileDiffs(modifiedFile(60, [5, 30]))),
+      renderSnippetRun([modRef(5), modRef(30)], fileDiffs(modifiedFile(60, [5, 30]))),
     );
     expect(root.querySelectorAll(".snippet")).toHaveLength(1);
     const gaps = root.querySelectorAll("tr.snippet-gap");
@@ -255,8 +255,6 @@ describe("renderSnippetBlock — merged regions and gap rows", () => {
       "bottom",
     ]);
     const between = gaps[1];
-    expect(between?.getAttribute("data-from")).toBe("5");
-    expect(between?.getAttribute("data-to")).toBe("28");
     expect(between?.querySelector(".snippet-gap-label")?.text).toBe("⋯ 24 lines");
     expect(
       between?.querySelectorAll(".snippet-gap-btn").map((b) => b.getAttribute("data-dir")),
@@ -268,7 +266,7 @@ describe("renderSnippetBlock — merged regions and gap rows", () => {
 
   it("renders a single button for a gap of at most EXPAND_STEP rows", () => {
     const root = parse(
-      renderSnippetBlock([modRef(5), modRef(10)], fileDiffs(modifiedFile(60, [5, 10]))),
+      renderSnippetRun([modRef(5), modRef(10)], fileDiffs(modifiedFile(60, [5, 10]))),
     );
     const between = root.querySelectorAll("tr.snippet-gap")[1];
     const buttons = between?.querySelectorAll(".snippet-gap-btn") ?? [];
@@ -278,7 +276,7 @@ describe("renderSnippetBlock — merged regions and gap rows", () => {
   });
 
   it("gives the top gap only an up button and the bottom gap only a down button", () => {
-    const root = parse(renderSnippetBlock([modRef(30)], fileDiffs(modifiedFile(60, [30]))));
+    const root = parse(renderSnippetRun([modRef(30)], fileDiffs(modifiedFile(60, [30]))));
     const [top, bottom] = root.querySelectorAll("tr.snippet-gap");
     expect(
       top?.querySelectorAll(".snippet-gap-btn").map((b) => b.getAttribute("data-dir")),
@@ -290,7 +288,7 @@ describe("renderSnippetBlock — merged regions and gap rows", () => {
 
   it("renders no top or bottom gap and no buttons when the file is over the embed cap", () => {
     const root = parse(
-      renderSnippetBlock([modRef(5), modRef(30)], fileDiffs(modifiedFile(60, [5, 30]), false)),
+      renderSnippetRun([modRef(5), modRef(30)], fileDiffs(modifiedFile(60, [5, 30]), false)),
     );
     const gaps = root.querySelectorAll("tr.snippet-gap");
     expect(gaps.map((gap) => gap.getAttribute("data-position"))).toEqual(["between"]);
@@ -300,7 +298,7 @@ describe("renderSnippetBlock — merged regions and gap rows", () => {
 
   it("renders contiguous split pieces with no gap between them", () => {
     const root = parse(
-      renderSnippetBlock([modRef(5), modRef(6)], fileDiffs(modifiedFile(10, [5, 6]))),
+      renderSnippetRun([modRef(5), modRef(6)], fileDiffs(modifiedFile(10, [5, 6]))),
     );
     expect(
       root.querySelectorAll("tr.snippet-gap").map((g) => g.getAttribute("data-position")),
@@ -312,17 +310,17 @@ describe("renderSnippetBlock — merged regions and gap rows", () => {
   });
 
   it("emits a colgroup matching the pane mode so fixed-layout tables keep gutter widths", () => {
-    const split = parse(renderSnippetBlock([modRef(5)], fileDiffs(modifiedFile(10, [5]))));
+    const split = parse(renderSnippetRun([modRef(5)], fileDiffs(modifiedFile(10, [5]))));
     expect(split.querySelectorAll("colgroup col")).toHaveLength(6);
     const added = buildAlignedDiff("", "a\nb\n");
     const addRef: SnippetRef = { path: "src/a.ts", head: { start: 1, end: 1 }, unfold: true };
-    const single = parse(renderSnippetBlock([addRef], fileDiffs(added)));
+    const single = parse(renderSnippetRun([addRef], fileDiffs(added)));
     expect(single.querySelectorAll("colgroup col")).toHaveLength(3);
   });
 
   it("summarizes every region and drops the per-block line bounds attributes", () => {
     const root = parse(
-      renderSnippetBlock([modRef(5), modRef(30)], fileDiffs(modifiedFile(60, [5, 30]))),
+      renderSnippetRun([modRef(5), modRef(30)], fileDiffs(modifiedFile(60, [5, 30]))),
     );
     expect(root.querySelector("summary")?.text).toBe(
       "src/a.ts — base 5-5, head 5-5; base 30-30, head 30-30 (2 lines)",
@@ -334,7 +332,7 @@ describe("renderSnippetBlock — merged regions and gap rows", () => {
   });
 
   it("renders a failed middle ref as a fallback between two blocks", () => {
-    const html = renderSnippetBlock(
+    const html = renderSnippetRun(
       [modRef(5), modRef(99), modRef(30)],
       fileDiffs(modifiedFile(60, [5, 30])),
     );
@@ -344,7 +342,7 @@ describe("renderSnippetBlock — merged regions and gap rows", () => {
   });
 });
 
-describe("renderSnippetBlock — metadata and fallbacks", () => {
+describe("renderSnippetRun — metadata and fallbacks", () => {
   const modRef: SnippetRef = {
     path: "src/a.ts",
     base: { start: 1, end: 1 },
@@ -355,7 +353,7 @@ describe("renderSnippetBlock — metadata and fallbacks", () => {
   it("records the file's guessed highlight.js language as a data attribute", () => {
     const rows = buildAlignedDiff("a\n", "A\n");
     expect(
-      parse(renderSnippetBlock([modRef], fileDiffs(rows)))
+      parse(renderSnippetRun([modRef], fileDiffs(rows)))
         .querySelector(".snippet")
         ?.getAttribute("data-lang"),
     ).toBe("typescript");
@@ -371,16 +369,23 @@ describe("renderSnippetBlock — metadata and fallbacks", () => {
     };
     const map = new Map([["src/a.xyz123", { rows, embeddable: true }]]);
     expect(
-      parse(renderSnippetBlock([ref], map))
+      parse(renderSnippetRun([ref], map))
         .querySelector(".snippet")
         ?.hasAttribute("data-lang"),
     ).toBe(false);
   });
 
   it("falls back gracefully when the file has no diff data", () => {
-    const html = renderSnippetBlock([modRef], new Map());
+    const html = renderSnippetRun([modRef], new Map());
     expect(html).toContain("could not be loaded");
     expect(html).toContain("src/a.ts");
+  });
+
+  it("escapes the model-written path in the fallback notice", () => {
+    const ref: SnippetRef = { ...modRef, path: "<img src=x onerror=alert(1)>.ts" };
+    const html = renderSnippetRun([ref], new Map());
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;.ts could not be loaded.");
   });
 
   it("falls back gracefully when the referenced range isn't found in the diff", () => {
@@ -391,7 +396,7 @@ describe("renderSnippetBlock — metadata and fallbacks", () => {
       head: { start: 99, end: 99 },
       unfold: true,
     };
-    expect(renderSnippetBlock([ref], fileDiffs(rows))).toContain("could not be located");
+    expect(renderSnippetRun([ref], fileDiffs(rows))).toContain("could not be located");
   });
 
   it("escapes untrusted file content", () => {
@@ -402,7 +407,7 @@ describe("renderSnippetBlock — metadata and fallbacks", () => {
       head: { start: 1, end: 1 },
       unfold: true,
     };
-    const html = renderSnippetBlock([ref], fileDiffs(rows));
+    const html = renderSnippetRun([ref], fileDiffs(rows));
     expect(html).not.toContain("<script>x</script>");
     expect(html).toContain("&lt;script&gt;");
   });
@@ -429,8 +434,8 @@ function loadClientRenderers(): ClientRenderers {
   const appJsPath = fileURLToPath(new URL("./assets/app.js", import.meta.url));
   const source = readFileSync(appJsPath, "utf8");
 
-  const start = source.indexOf("var SNIPPET_ESCAPES");
-  const end = source.indexOf("function loadFileData");
+  const start = source.indexOf("// --- mirrored from snippets.ts: BEGIN ---");
+  const end = source.indexOf("// --- mirrored from snippets.ts: END ---");
   if (start === -1 || end === -1) {
     throw new Error(
       "could not locate the row-rendering block in assets/app.js — parity test needs updating",
