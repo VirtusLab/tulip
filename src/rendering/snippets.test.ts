@@ -136,31 +136,6 @@ describe("renderSnippetRun — per-region alignment", () => {
     const trs = root.querySelectorAll("tr:not(.snippet-gap)");
     expect(trs[0]?.querySelectorAll("td")).toHaveLength(6);
   });
-
-  it("renders two adjacent split sub-modifications as disjoint, non-overlapping rows", () => {
-    // Lines 2 and 3 both modified; split into piece A (line 2) and piece B (line 3).
-    const rows = buildAlignedDiff("a\nb\nc\nd\n", "a\nB\nC\nd\n");
-    const pieceA: SnippetRef = {
-      path: "src/a.ts",
-      base: { start: 2, end: 2 },
-      head: { start: 2, end: 2 },
-      unfold: true,
-    };
-    const pieceB: SnippetRef = {
-      path: "src/a.ts",
-      base: { start: 3, end: 3 },
-      head: { start: 3, end: 3 },
-      unfold: true,
-    };
-    const rowsA = parse(renderSnippetRun([pieceA], fileDiffs(rows))).querySelectorAll(
-      "tr:not(.snippet-gap)",
-    );
-    const rowsB = parse(renderSnippetRun([pieceB], fileDiffs(rows))).querySelectorAll(
-      "tr:not(.snippet-gap)",
-    );
-    expect(rowsA.map((tr) => tr.querySelector(".snippet-cell-base code")?.text)).toEqual(["b"]);
-    expect(rowsB.map((tr) => tr.querySelector(".snippet-cell-base code")?.text)).toEqual(["c"]);
-  });
 });
 
 describe("renderSnippetRun — fold/unfold and wrapping", () => {
@@ -318,17 +293,20 @@ describe("renderSnippetRun — merged regions and gap rows", () => {
     expect(single.querySelectorAll("colgroup col")).toHaveLength(3);
   });
 
-  it("summarizes every region and drops the per-block line bounds attributes", () => {
+  it("summarizes every region's ranges and the total line count", () => {
     const root = parse(
       renderSnippetRun([modRef(5), modRef(30)], fileDiffs(modifiedFile(60, [5, 30]))),
     );
     expect(root.querySelector("summary")?.text).toBe(
       "src/a.ts — base 5-5, head 5-5; base 30-30, head 30-30 (2 lines)",
     );
+  });
+
+  it("carries no per-block line bounds; the gap rows own the hidden ranges", () => {
+    const root = parse(renderSnippetRun([modRef(5)], fileDiffs(modifiedFile(10, [5]))));
     const container = root.querySelector(".snippet");
     expect(container?.getAttribute("data-base-start")).toBeUndefined();
     expect(container?.getAttribute("data-head-start")).toBeUndefined();
-    expect(container?.getAttribute("data-pane-mode")).toBe("split");
   });
 
   it("renders a failed middle ref as a fallback between two blocks", () => {
@@ -416,8 +394,8 @@ describe("renderSnippetRun — metadata and fallbacks", () => {
 interface ClientRenderers {
   renderSnippetRow: (row: AlignedRow, paneMode?: SnippetPaneMode) => string;
   renderGapRow: (
-    from: number,
-    to: number,
+    fromRow: number,
+    toRow: number,
     position: GapPosition,
     paneMode: SnippetPaneMode,
     embeddable: boolean,

@@ -49,16 +49,17 @@ export function blockRegions(block: SnippetBlock): SnippetRegion[] {
   return block.items.flatMap((item) => (item.kind === "region" ? [item.region] : []));
 }
 
-/** `reason` is plain text for the renderer to escape. */
 export type SnippetPiece =
   | { kind: "block"; block: SnippetBlock }
+  /** `reason` is plain text for the renderer to escape. */
   | { kind: "fallback"; ref: SnippetRef; reason: string };
 
 /**
  * Turns a run of refs (consecutive in the markdown, all to one path — ./markdown.ts groups them)
- * into the pieces to render: normally one block. The run splits at a ref that can't be rendered
- * (a fallback notice in its place) and at a ref whose line ranges overlap an earlier ref's, so the
- * same lines are never drawn twice; pieces on either side of a split do not re-merge.
+ * into the pieces to render: normally one block. The run splits at a ref whose lines aren't in
+ * the diff (a fallback notice in its place) and at a ref whose line ranges overlap an earlier
+ * ref's, so the same lines are never drawn twice; pieces on either side of a split do not
+ * re-merge. A path with no diff data yields a fallback per ref.
  */
 export function buildSnippetPieces(
   refs: SnippetRef[],
@@ -81,12 +82,15 @@ export function buildSnippetPieces(
   }
 
   const pieces: SnippetPiece[] = [];
-  let run: SnippetRegion[] = [];
+  let pending: SnippetRegion[] = [];
   const flush = () => {
-    if (run.length > 0) {
-      pieces.push({ kind: "block", block: assembleBlock(first.path, run, data, forceCollapsed) });
+    if (pending.length > 0) {
+      pieces.push({
+        kind: "block",
+        block: assembleBlock(first.path, pending, data, forceCollapsed),
+      });
     }
-    run = [];
+    pending = [];
   };
 
   for (const ref of refs) {
@@ -100,10 +104,10 @@ export function buildSnippetPieces(
       });
       continue;
     }
-    if (run.some((earlier) => refsOverlap(earlier.ref, ref))) {
+    if (pending.some((earlier) => refsOverlap(earlier.ref, ref))) {
       flush();
     }
-    run.push(region);
+    pending.push(region);
   }
   flush();
   return pieces;
@@ -113,7 +117,7 @@ function buildRegion(ref: SnippetRef, rows: AlignedRow[]): SnippetRegion | undef
   const baseLines = ref.base ? sideLines(rows, "base", ref.base) : [];
   const headLines = ref.head ? sideLines(rows, "head", ref.head) : [];
   const firstRow = rows.findIndex((row) => rowHoldsRef(row, ref));
-  if (firstRow === -1 || (baseLines.length === 0 && headLines.length === 0)) {
+  if (firstRow === -1) {
     return undefined;
   }
   return {
@@ -131,10 +135,8 @@ function assembleBlock(
   data: FileDiffData,
   forceCollapsed: boolean,
 ): SnippetBlock {
-  const sorted = regions
-    .map((region, order) => ({ region, order }))
-    .sort((a, b) => a.region.firstRow - b.region.firstRow || a.order - b.order)
-    .map((entry) => entry.region);
+  // A stable sort keeps document order for regions starting on the same row.
+  const sorted = [...regions].sort((a, b) => a.firstRow - b.firstRow);
 
   // A running cursor, not `previous.lastRow + 1`: row ranges of neighbouring regions may overlap
   // (split pieces straddle paired rows) or nest, and a gap must never re-expose a region's rows.

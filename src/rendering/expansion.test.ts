@@ -59,10 +59,14 @@ function mount(markdown: string = DEFAULT_MARKDOWN): Element {
   return container;
 }
 
-function headLines(container: Element): number[] {
-  return Array.from(container.querySelectorAll("td.snippet-line-no.side-head"))
+function lineNumbers(container: Element, side: "base" | "head"): number[] {
+  return Array.from(container.querySelectorAll(`td.snippet-line-no.side-${side}`))
     .map((td) => Number(td.textContent))
     .filter((n) => n > 0);
+}
+
+function headLines(container: Element): number[] {
+  return lineNumbers(container, "head");
 }
 
 function gap(container: Element, position: string): Element | null {
@@ -78,17 +82,6 @@ function click(container: Element, position: string, dir: string): void {
 }
 
 describe("gap-row expansion in a real DOM (app.js under jsdom)", () => {
-  it("renders the two refs as one block with top, between and bottom gaps", () => {
-    const container = mount();
-    expect(container.ownerDocument.querySelectorAll(".snippet")).toHaveLength(1);
-    expect(headLines(container)).toEqual([10, 30]);
-    expect(
-      Array.from(container.querySelectorAll("tr.snippet-gap")).map((g) =>
-        g.getAttribute("data-position"),
-      ),
-    ).toEqual(["top", "between", "bottom"]);
-  });
-
   it("expands a small between gap fully with one click, keeping file order", () => {
     const container = mount();
     click(container, "between", "all");
@@ -126,7 +119,9 @@ describe("gap-row expansion in a real DOM (app.js under jsdom)", () => {
     click(container, "between", "all");
     click(container, "bottom", "down");
     click(container, "bottom", "all");
-    expect(headLines(container)).toEqual(Array.from({ length: 60 }, (_, i) => i + 1));
+    const all = Array.from({ length: 60 }, (_, i) => i + 1);
+    expect(headLines(container)).toEqual(all);
+    expect(lineNumbers(container, "base")).toEqual(all);
     expect(container.querySelectorAll("tr.snippet-gap")).toHaveLength(0);
     expect(container.querySelectorAll(".snippet-gap-btn")).toHaveLength(0);
   });

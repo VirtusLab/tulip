@@ -16,9 +16,9 @@ import {
  * ./markdown.ts) as one diff block: a collapsible `<details>` holding the refs' regions in file
  * order, with a gap row for each hidden range between, above and below them (docs/adr/0021).
  * Each region's lines are aligned on their own (docs/adr/0018), and gap rows let ./assets/app.js
- * reveal the whole-file rows around them in steps. A ref that can't be rendered (unknown path,
- * lines not in the diff, or lines overlapping an earlier ref's) splits the run and renders a
- * plain notice in its place; the pieces around it render as separate blocks.
+ * reveal the whole-file rows around them in steps. A ref whose lines aren't in the diff, or
+ * overlap an earlier ref's, splits the run and renders a plain notice in its place; the pieces
+ * around it render as separate blocks. A path with no diff data renders a notice per ref.
  *
  * `forceCollapsed` overrides every ref's `unfold` to collapsed — set by ./markdown.ts for a
  * "## Test code" subsection (see ./sections.ts).
@@ -100,13 +100,15 @@ function pluralLines(count: number): string {
   return `${count} line${count === 1 ? "" : "s"}`;
 }
 
-/** `message` may quote the ref's path, which the model wrote: escaped here, never upstream. */
-function renderFallback(ref: SnippetRef, message: string): string {
+/** `reason` may quote the ref's path, which the model wrote: escaped here, never upstream. */
+function renderFallback(ref: SnippetRef, reason: string): string {
   const baseLen = ref.base ? ref.base.end - ref.base.start + 1 : 0;
   const headLen = ref.head ? ref.head.end - ref.head.start + 1 : 0;
   const lines = Math.max(baseLen, headLen);
-  return `<div class="snippet snippet-unavailable">${escapeHtml(message)} (${escapeHtml(ref.path)}, ${refRanges(ref)} — ${pluralLines(lines)})</div>`;
+  return `<div class="snippet snippet-unavailable">${escapeHtml(reason)} (${escapeHtml(ref.path)}, ${refRanges(ref)} — ${pluralLines(lines)})</div>`;
 }
+
+// --- mirrored in assets/app.js: BEGIN --- (must render identical HTML; see the parity test)
 
 /**
  * Renders one diff row as a `<tr>`. Mirrored line-for-line in ./assets/app.js's own
@@ -185,3 +187,5 @@ export function renderGapRow(
   const colspan = paneMode === "split" ? 6 : 3;
   return `<tr class="snippet-gap" data-from-row="${fromRow}" data-to-row="${toRow}" data-position="${position}"><td colspan="${colspan}">${controls}</td></tr>`;
 }
+
+// --- mirrored in assets/app.js: END ---

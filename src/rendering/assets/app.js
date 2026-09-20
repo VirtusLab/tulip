@@ -165,7 +165,7 @@
     document.addEventListener("tulip:theme-change", render);
   }
 
-  // --- mirrored from snippets.ts: BEGIN --- (byte-identical; see snippets.test.ts's parity test)
+  // --- mirrored from snippets.ts: BEGIN --- (must render identical HTML; see the parity test)
   var SNIPPET_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   var EXPAND_STEP = 20;
 
@@ -177,13 +177,8 @@
     return type ? ` type-${type}` : "";
   }
 
-  // Mirrors ./snippets.ts's exported `renderSnippetRow` (the server-side row renderer) line for
-  // line — used to insert newly-revealed context rows when expand-up/expand-down is clicked
-  // (see setupSnippetExpansion). Row text comes from the page-embedded file-content JSON, which
-  // is raw (unescaped) untrusted file content, so it must be escaped here exactly like the
-  // server-rendered rows are. The two must stay byte-identical; keep them in sync by hand and
-  // see snippets.test.ts's "byte-identical" parity test, which evaluates this copy in Node
-  // (no browser) and asserts it matches the TS one on the same input.
+  // Row text comes from the page-embedded file-content JSON, which is raw (unescaped) untrusted
+  // file content, so it must be escaped here exactly like the server-rendered rows are.
   function baseCells(row) {
     return (
       '<td class="snippet-line-no side-base' +
@@ -233,8 +228,7 @@
     return `<tr>${base}${head}</tr>`;
   }
 
-  // Mirrors ./snippets.ts's `renderGapRow` line for line — a gap row is re-rendered here after
-  // each partial expansion (see setupSnippetExpansion). Byte-identical by the parity test.
+  // A gap row is re-rendered here after each partial expansion (see setupSnippetExpansion).
   function renderGapRow(fromRow, toRow, position, paneMode, embeddable) {
     var count = toRow - fromRow + 1;
     var unit = count === 1 ? "line" : "lines";
@@ -406,9 +400,9 @@
 
   // Serve mode only (docs/adr/0019): each `.review-box` (./template.ts's renderReviewBox) posts a
   // per-category PR comment to the local server's `/api/comment`. A no-op on the static page,
-  // which renders no boxes. Deliberately placed AFTER setupHighlighting and OUTSIDE the
-  // snippet-row block mirrored byte-for-byte in ./snippets.ts (snippets.test.ts's parity test
-  // evaluates that block, bounded by `var SNIPPET_ESCAPES`..`function loadFileData`, in Node).
+  // which renders no boxes. Deliberately placed AFTER setupHighlighting and OUTSIDE the block
+  // mirrored from ./snippets.ts (between the BEGIN/END markers above, which snippets.test.ts's
+  // parity test evaluates in Node).
   function setupReviewBoxes() {
     document.querySelectorAll(".review-box").forEach((form) => {
       var textarea = form.querySelector(".review-text");

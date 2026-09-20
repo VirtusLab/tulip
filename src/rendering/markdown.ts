@@ -81,7 +81,7 @@ export function renderCategoryMarkdown(
  * (docs/adr/0021): consecutive refs to the same path with nothing but whitespace between them.
  * Any prose, even an HTML comment, separates runs — the writer put something between the
  * snippets on purpose. Grouping is textual only; whether a run's refs can actually merge is
- * decided by ./snippets.ts.
+ * decided by ./snippet-blocks.ts.
  */
 function groupAdjacentRefs(source: string, matches: SnippetRefMatch[]): SnippetRefMatch[][] {
   const runs: SnippetRefMatch[][] = [];

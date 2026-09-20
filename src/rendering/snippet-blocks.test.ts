@@ -29,7 +29,7 @@ function onlyBlock(refs: SnippetRef[], diffs: Map<string, FileDiffData>): Snippe
   return piece.block;
 }
 
-// The model-level facts the HTML tests in snippets.test.ts can't state directly: row bounds,
+// The block-structure facts the HTML tests in snippets.test.ts can't state directly: row bounds,
 // gap arithmetic, ordering, and run splitting by line-range overlap.
 describe("buildSnippetPieces", () => {
   it("bounds a longer-base modification by both sides, so no referenced base line lands in a gap", () => {
