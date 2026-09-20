@@ -401,9 +401,8 @@
 
   // Serve mode only (docs/adr/0019): each `.review-box` (./template.ts's renderReviewBox) posts a
   // per-category PR comment to the local server's `/api/comment`. A no-op on the static page,
-  // which renders no boxes. Deliberately placed AFTER setupHighlighting and OUTSIDE the block
-  // mirrored from ./snippets.ts (between the BEGIN/END markers above, which snippets.test.ts's
-  // parity test evaluates in Node).
+  // which renders no boxes. Deliberately placed AFTER setupHighlighting and OUTSIDE the mirrored
+  // block above (see the marker there).
   function setupReviewBoxes() {
     document.querySelectorAll(".review-box").forEach((form) => {
       var textarea = form.querySelector(".review-text");

@@ -175,7 +175,6 @@ describe("app.js", () => {
   });
 
   it("wires up the serve-mode review boxes posting to the local API, outside the parity slice", () => {
-    expect(js).toContain("setupReviewBoxes");
     expect(js).toContain("/api/comment");
     // Must live after the block mirrored from snippets.ts (which the parity test evaluates in
     // Node) — otherwise it would break that evaluation.

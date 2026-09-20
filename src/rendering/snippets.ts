@@ -17,9 +17,8 @@ import {
  * order, with a gap row for each hidden range between, above and below them (docs/adr/0021).
  * Each region's lines are aligned on their own (docs/adr/0018), and gap rows let ./assets/app.js
  * reveal the whole-file rows around them in steps. A ref whose lines aren't in the diff renders
- * a plain notice in its place; a ref whose lines overlap an earlier ref's starts a new block.
- * Either way the pieces around it render as separate blocks. A path with no diff data renders a
- * notice per ref.
+ * a plain notice in its place, splitting the run; a ref overlapping an earlier ref's lines starts
+ * a new block. A path with no diff data renders a notice per ref.
  *
  * `forceCollapsed` overrides every ref's `unfold` to collapsed — set by ./markdown.ts for a
  * "## Test code" subsection (see ./sections.ts).
@@ -109,9 +108,9 @@ function renderFallback(ref: SnippetRef, reason: string): string {
   return `<div class="snippet snippet-unavailable">${escapeHtml(reason)} (${escapeHtml(ref.path)}, ${refRanges(ref)} — ${pluralLines(lines)})</div>`;
 }
 
-// --- mirrored in assets/app.js, to the end of this file --- (the client inserts rows and
-// re-renders gap rows without a server round-trip; both copies must render identical HTML, kept
-// in sync by hand and checked by snippets.test.ts's parity test)
+// --- mirrored in assets/app.js, from here through `renderGapRow` --- (the client inserts rows
+// and re-renders gap rows without a server round-trip; both copies must render identical HTML,
+// kept in sync by hand and checked by snippets.test.ts's parity test)
 
 /**
  * Renders one diff row as a `<tr>`.
@@ -153,9 +152,10 @@ export const EXPAND_STEP = 20;
 
 /**
  * Renders a gap row: the control for a hidden range `[fromRow, toRow]` of whole-file row indices
- * (docs/adr/0021). A range of at most `EXPAND_STEP` rows gets one button revealing it all; a larger one gets a step button
- * per direction, except that the top gap has no region above to grow from and the bottom gap
- * none below. Over the embed cap there is nothing to reveal, so only the label renders.
+ * (docs/adr/0021). A range of at most `EXPAND_STEP` rows gets one button revealing it all; a
+ * larger one gets a step button per direction, except that the top gap has no region above to
+ * grow from and the bottom gap none below. Over the embed cap there is nothing to reveal, so only
+ * the label renders.
  */
 export function renderGapRow(
   fromRow: number,
