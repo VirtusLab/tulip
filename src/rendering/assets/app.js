@@ -175,17 +175,17 @@
   }
 
   function cellTypeClass(type) {
-    return type ? ` type-${type}` : "";
+    return type ? ` type-${escapeHtml(type)}` : "";
   }
 
-  // Row text comes from the page-embedded file-content JSON, which is raw (unescaped) untrusted
-  // file content, so it must be escaped here exactly like the server-rendered rows are.
+  // Rows come from the page-embedded file-content JSON: raw (unescaped) untrusted file text, so
+  // every interpolated value is escaped here exactly like the server-rendered rows are.
   function baseCells(row) {
     return (
       '<td class="snippet-line-no side-base' +
       cellTypeClass(row.baseType) +
       '">' +
-      (row.baseLine == null ? "" : row.baseLine) +
+      (row.baseLine == null ? "" : escapeHtml(row.baseLine)) +
       "</td>" +
       '<td class="snippet-marker side-base' +
       cellTypeClass(row.baseType) +
@@ -205,7 +205,7 @@
       '<td class="snippet-line-no side-head' +
       cellTypeClass(row.headType) +
       '">' +
-      (row.headLine == null ? "" : row.headLine) +
+      (row.headLine == null ? "" : escapeHtml(row.headLine)) +
       "</td>" +
       '<td class="snippet-marker side-head' +
       cellTypeClass(row.headType) +
@@ -249,7 +249,7 @@
       controls = `${up}${label}${down}`;
     }
     var colspan = paneMode === "split" ? 6 : 3;
-    return `<tr class="snippet-gap" data-from-row="${fromRow}" data-to-row="${toRow}" data-position="${position}"><td colspan="${colspan}">${controls}</td></tr>`;
+    return `<tr class="snippet-gap" data-from-row="${escapeHtml(fromRow)}" data-to-row="${escapeHtml(toRow)}" data-position="${escapeHtml(position)}"><td colspan="${colspan}">${controls}</td></tr>`;
   }
   // --- mirrored from snippets.ts: END ---
 
@@ -282,6 +282,9 @@
     var fromRow = Number(gapRow.getAttribute("data-from-row"));
     var toRow = Number(gapRow.getAttribute("data-to-row"));
     var position = gapRow.getAttribute("data-position");
+    if (!Number.isInteger(fromRow) || !Number.isInteger(toRow)) {
+      return;
+    }
     // "up" grows the region below the gap upward: it reveals the range's tail and inserts it
     // below this row. "down" grows the region above downward: the range's head, inserted above
     // this row. "all" is a "down" that fits in one step.

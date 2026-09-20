@@ -127,9 +127,11 @@ export function renderSnippetRow(row: AlignedRow, paneMode: SnippetPaneMode = "s
   return `<tr>${base}${head}</tr>`;
 }
 
+// Every interpolated value is escaped, not just file text: the client re-renders these from
+// page-embedded JSON and DOM attributes, so the sink is what has to be safe.
 function baseCells(row: AlignedRow): string {
   return (
-    `<td class="snippet-line-no side-base${cellTypeClass(row.baseType)}">${row.baseLine ?? ""}</td>` +
+    `<td class="snippet-line-no side-base${cellTypeClass(row.baseType)}">${row.baseLine === null ? "" : escapeHtml(String(row.baseLine))}</td>` +
     `<td class="snippet-marker side-base${cellTypeClass(row.baseType)}">${row.baseType === "remove" ? "-" : ""}</td>` +
     `<td class="snippet-cell-base${cellTypeClass(row.baseType)}"><code>${row.baseText !== null ? escapeHtml(row.baseText) : ""}</code></td>`
   );
@@ -137,14 +139,14 @@ function baseCells(row: AlignedRow): string {
 
 function headCells(row: AlignedRow): string {
   return (
-    `<td class="snippet-line-no side-head${cellTypeClass(row.headType)}">${row.headLine ?? ""}</td>` +
+    `<td class="snippet-line-no side-head${cellTypeClass(row.headType)}">${row.headLine === null ? "" : escapeHtml(String(row.headLine))}</td>` +
     `<td class="snippet-marker side-head${cellTypeClass(row.headType)}">${row.headType === "add" ? "+" : ""}</td>` +
     `<td class="snippet-cell-head${cellTypeClass(row.headType)}"><code>${row.headText !== null ? escapeHtml(row.headText) : ""}</code></td>`
   );
 }
 
 function cellTypeClass(type: AlignedRow["baseType"]): string {
-  return type ? ` type-${type}` : "";
+  return type ? ` type-${escapeHtml(type)}` : "";
 }
 
 /** Rows one click reveals. */
@@ -182,5 +184,5 @@ export function renderGapRow(
     controls = `${up}${label}${down}`;
   }
   const colspan = paneMode === "split" ? 6 : 3;
-  return `<tr class="snippet-gap" data-from-row="${fromRow}" data-to-row="${toRow}" data-position="${position}"><td colspan="${colspan}">${controls}</td></tr>`;
+  return `<tr class="snippet-gap" data-from-row="${escapeHtml(String(fromRow))}" data-to-row="${escapeHtml(String(toRow))}" data-position="${escapeHtml(position)}"><td colspan="${colspan}">${controls}</td></tr>`;
 }
