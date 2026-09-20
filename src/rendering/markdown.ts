@@ -1,12 +1,13 @@
 import {
   type CategoryRefTarget,
   parseSnippetRefs,
+  type SnippetRefMatch,
   substituteCategoryRefs,
 } from "../explanations/markup.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { findMermaidFences, renderMermaidPlaceholder } from "./mermaid.js";
 import { renderWithSegments, type Segment } from "./segments.js";
-import { renderSnippetBlock } from "./snippets.js";
+import { renderSnippetRun } from "./snippets.js";
 
 export { renderProseMarkdown } from "./prose.js";
 
@@ -59,12 +60,44 @@ export function renderCategoryMarkdown(
     },
   }));
 
-  const snippetSegments: Segment[] = parseSnippetRefs(source).map((match) => ({
-    start: match.start,
-    end: match.end,
-    render: () =>
-      renderSnippetBlock(match.ref, ctx.fileDiffs, options.forceSnippetsCollapsed ?? false),
-  }));
+  const snippetSegments: Segment[] = groupAdjacentRefs(source, parseSnippetRefs(source)).map(
+    (run) => ({
+      start: run[0]?.start ?? 0,
+      end: run[run.length - 1]?.end ?? 0,
+      render: () =>
+        renderSnippetRun(
+          run.map((match) => match.ref),
+          ctx.fileDiffs,
+          options.forceSnippetsCollapsed ?? false,
+        ),
+    }),
+  );
 
   return renderWithSegments(source, [...mermaidSegments, ...snippetSegments]);
+}
+
+/**
+ * Splits snippet ref matches (document order) into runs that render as one block
+ * (docs/adr/0021): consecutive refs to the same path with nothing but whitespace between them.
+ * Any prose, even an HTML comment, separates runs — the writer put something between the
+ * snippets on purpose. Grouping is textual only; whether a run's refs can actually merge is
+ * decided by ./snippet-blocks.ts.
+ */
+function groupAdjacentRefs(source: string, matches: SnippetRefMatch[]): SnippetRefMatch[][] {
+  const runs: SnippetRefMatch[][] = [];
+  for (const match of matches) {
+    const run = runs[runs.length - 1];
+    const previous = run?.[run.length - 1];
+    if (
+      run &&
+      previous &&
+      previous.ref.path === match.ref.path &&
+      /^\s*$/.test(source.slice(previous.end, match.start))
+    ) {
+      run.push(match);
+    } else {
+      runs.push([match]);
+    }
+  }
+  return runs;
 }

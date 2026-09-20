@@ -36,6 +36,11 @@ describe("style.css", () => {
     expect(css).not.toMatch(/\bbody\s*\{[^}]*overflow-x:\s*auto/);
   });
 
+  it("styles gap rows and their inline buttons", () => {
+    expect(css).toMatch(/\.snippet-table \.snippet-gap td\s*\{[^}]*text-align:\s*center/);
+    expect(css).toMatch(/\.snippet-gap-btn\s*\{/);
+  });
+
   it("defines a full palette for both light and dark themes", () => {
     for (const variable of ["--bg", "--fg", "--link", "--accent", "--add-fg", "--remove-fg"]) {
       // Once in :root (light), and again in both the prefers-color-scheme and [data-theme="dark"]
@@ -143,7 +148,7 @@ describe("app.js", () => {
     expect(js).not.toMatch(/\.innerHTML\s*=\s*(?!"")[a-zA-Z_]/);
   });
 
-  it("re-highlights newly-inserted rows after context expansion", () => {
+  it("re-highlights rows inserted by a gap expansion", () => {
     const start = js.indexOf("function setupSnippetExpansion");
     const end = js.indexOf("\n  function ", start + 1);
     expect(js.slice(start, end)).toContain("highlightSnippetContainer");
@@ -170,10 +175,11 @@ describe("app.js", () => {
   });
 
   it("wires up the serve-mode review boxes posting to the local API, outside the parity slice", () => {
-    expect(js).toContain("setupReviewBoxes");
     expect(js).toContain("/api/comment");
-    // Must live after the byte-mirrored snippet-row block (which the parity test evaluates,
-    // ending at `function loadFileData`) — otherwise it would break that Node evaluation.
-    expect(js.indexOf("setupReviewBoxes")).toBeGreaterThan(js.indexOf("function loadFileData"));
+    // Must live after the block mirrored from snippets.ts (which the parity test evaluates in
+    // Node) — otherwise it would break that evaluation.
+    const mirrorEnd = js.indexOf("// --- mirrored from snippets.ts: END ---");
+    expect(mirrorEnd).toBeGreaterThan(0);
+    expect(js.indexOf("setupReviewBoxes")).toBeGreaterThan(mirrorEnd);
   });
 });

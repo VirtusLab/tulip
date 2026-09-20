@@ -165,29 +165,27 @@
     document.addEventListener("tulip:theme-change", render);
   }
 
+  // --- mirrored from snippets.ts: BEGIN --- (must render identical HTML; see the parity test,
+  // which evaluates this block on its own in Node — hence escapeHtml inlined here)
   var SNIPPET_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  var EXPAND_STEP = 20;
 
   function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, (ch) => SNIPPET_ESCAPES[ch]);
   }
 
   function cellTypeClass(type) {
-    return type ? ` type-${type}` : "";
+    return type ? ` type-${escapeHtml(type)}` : "";
   }
 
-  // Mirrors ./snippets.ts's exported `renderSnippetRow` (the server-side row renderer) line for
-  // line — used to insert newly-revealed context rows when expand-up/expand-down is clicked
-  // (see setupSnippetExpansion). Row text comes from the page-embedded file-content JSON, which
-  // is raw (unescaped) untrusted file content, so it must be escaped here exactly like the
-  // server-rendered rows are. The two must stay byte-identical; keep them in sync by hand and
-  // see snippets.test.ts's "byte-identical" parity test, which evaluates this copy in Node
-  // (no browser) and asserts it matches the TS one on the same input.
+  // Rows come from the page-embedded file-content JSON: raw (unescaped) untrusted file text, so
+  // every interpolated value is escaped here exactly like the server-rendered rows are.
   function baseCells(row) {
     return (
       '<td class="snippet-line-no side-base' +
       cellTypeClass(row.baseType) +
       '">' +
-      (row.baseLine == null ? "" : row.baseLine) +
+      (row.baseLine == null ? "" : escapeHtml(row.baseLine)) +
       "</td>" +
       '<td class="snippet-marker side-base' +
       cellTypeClass(row.baseType) +
@@ -207,7 +205,7 @@
       '<td class="snippet-line-no side-head' +
       cellTypeClass(row.headType) +
       '">' +
-      (row.headLine == null ? "" : row.headLine) +
+      (row.headLine == null ? "" : escapeHtml(row.headLine)) +
       "</td>" +
       '<td class="snippet-marker side-head' +
       cellTypeClass(row.headType) +
@@ -231,6 +229,30 @@
     return `<tr>${base}${head}</tr>`;
   }
 
+  // A gap row is re-rendered here after each partial expansion (see setupSnippetExpansion).
+  function renderGapRow(fromRow, toRow, position, paneMode, embeddable) {
+    var count = toRow - fromRow + 1;
+    var unit = count === 1 ? "line" : "lines";
+    var label = `<span class="snippet-gap-label">⋯ ${count} ${unit}</span>`;
+    var controls = label;
+    if (embeddable && count <= EXPAND_STEP) {
+      controls = `<button type="button" class="snippet-gap-btn" data-dir="all">expand ${count} ${unit}</button>`;
+    } else if (embeddable) {
+      const up =
+        position === "bottom"
+          ? ""
+          : `<button type="button" class="snippet-gap-btn" data-dir="up">↑ ${EXPAND_STEP}</button>`;
+      const down =
+        position === "top"
+          ? ""
+          : `<button type="button" class="snippet-gap-btn" data-dir="down">↓ ${EXPAND_STEP}</button>`;
+      controls = `${up}${label}${down}`;
+    }
+    var colspan = paneMode === "split" ? 6 : 3;
+    return `<tr class="snippet-gap" data-from-row="${escapeHtml(fromRow)}" data-to-row="${escapeHtml(toRow)}" data-position="${escapeHtml(position)}"><td colspan="${colspan}">${controls}</td></tr>`;
+  }
+  // --- mirrored from snippets.ts: END ---
+
   function loadFileData() {
     var el = document.getElementById("tulip-file-data");
     if (!el) {
@@ -243,33 +265,6 @@
     }
   }
 
-  var CONTEXT_STEP = 20;
-
-  // Range-based context expansion (docs/adr/0018): a snippet's own per-region rows are not a
-  // contiguous slice of the embedded whole-file rows, so expansion walks the whole-file rows by
-  // line number, not by row index. The anchor side is head if present, else base; it stops at a
-  // changed row (another change, or the seam to a sibling split piece — where nothing is hidden).
-  function isContextRow(row) {
-    return row && row.baseType === "context" && row.headType === "context";
-  }
-
-  function anchorSideOf(container) {
-    return container.hasAttribute("data-head-start") ? "head" : "base";
-  }
-
-  function lineOf(row, side) {
-    return side === "head" ? row.headLine : row.baseLine;
-  }
-
-  function indexOfLine(rows, side, line) {
-    for (let i = 0; i < rows.length; i++) {
-      if (lineOf(rows[i], side) === line) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
   function renderRows(rows, paneMode) {
     var html = "";
     for (let i = 0; i < rows.length; i++) {
@@ -278,81 +273,64 @@
     return html;
   }
 
-  function expandUp(container, rows, paneMode) {
-    var side = anchorSideOf(container);
-    var startAttr = `data-${side}-start`;
-    var topIdx = indexOfLine(rows, side, Number(container.getAttribute(startAttr)));
-    if (topIdx <= 0) {
-      return true;
+  // Gap-row expansion (docs/adr/0021). Every control is a `tr.snippet-gap` owning a hidden range
+  // [fromRow, toRow] of whole-file row indices. A click reveals up to EXPAND_STEP rows, shrinks
+  // the range, and re-renders the row — or removes it once nothing is hidden. Revealed rows come
+  // from the page-embedded whole-file data, so a change that isn't part of this block shows as
+  // add/remove rows, as expanded context does on GitHub.
+  function expandGap(gapRow, rows, paneMode, dir) {
+    var fromRow = Number(gapRow.getAttribute("data-from-row"));
+    var toRow = Number(gapRow.getAttribute("data-to-row"));
+    var position = gapRow.getAttribute("data-position");
+    if (!Number.isInteger(fromRow) || !Number.isInteger(toRow)) {
+      return;
     }
-    var collected = [];
-    var i = topIdx - 1;
-    while (i >= 0 && collected.length < CONTEXT_STEP && isContextRow(rows[i])) {
-      collected.unshift(rows[i]);
-      i--;
+    // "up" grows the region below the gap upward: it reveals the range's tail and inserts it
+    // below this row. "down" grows the region above downward: the range's head, inserted above
+    // this row. "all" is a "down" that fits in one step.
+    var up = dir === "up";
+    var revealFrom = up ? Math.max(fromRow, toRow - EXPAND_STEP + 1) : fromRow;
+    var revealTo = up ? toRow : Math.min(toRow, fromRow + EXPAND_STEP - 1);
+    var insertAt = up ? "afterend" : "beforebegin";
+    gapRow.insertAdjacentHTML(insertAt, renderRows(rows.slice(revealFrom, revealTo + 1), paneMode));
+    if (up) {
+      toRow = revealFrom - 1;
+    } else {
+      fromRow = revealTo + 1;
     }
-    if (collected.length === 0) {
-      return true;
+    if (fromRow <= toRow) {
+      // Only an embeddable file has buttons, so the re-rendered row is embeddable too.
+      gapRow.insertAdjacentHTML(
+        "beforebegin",
+        renderGapRow(fromRow, toRow, position, paneMode, true),
+      );
     }
-    var tbody = container.querySelector(".snippet-table tbody");
-    if (tbody) {
-      tbody.insertAdjacentHTML("afterbegin", renderRows(collected, paneMode));
-    }
-    container.setAttribute(startAttr, String(lineOf(collected[0], side)));
-    return i < 0 || !isContextRow(rows[i]);
+    gapRow.remove();
   }
 
-  function expandDown(container, rows, paneMode) {
-    var side = anchorSideOf(container);
-    var endAttr = `data-${side}-end`;
-    var botIdx = indexOfLine(rows, side, Number(container.getAttribute(endAttr)));
-    if (botIdx < 0 || botIdx >= rows.length - 1) {
-      return true;
-    }
-    var collected = [];
-    var i = botIdx + 1;
-    while (i < rows.length && collected.length < CONTEXT_STEP && isContextRow(rows[i])) {
-      collected.push(rows[i]);
-      i++;
-    }
-    if (collected.length === 0) {
-      return true;
-    }
-    var tbody = container.querySelector(".snippet-table tbody");
-    if (tbody) {
-      tbody.insertAdjacentHTML("beforeend", renderRows(collected, paneMode));
-    }
-    container.setAttribute(endAttr, String(lineOf(collected[collected.length - 1], side)));
-    return i >= rows.length || !isContextRow(rows[i]);
-  }
-
-  // Github-style context expansion (task 7.3): each button reveals more surrounding lines from
-  // the page-embedded per-file row data (see ./file-diffs.ts) without a server round-trip.
-  // Buttons only exist for files under the embed-size cap — see ./snippets.ts.
+  // One delegated listener: gap rows are re-created on every step, so per-button listeners
+  // would be lost. Files over the embed cap have no rows here and no buttons.
   function setupSnippetExpansion() {
     var fileData = loadFileData();
-    document.querySelectorAll(".snippet-expand").forEach((button) => {
-      button.addEventListener("click", () => {
-        var container = button.closest(".snippet");
-        if (!container) {
-          return;
-        }
-        var path = container.getAttribute("data-path");
-        var rows = path ? fileData[path] : undefined;
-        if (!rows) {
-          return;
-        }
-        var dir = button.getAttribute("data-dir");
-        var paneMode = container.getAttribute("data-pane-mode") || "split";
-        var reachedEnd =
-          dir === "up"
-            ? expandUp(container, rows, paneMode)
-            : expandDown(container, rows, paneMode);
-        if (reachedEnd) {
-          button.remove();
-        }
-        highlightSnippetContainer(container);
-      });
+    document.addEventListener("click", (event) => {
+      var target = event.target;
+      var button = target instanceof Element ? target.closest(".snippet-gap-btn") : null;
+      if (!button) {
+        return;
+      }
+      var gapRow = button.closest("tr.snippet-gap");
+      var container = button.closest(".snippet");
+      if (!gapRow || !container) {
+        return;
+      }
+      var path = container.getAttribute("data-path");
+      var rows = path ? fileData[path] : undefined;
+      if (!rows) {
+        return;
+      }
+      var paneMode = container.getAttribute("data-pane-mode") || "split";
+      expandGap(gapRow, rows, paneMode, button.getAttribute("data-dir"));
+      highlightSnippetContainer(container);
     });
   }
 
@@ -388,7 +366,7 @@
   // Highlights a `{{snippet}}` diff block's code cells (task 7.3's `.snippet`, see
   // ./snippets.ts) using the language ./snippets.ts guessed from the file path and recorded on
   // the container as `data-lang`. `:not([data-highlighted])` scopes this to cells highlight.js
-  // hasn't already processed, so calling it again after expand-up/down (see
+  // hasn't already processed, so calling it again after a gap row is expanded (see
   // setupSnippetExpansion) only touches the newly-inserted rows.
   function highlightSnippetContainer(container) {
     var lang = container.getAttribute("data-lang");
@@ -426,9 +404,8 @@
 
   // Serve mode only (docs/adr/0019): each `.review-box` (./template.ts's renderReviewBox) posts a
   // per-category PR comment to the local server's `/api/comment`. A no-op on the static page,
-  // which renders no boxes. Deliberately placed AFTER setupHighlighting and OUTSIDE the
-  // snippet-row block mirrored byte-for-byte in ./snippets.ts (snippets.test.ts's parity test
-  // evaluates that block, bounded by `var SNIPPET_ESCAPES`..`function loadFileData`, in Node).
+  // which renders no boxes. Deliberately placed AFTER setupHighlighting and OUTSIDE the mirrored
+  // block above (see the marker there).
   function setupReviewBoxes() {
     document.querySelectorAll(".review-box").forEach((form) => {
       var textarea = form.querySelector(".review-text");
