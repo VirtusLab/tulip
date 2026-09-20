@@ -179,8 +179,8 @@ describe("app.js", () => {
     expect(js).toContain("/api/comment");
     // Must live after the block mirrored from snippets.ts (which the parity test evaluates in
     // Node) — otherwise it would break that evaluation.
-    const end = js.indexOf("// --- mirrored from snippets.ts: END ---");
-    expect(end).toBeGreaterThan(0);
-    expect(js.indexOf("setupReviewBoxes")).toBeGreaterThan(end);
+    const mirrorEnd = js.indexOf("// --- mirrored from snippets.ts: END ---");
+    expect(mirrorEnd).toBeGreaterThan(0);
+    expect(js.indexOf("setupReviewBoxes")).toBeGreaterThan(mirrorEnd);
   });
 });

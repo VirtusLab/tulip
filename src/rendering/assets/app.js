@@ -165,7 +165,8 @@
     document.addEventListener("tulip:theme-change", render);
   }
 
-  // --- mirrored from snippets.ts: BEGIN --- (must render identical HTML; see the parity test)
+  // --- mirrored from snippets.ts: BEGIN --- (must render identical HTML; see the parity test,
+  // which evaluates this block on its own in Node — hence escapeHtml inlined here)
   var SNIPPET_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   var EXPAND_STEP = 20;
 

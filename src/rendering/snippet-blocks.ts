@@ -154,7 +154,7 @@ function assembleBlock(
     paneMode: paneModeForRows(data.rows),
     items,
     embeddable: data.embeddable,
-    open: sorted.some((region) => region.ref.unfold) && !forceCollapsed,
+    open: regions.some((region) => region.ref.unfold) && !forceCollapsed,
   };
 }
 

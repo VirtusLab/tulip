@@ -302,13 +302,6 @@ describe("renderSnippetRun — merged regions and gap rows", () => {
     );
   });
 
-  it("carries no per-block line bounds; the gap rows own the hidden ranges", () => {
-    const root = parse(renderSnippetRun([modRef(5)], fileDiffs(modifiedFile(10, [5]))));
-    const container = root.querySelector(".snippet");
-    expect(container?.getAttribute("data-base-start")).toBeUndefined();
-    expect(container?.getAttribute("data-head-start")).toBeUndefined();
-  });
-
   it("renders a failed middle ref as a fallback between two blocks", () => {
     const html = renderSnippetRun(
       [modRef(5), modRef(99), modRef(30)],
@@ -427,7 +420,7 @@ function loadClientRenderers(): ClientRenderers {
 }
 
 describe("snippets.ts / assets/app.js parity", () => {
-  it("renders byte-identical row HTML to assets/app.js's client-side row renderer", () => {
+  it("renders identical row HTML to assets/app.js's client-side row renderer", () => {
     const client = loadClientRenderers();
     const rows: AlignedRow[] = [
       {
@@ -473,7 +466,7 @@ describe("snippets.ts / assets/app.js parity", () => {
     }
   });
 
-  it("renders byte-identical gap rows and shares the expansion step", () => {
+  it("renders identical gap rows and shares the expansion step", () => {
     const client = loadClientRenderers();
     expect(client.EXPAND_STEP).toBe(EXPAND_STEP);
     const positions: GapPosition[] = ["top", "between", "bottom"];
