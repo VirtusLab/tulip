@@ -96,8 +96,10 @@ The amendment above preferred scaling a wide diagram down over sideways scrollin
 made a two-flow diagram unreadable. `app.js` now keeps each svg at no less than 70% of its natural
 width; a diagram whose floor would not fit its block gets the whole column (`mermaid-wide`) and
 then scrolls sideways. The block uses `justify-content: safe center`, since a centered flex item
-that overflows cannot be scrolled to its left edge. The explain prompt asks for narrow, top-down
-diagrams so this stays the exception.
+that overflows cannot be scrolled to its left edge. `safe` has no fallback declaration: a browser
+without it (Chrome before 115, Safari before 17.6) drops the centering, the same trade-off ADR
+0007 accepts for `color-mix()`. The explain prompt asks for narrow, top-down diagrams so this
+stays the exception.
 
 ## References
 
