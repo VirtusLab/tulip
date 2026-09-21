@@ -27,24 +27,12 @@ export interface MarkdownRenderContext {
   categoryRefTargets: ReadonlyMap<string, CategoryRefTarget>;
 }
 
-export interface RenderCategoryMarkdownOptions {
-  /** Forces every `{{snippet}}` in `markdown` to render collapsed regardless of its own
-   * `unfold` flag — set by ./template.ts for a "## Test code" subsection (see ./sections.ts's
-   * `SubsectionKind`), so test snippets stay out of the way by default. Defaults to `false`
-   * (honor each ref's own `unfold` flag, as before). */
-  forceSnippetsCollapsed?: boolean;
-}
-
 /**
  * Converts one category (sub)section's markdown to HTML: prose via {@link renderProseMarkdown},
  * ```mermaid fences into client-rendered diagram placeholders (task 7.2), and `{{snippet}}`
  * markers into side-by-side diff blocks (task 7.3, see ./snippets.ts).
  */
-export function renderCategoryMarkdown(
-  markdown: string,
-  ctx: MarkdownRenderContext,
-  options: RenderCategoryMarkdownOptions = {},
-): string {
+export function renderCategoryMarkdown(markdown: string, ctx: MarkdownRenderContext): string {
   // Inline `{{catref}}` backlinks are rewritten to markdown links first, at text level, before
   // any segment is located or the prose is parsed (docs/adr/0015) — a catref sits mid-sentence,
   // so it can't be a block segment. Own-line mermaid fences and snippet refs never overlap it,
@@ -68,7 +56,6 @@ export function renderCategoryMarkdown(
         renderSnippetRun(
           run.map((match) => match.ref),
           ctx.fileDiffs,
-          options.forceSnippetsCollapsed ?? false,
         ),
     }),
   );

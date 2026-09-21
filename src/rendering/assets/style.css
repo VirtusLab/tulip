@@ -393,7 +393,7 @@ main pre.mermaid {
 
 /* Per-category attention badge (docs/adr/0010) — next to the name in a category's own h2
    (./template.ts) and inline before its label in the TOC (./toc.ts). Never shown on a
-   Production/Test subsection. Three weights communicate the level without relying on color
+   subsection. Three weights communicate the level without relying on color
    alone (WCAG): "Read closely" is the strongest (warm accent + bolder), "Read through" is
    plain/neutral (no special treatment needed — it's the default, unmarked case), and "Skim" is
    muted/quiet via fill/border/weight only — never `opacity` on the text, which would blend
@@ -489,6 +489,30 @@ main pre.mermaid {
   margin-top: 0;
 }
 
+/* A folded test/docs subsection (docs/adr/0022): a full-bleed <details> holding the heading in
+   its summary and the `.subsection` grid below. A <details> lays its children out in its own
+   content box, so it can't be the grid itself; the summary is instead sized to the prose measure
+   and centered, which lands it exactly where grid column 2 would. */
+.page-section > .subsection-fold {
+  grid-column: 1 / -1;
+  margin-top: var(--space-3);
+}
+
+.subsection-fold > summary {
+  width: min(var(--prose-measure), 100%);
+  margin: 0 auto;
+  cursor: pointer;
+}
+
+.subsection-fold > summary > h3 {
+  display: inline;
+  margin: 0;
+}
+
+.subsection-fold > .subsection {
+  margin-top: var(--space-2);
+}
+
 /* Page footer (build/version info) — the last plain child of `main`, not one of the shared
    centered grids above, so it doesn't need to opt into their column/reset rules; it's a single
    short line, not multi-track content, and inherits main's own horizontal padding/max-width by
@@ -562,6 +586,8 @@ main pre.mermaid {
 
 .toc a {
   display: block;
+  /* Subsection labels are the model's own headings, which can run long. */
+  overflow-wrap: anywhere;
   padding: 0.3rem 0.5rem;
   margin: 0.05rem 0;
   border-radius: 6px;

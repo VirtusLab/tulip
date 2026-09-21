@@ -63,10 +63,28 @@ describe("renderTocHtml", () => {
   it("renders no attention badge for subsection children", () => {
     const toc = buildToc(
       [{ name: "Auth", attention: "close" }],
-      [[{ kind: "production", heading: "Production code", markdown: "" }]],
+      [[{ kind: "main", heading: "What changed", markdown: "" }]],
     );
     const html = renderTocHtml(toc);
     const childrenHtml = html.slice(html.indexOf("toc-children"));
     expect(childrenHtml).not.toContain("attention-badge");
+  });
+
+  it("labels every subsection child by its own heading text", () => {
+    const toc = buildToc(
+      [{ name: "Auth", attention: "close" }],
+      [
+        [
+          { kind: "main", heading: "Why key by the stage", markdown: "" },
+          { kind: "test", heading: "Tests", markdown: "" },
+          { kind: "docs", heading: "Docs", markdown: "" },
+        ],
+      ],
+    );
+    expect(toc[1]?.children.map((child) => [child.id, child.label])).toEqual([
+      ["category-0-main-0", "Why key by the stage"],
+      ["category-0-test-1", "Tests"],
+      ["category-0-docs-2", "Docs"],
+    ]);
   });
 });

@@ -19,16 +19,9 @@ import {
  * reveal the whole-file rows around them in steps. A ref whose lines aren't in the diff renders
  * a plain notice in its place, splitting the run; a ref overlapping an earlier ref's lines starts
  * a new block. A path with no diff data renders a notice per ref.
- *
- * `forceCollapsed` overrides every ref's `unfold` to collapsed — set by ./markdown.ts for a
- * "## Test code" subsection (see ./sections.ts).
  */
-export function renderSnippetRun(
-  refs: SnippetRef[],
-  fileDiffs: Map<string, FileDiffData>,
-  forceCollapsed = false,
-): string {
-  return buildSnippetPieces(refs, fileDiffs, forceCollapsed)
+export function renderSnippetRun(refs: SnippetRef[], fileDiffs: Map<string, FileDiffData>): string {
+  return buildSnippetPieces(refs, fileDiffs)
     .map((piece) =>
       piece.kind === "block" ? renderBlock(piece.block) : renderFallback(piece.ref, piece.reason),
     )

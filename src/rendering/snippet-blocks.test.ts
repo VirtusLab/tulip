@@ -22,7 +22,7 @@ function modRef(line: number, unfold = true): SnippetRef {
 }
 
 function onlyBlock(refs: SnippetRef[], diffs: Map<string, FileDiffData>): SnippetBlock {
-  const pieces = buildSnippetPieces(refs, diffs, false);
+  const pieces = buildSnippetPieces(refs, diffs);
   expect(pieces).toHaveLength(1);
   const piece = pieces[0];
   if (piece?.kind !== "block") throw new Error("expected a block");
@@ -88,7 +88,7 @@ describe("buildSnippetPieces", () => {
       head: { start: 4, end: 5 },
       unfold: true,
     };
-    const pieces = buildSnippetPieces([a, b], fileDiffs(modifiedFile(10, [3, 4, 5])), false);
+    const pieces = buildSnippetPieces([a, b], fileDiffs(modifiedFile(10, [3, 4, 5])));
     expect(pieces.map((p) => p.kind)).toEqual(["block", "block"]);
   });
 

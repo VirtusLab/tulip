@@ -164,15 +164,6 @@ describe("renderSnippetRun — fold/unfold and wrapping", () => {
     expect(details?.querySelector("summary")?.text).toContain("1 line");
   });
 
-  it("forces the details closed when forceCollapsed is set, even with unfold=yes", () => {
-    const rows = buildAlignedDiff("a\n", "A\n");
-    expect(
-      parse(renderSnippetRun([modRef(true)], fileDiffs(rows), true))
-        .querySelector("details")
-        ?.hasAttribute("open"),
-    ).toBe(false);
-  });
-
   it("wraps long lines for a prose/doc file instead of scrolling", () => {
     const rows = buildAlignedDiff("a\n", "A\n");
     const proseFileDiffs = new Map([["docs/readme.md", { rows, embeddable: true }]]);

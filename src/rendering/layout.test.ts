@@ -36,7 +36,7 @@ function renderIntoJsdom(): Document {
     explanations: [
       {
         category: { id: "c1", name: "Auth", description: "d", attention: "normal" },
-        markdown: `Intro prose.\n\n${snippetRef}\n\n\`\`\`ts\nconst x = 1;\n\`\`\`\n\n\`\`\`mermaid\ngraph TD\nA-->B\n\`\`\`\n\n## Production code\n\nBody.\n`,
+        markdown: `Intro prose.\n\n${snippetRef}\n\n\`\`\`ts\nconst x = 1;\n\`\`\`\n\n\`\`\`mermaid\ngraph TD\nA-->B\n\`\`\`\n\n## What changed\n\nBody.\n\n## Tests\n\nT.\n`,
       },
     ],
   });
@@ -109,6 +109,20 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
     expect(gridColumn(pre)).toBe("1 / -1");
     // Capped by max-width below the track width, so it must center rather than pin left.
     expect(getComputedStyle(pre as Element).justifySelf).toBe("center");
+  });
+
+  it("bleeds a folded subsection full width, with its summary sized to the prose column", () => {
+    const doc = renderIntoJsdom();
+    const folded = doc.querySelector("#category-0 > details.subsection-fold");
+    if (!folded) {
+      throw new Error("expected a folded Tests subsection in the fixture");
+    }
+    expect(gridColumn(folded)).toBe("1 / -1");
+    const summary = folded.querySelector("summary");
+    expect(getComputedStyle(summary as Element).width).toBe("min(var(--prose-measure), 100%)");
+    expect(getComputedStyle(summary as Element).marginLeft).toBe("auto");
+    // The content below is an ordinary subsection grid, so its snippets can still break out.
+    expect(getComputedStyle(folded.querySelector(".subsection") as Element).display).toBe("grid");
   });
 
   it("gives a .subsection the full-width span", () => {

@@ -87,6 +87,40 @@
     });
   }
 
+  // A test/docs subsection is a closed <details> (docs/adr/0022). Navigating to something inside
+  // one opens every closed <details> above it, then scrolls: on load the browser's own scroll
+  // ran before this, and a TOC click on the already-current hash fires no hashchange.
+  function revealHashTarget() {
+    var id = location.hash.slice(1);
+    var target = id ? document.getElementById(id) : null;
+    if (!target) {
+      return;
+    }
+    var opened = false;
+    var folded = target.closest("details");
+    while (folded) {
+      if (!folded.open) {
+        folded.open = true;
+        opened = true;
+      }
+      folded = folded.parentElement ? folded.parentElement.closest("details") : null;
+    }
+    if (opened) {
+      target.scrollIntoView();
+    }
+  }
+
+  function setupFoldedSections() {
+    revealHashTarget();
+    window.addEventListener("hashchange", revealHashTarget);
+    var toc = document.getElementById("toc");
+    if (toc) {
+      toc.addEventListener("click", () => {
+        setTimeout(revealHashTarget, 0);
+      });
+    }
+  }
+
   function loadMermaidSources() {
     var el = document.getElementById("tulip-mermaid-sources");
     if (!el) {
@@ -458,6 +492,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     setupThemeToggle();
     setupToc();
+    setupFoldedSections();
     setupMermaid();
     setupSnippetExpansion();
     setupHighlighting();
