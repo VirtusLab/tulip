@@ -20,3 +20,6 @@ dist/
 .idea/
 .vscode/
 *.swp
+
+# Claude Code session data and agent worktrees
+.claude/
