@@ -36,6 +36,11 @@ describe("style.css", () => {
     expect(css).not.toMatch(/\bbody\s*\{[^}]*overflow-x:\s*auto/);
   });
 
+  it("lets a wide diagram's block use the full column, and never centers an overflowing svg", () => {
+    expect(css).toMatch(/pre\.mermaid\.mermaid-wide\s*\{[^}]*max-width:\s*100%/);
+    expect(css).toMatch(/pre\.mermaid\s*\{[^}]*justify-content:\s*safe center/);
+  });
+
   it("styles gap rows and their inline buttons", () => {
     expect(css).toMatch(/\.snippet-table \.snippet-gap td\s*\{[^}]*text-align:\s*center/);
     expect(css).toMatch(/\.snippet-gap-btn\s*\{/);

@@ -253,8 +253,10 @@ describe("style.css layout — mermaid diagram centering (real CSS, real DOM)", 
     }
     // docs/adr/0011: `text-align: center` (docs/adr/0009) didn't reliably center the rendered
     // svg in a real browser — flexbox does, regardless of how the svg's own `display` resolves.
+    // `safe`: an overflowing svg (its scale floor, docs/adr/0011's second amendment) starts at
+    // the left edge instead of being clipped on both sides.
     expect(getComputedStyle(pre).display).toBe("flex");
-    expect(getComputedStyle(pre).justifyContent).toBe("center");
+    expect(getComputedStyle(pre).justifyContent).toBe("safe center");
   });
 
   it("centers regardless of theme", () => {
@@ -266,7 +268,7 @@ describe("style.css layout — mermaid diagram centering (real CSS, real DOM)", 
         throw new Error("expected a pre.mermaid placeholder in the fixture");
       }
       expect(getComputedStyle(pre).display).toBe("flex");
-      expect(getComputedStyle(pre).justifyContent).toBe("center");
+      expect(getComputedStyle(pre).justifyContent).toBe("safe center");
     } finally {
       document.documentElement.removeAttribute("data-theme");
     }

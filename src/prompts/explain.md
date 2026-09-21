@@ -52,6 +52,11 @@ the reviewer can't yet place. Scale both the overview and the per-change prose t
 sentence or two for a Skim or single-file category, and no diagram when the flow is trivial. The
 first diagram orients the whole category; later ones illustrate a specific mechanism.
 
+A diagram must fit the width of the surrounding text without scrolling. Lay flowcharts out
+top-down (`flowchart TD`); stack before/after or alternative subgraphs under each other, never
+side by side; keep at most five nodes across, and at most five participants in a sequence
+diagram. Split anything wider into two diagrams.
+
 Write "## ..." sections only for facets that have something to explain:
 - a section on the main change — name it for what it covers, not "production";
 - "## Tests" if tests changed — cover the testing strategy;

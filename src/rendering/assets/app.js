@@ -132,6 +132,27 @@
     };
   }
 
+  // A diagram wider than its block scales down to fit (style.css). Below this fraction of its
+  // natural size the text stops being readable, so the svg keeps at least this much and the
+  // block scrolls sideways instead.
+  var MIN_DIAGRAM_SCALE = 0.7;
+
+  // Mermaid reports a diagram's natural width as an inline `max-width` on the svg it inserts.
+  // The wide class is cleared before measuring, so the block is measured at its normal width on
+  // every render and a theme toggle can't flip the decision.
+  function fitDiagram(node) {
+    node.classList.remove("mermaid-wide");
+    var svg = node.querySelector("svg");
+    var natural = svg ? parseFloat(svg.style.maxWidth) : NaN;
+    if (!(natural > 0)) {
+      return;
+    }
+    var floor = Math.round(natural * MIN_DIAGRAM_SCALE);
+    svg.style.minWidth = `${floor}px`;
+    // The floor would overflow the block: give the diagram the whole column first.
+    node.classList.toggle("mermaid-wide", floor > node.clientWidth);
+  }
+
   // Mermaid replaces each `.mermaid` element's content with rendered SVG in place, so a
   // theme change (which needs a full re-render to pick up mermaid's own theme colors) first
   // restores each element's original source from the page-embedded JSON before re-running.
@@ -158,7 +179,10 @@
       });
       // suppressErrors: an invalid diagram renders mermaid's own error placeholder instead of
       // rejecting — without it, an invalid diagram left an unhandled promise rejection.
-      window.mermaid.run({ nodes: nodes, suppressErrors: true }).catch(() => {});
+      window.mermaid
+        .run({ nodes: nodes, suppressErrors: true })
+        .then(() => nodes.forEach(fitDiagram))
+        .catch(() => {});
     }
 
     render();
