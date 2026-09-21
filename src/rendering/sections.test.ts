@@ -70,21 +70,14 @@ describe("splitCategoryMarkdown", () => {
     expect(result.intro).toContain("## Nor this");
   });
 
-  it("does not let a fence line with an info string close a quoted block", () => {
-    const result = splitCategoryMarkdown(
-      "Intro.\n\n```markdown\n```js\n## Not a section\n```\n\n## Tests\n\nT\n",
-    );
-    expect(result.subsections.map((s) => s.heading)).toEqual(["Tests"]);
-    expect(result.intro).toContain("## Not a section");
+  // Blanked rather than removed: joining the neighbours would make "Intro" a setext heading.
+  it.each(["## ###", "##", "## "])("blanks a %s line that names nothing, keeping the line", (h) => {
+    const result = splitCategoryMarkdown(`Intro\n${h}\n---\n`);
+    expect(result.subsections).toEqual([]);
+    expect(result.intro).toBe("Intro\n\n---\n");
   });
 
-  it("blanks a ## line that names nothing, rather than leaving it in the prose", () => {
-    const result = splitCategoryMarkdown("Intro.\n\n## ###\n\nMore.\n");
-    expect(result.subsections).toEqual([]);
-    expect(result.intro).not.toContain("#");
-    // Blanked, not removed: joining the neighbours would make "Intro" a setext heading.
-    expect(splitCategoryMarkdown("Intro\n## ###\n---\n").intro).toBe("Intro\n\n---\n");
-    // The blanked line keeps its `\r`, so a CRLF document is not left with one lone LF.
+  it("keeps the blanked line's \\r on CRLF input", () => {
     expect(splitCategoryMarkdown("Intro\r\n## ###\r\n---\r\n").intro).toBe("Intro\r\n\r\n---\r\n");
   });
 

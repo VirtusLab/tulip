@@ -20,10 +20,11 @@ export interface CategorySections {
   subsections: CategorySubsection[];
 }
 
-// The mandatory blank after `##` is what keeps `###` from matching. Greedy, single-quantifier
-// patterns only: the model's output is untrusted, and a lazy group before a trailing quantifier
-// backtracks quadratically on a long line.
-const H2_PATTERN = /^##[ \t]+(.+)$/;
+// The mandatory blank after `##` is what keeps `###` from matching; the tail is optional so a
+// bare `##` is seen too, and blanked below rather than left to render as an empty heading.
+// Greedy, single-quantifier patterns only: the model's output is untrusted, and a lazy group
+// before a trailing quantifier backtracks quadratically on a long line.
+const H2_PATTERN = /^##([ \t].*)?$/gm;
 
 // Keys are lowercase. "test code" is the pre-ADR-0003 heading, kept because it costs nothing.
 const KIND_BY_HEADING = new Map<string, SubsectionKind>([
@@ -43,18 +44,20 @@ const KIND_BY_HEADING = new Map<string, SubsectionKind>([
  * markdown, so it renders as nothing.
  */
 export function splitCategoryMarkdown(markdown: string): CategorySections {
-  const source = blankEmptyHeadings(markdown);
-  const headings = findHeadings(source);
+  // Two passes, each scanning fences afresh: blanking only empties lines that are already
+  // outside every fence, so it cannot move a fence boundary the second pass would see.
+  const blanked = blankEmptyHeadings(markdown);
+  const headings = findHeadings(blanked);
   const first = headings[0];
   if (!first) {
-    return { intro: source, subsections: [] };
+    return { intro: blanked, subsections: [] };
   }
   const subsections = headings.map((heading, i) => ({
     kind: KIND_BY_HEADING.get(heading.text.toLowerCase()) ?? "main",
     heading: heading.text,
-    markdown: source.slice(heading.bodyStart, headings[i + 1]?.index ?? source.length),
+    markdown: blanked.slice(heading.bodyStart, headings[i + 1]?.index ?? blanked.length),
   }));
-  return { intro: source.slice(0, first.index), subsections };
+  return { intro: blanked.slice(0, first.index), subsections };
 }
 
 interface HeadingMatch {
@@ -65,69 +68,56 @@ interface HeadingMatch {
   text: string;
 }
 
-/** Empties every `## ` line that cleans to nothing (`## ###`). Such a line names no section, and
- * left alone it reaches the renderer as prose and shows up as an empty `<h2>`. The line is kept,
- * blank, rather than removed: joining its neighbours could make the one above a setext heading. */
+/** Empties every `##` line that cleans to nothing — `##`, `## `, `## ###`. Such a line names no
+ * section, and left alone it reaches the renderer as prose and shows up as an empty `<h2>`. The
+ * line is kept, blank, rather than removed: joining its neighbours could make the one above a
+ * setext heading. */
 function blankEmptyHeadings(markdown: string): string {
-  const lines = [...eachLine(markdown)].map((line) =>
-    // The `\r` stays, or a CRLF document would be left with one lone LF.
-    headingOf(line) === "" ? (line.raw.endsWith("\r") ? "\r" : "") : line.raw,
-  );
-  return lines.join("\n");
+  let blanked = "";
+  let copiedTo = 0;
+  for (const match of headingMatches(markdown)) {
+    if (cleanHeading(match[1] ?? "") !== "") {
+      continue;
+    }
+    // `$` stops before a CRLF line's `\r`, so the `\r` is outside the match and survives —
+    // dropping it would leave the document with one lone LF.
+    blanked += markdown.slice(copiedTo, match.index);
+    copiedTo = match.index + match[0].length;
+  }
+  return blanked + markdown.slice(copiedTo);
 }
 
 /** Own-line `## ` headings with their character offsets into `markdown`. */
 function findHeadings(markdown: string): HeadingMatch[] {
   const headings: HeadingMatch[] = [];
-  for (const line of eachLine(markdown)) {
-    const text = headingOf(line);
+  for (const match of headingMatches(markdown)) {
+    const text = cleanHeading(match[1] ?? "");
     if (text) {
-      headings.push({ index: line.offset, bodyStart: line.offset + line.raw.length, text });
+      // `$` stops before a CRLF line's `\r`, so step over it: the heading line owns its `\r`,
+      // and every body starts at the newline.
+      const lineEnd = match.index + match[0].length;
+      const bodyStart = markdown[lineEnd] === "\r" ? lineEnd + 1 : lineEnd;
+      headings.push({ index: match.index, bodyStart, text });
     }
   }
   return headings;
 }
 
-/** This line's cleaned `## ` heading text, or undefined if it is not one. */
-function headingOf(line: SourceLine): string | undefined {
-  if (line.inFence) {
-    return undefined;
-  }
-  const text = H2_PATTERN.exec(line.text)?.[1];
-  return text === undefined ? undefined : cleanHeading(text);
-}
-
-interface SourceLine {
-  /** The line as it appears in the source, a trailing `\r` included. */
-  raw: string;
-  /** The same line without that `\r`, so patterns match alike on LF and CRLF input. */
-  text: string;
-  /** Offset of the line's first character. */
-  offset: number;
-  inFence: boolean;
-}
-
-/** Walks `markdown` line by line, telling each line whether it falls inside a fenced code block —
- * the model quotes markdown and diffs, and a `## ` line inside a quoted block must not split
- * anything. */
-function* eachLine(markdown: string): Generator<SourceLine> {
+/** Every own-line `##` match outside a fenced code block: the model quotes markdown and diffs,
+ * and a `## ` line inside a quoted block must not split anything. */
+function* headingMatches(markdown: string): Generator<RegExpExecArray> {
   const fences = findFences(markdown);
   let fenceIndex = 0;
-  let offset = 0;
-  for (const raw of markdown.split("\n")) {
-    // Fences and lines are both in document order, so one cursor walks them together.
+  for (const match of markdown.matchAll(H2_PATTERN)) {
+    // Fences and matches are both in document order, so one cursor walks them together.
     let fence = fences[fenceIndex];
-    while (fence && fence.end <= offset) {
+    while (fence && fence.end <= match.index) {
       fenceIndex++;
       fence = fences[fenceIndex];
     }
-    yield {
-      raw,
-      text: raw.replace(/\r$/, ""),
-      offset,
-      inFence: fence !== undefined && offset >= fence.start,
-    };
-    offset += raw.length + 1;
+    if (fence === undefined || match.index < fence.start) {
+      yield match;
+    }
   }
 }
 

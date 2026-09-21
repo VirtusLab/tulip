@@ -135,7 +135,10 @@ describe("renderPage", () => {
       explanations: [explanation({ markdown: "Intro.\n\n## ###\n\nMore.\n" })],
     });
     const root = parse(html);
-    expect(root.querySelectorAll("h2").map((h) => h.text.trim())).not.toContain("");
+    // The count too, so this can't pass on a page that happens to have no headings at all.
+    const headings = root.querySelectorAll("h2").map((h) => h.text.trim());
+    expect(headings).toHaveLength(2);
+    expect(headings).not.toContain("");
   });
 
   it("renders one section per category, in given order", () => {
