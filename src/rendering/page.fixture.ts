@@ -6,29 +6,29 @@ import { renderPage } from "./template.js";
 // `import.meta.dirname`, not `new URL(..., import.meta.url)` — see highlight-safety.test.ts.
 const APP_JS = readFileSync(`${import.meta.dirname}/assets/app.js`, "utf8");
 
-/** Renders a page with the common one-category skeleton the app.js tests mount into jsdom.
- * Pass `markdown` and/or `fileDiffs` to override the defaults. */
-export function renderFixturePage(
-  overrides: { markdown?: string; fileDiffs?: Map<string, FileDiffData> } = {},
-): string {
+/** Renders the common one-category skeleton the app.js tests mount into jsdom. */
+export function renderFixturePage(input: {
+  markdown: string;
+  fileDiffs?: Map<string, FileDiffData>;
+}): string {
   return renderPage({
     prTitle: "t",
     prDescription: "d",
     prUrl: "https://github.com/a/b/pull/1",
-    fileDiffs: overrides.fileDiffs ?? new Map(),
+    fileDiffs: input.fileDiffs ?? new Map(),
     explanations: [
       {
         category: { id: "c1", name: "C", description: "d", attention: "normal" },
-        markdown: overrides.markdown ?? "Intro.\n\n## What changed\n\nBody.\n",
+        markdown: input.markdown,
       },
     ],
   });
 }
 
 /** Loads `html` into a fresh JSDOM window (one per test, so app.js's listeners never accumulate),
- * runs `prepare` for any per-test stubs (a stand-in `mermaid`, a `scrollIntoView` recorder, a
- * `clientWidth` stub, ...), then evaluates the real app.js and fires DOMContentLoaded. No
- * `<script src>` is fetched by JSDOM. `hash` loads the page at that fragment. */
+ * then evaluates the real app.js and fires DOMContentLoaded. No `<script src>` is fetched by
+ * JSDOM. `hash` loads the page at that fragment. `prepare` runs after the HTML is parsed and
+ * before app.js, for stubs app.js must see. */
 export function mountWithAppJs(
   html: string,
   options: { hash?: string; prepare?: (win: Window & typeof globalThis) => void } = {},

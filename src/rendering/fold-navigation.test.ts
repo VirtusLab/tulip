@@ -17,7 +17,7 @@ function mount(hashId = ""): Mounted {
   });
   const scrolled: Element[] = [];
   const win = mountWithAppJs(html, {
-    ...(hashId ? { hash: hashId } : {}),
+    hash: hashId,
     prepare(prepWin) {
       prepWin.Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
         scrolled.push(this);

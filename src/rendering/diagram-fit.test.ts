@@ -16,11 +16,9 @@ async function mountDiagram(naturalWidth: number | undefined, blockWidth = 900):
     markdown: "Intro.\n\n```mermaid\ngraph LR\nA-->B\n```\n\n## Production code\n\nBody.\n",
   });
   let width = naturalWidth;
-  let pre!: Element;
   const win = mountWithAppJs(html, {
     prepare(prepWin) {
-      const stubWin = prepWin as unknown as Window & { mermaid?: unknown };
-      stubWin.mermaid = {
+      (prepWin as unknown as Window & { mermaid?: unknown }).mermaid = {
         initialize() {},
         async run({ nodes }: { nodes: Iterable<Element> }) {
           for (const node of nodes) {
@@ -36,11 +34,14 @@ async function mountDiagram(naturalWidth: number | undefined, blockWidth = 900):
         throw new Error("expected a diagram placeholder");
       }
       Object.defineProperty(foundPre, "clientWidth", { value: blockWidth });
-      pre = foundPre;
     },
   });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   await settle();
+  const pre = win.document.querySelector("pre.mermaid");
+  if (!pre) {
+    throw new Error("expected a diagram placeholder");
+  }
   return {
     pre,
     async rerender(next) {
