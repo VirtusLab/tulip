@@ -397,6 +397,11 @@ describe("renderPage", () => {
       "#category-0-test-1",
       "#category-1",
     ]);
+    // Guards against the TOC and the section markup ever deriving ids independently again (see
+    // ./toc.ts's `buildToc` doc comment).
+    for (const href of links) {
+      expect(root.querySelector(href ?? "")).not.toBeNull();
+    }
   });
 
   it("turns mermaid fences into diagram placeholders and embeds their sources", () => {
