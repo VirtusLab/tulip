@@ -397,10 +397,8 @@ describe("renderPage", () => {
       "#category-0-test-1",
       "#category-1",
     ]);
-    // Every TOC href must resolve to the section it's supposed to open — the TOC and the section
-    // markup each derive a subsection's id independently, and only stay in sync because both walk
-    // the same subsection list in the same order (docs/adr/0022 folds TOC targets into
-    // <details>, so a mismatch would open the wrong one).
+    // Guards against the TOC and the section markup ever deriving ids independently again (see
+    // ./toc.ts's `buildToc` doc comment).
     for (const href of links) {
       expect(root.querySelector(href ?? "")).not.toBeNull();
     }

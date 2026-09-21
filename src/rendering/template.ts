@@ -35,8 +35,8 @@ export interface PageInput {
 
 const EMPTY_SECTIONS: CategorySections = { intro: "", subsections: [] };
 
-/** A subsection paired with the DOM id it renders under, computed once in `renderPage` and
- * shared by the TOC and the section markup (see `subsectionId` in ./ids.ts). */
+/** A subsection paired with the DOM id it renders under (see ./toc.ts's `buildToc` for why this
+ * is computed once and shared, rather than separately, by the TOC and the section markup). */
 interface IdentifiedSubsection {
   subsection: CategorySubsection;
   id: string;
@@ -50,10 +50,7 @@ export function renderPage(input: PageInput): string {
   const parsedSections = input.explanations.map((explanation) =>
     splitCategoryMarkdown(explanation.markdown),
   );
-  // Each subsection's id, derived once here instead of separately by the TOC and the section
-  // markup — the two used to walk the same array independently and only lined up because they
-  // walked it in the same order (docs/adr/0022 folds TOC targets into <details>, so a drift
-  // would open the wrong one).
+  // Each subsection's id, derived once (see ./toc.ts's `buildToc` doc comment for why).
   const subsectionsPerCategory: IdentifiedSubsection[][] = parsedSections.map((sections, index) =>
     sections.subsections.map((subsection, subsectionIndex) => ({
       subsection,

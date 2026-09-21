@@ -17,10 +17,12 @@ export interface TocEntry {
 /** Builds the TOC structure for the page: the PR's original description first (task: it's the
  * PR author's own text, not Tulip's analysis — always present, unlike categories, so it's
  * unconditional), then one entry per category in presentation order, with a child entry per
- * subsection that category's markdown has. Each subsection's `id` is the caller's (./template.ts
- * computes it once from the same parsed subsection list used for the section markup, so a TOC
- * link and its target can't drift apart — docs/adr/0022 folds the target into a `<details>`,
- * so a mismatch would open the wrong one). */
+ * subsection that category's markdown has. Each subsection's `id` is the caller's: ./template.ts
+ * computes it once, from the same parsed subsection list used for the section markup, and passes
+ * it into both places. Before that, the TOC and the section markup each derived a subsection's id
+ * independently while walking the same list, staying in sync only because both walked it in the
+ * same order — since docs/adr/0022 the TOC links into folded `<details>` targets, so a drift
+ * between the two would silently open the wrong section. */
 export function buildToc(
   categories: { name: string; attention: Attention }[],
   subsectionsPerCategory: { id: string; heading: string }[][],
