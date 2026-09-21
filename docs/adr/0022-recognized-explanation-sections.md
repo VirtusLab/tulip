@@ -93,6 +93,11 @@ now what the parser recognizes.
   `snippets.ts`, `template.ts`, `style.css` ("Production/Test subsection"), and the subsection
   tests in `sections.test.ts`, `template.test.ts`, `toc.test.ts`, `layout.test.ts`.
 - ADR 0007 item 6 is superseded. ADR 0003 stands; this ADR makes the renderer follow it.
+- Amendment: the fence scan described in section A is no longer part of `sections.ts`. It lives
+  in `src/rendering/fences.ts` and is shared with the Mermaid finder (`mermaid.ts`), which used
+  to recognize a narrower set of fences. One scanner means the two can never disagree about
+  where a code block ends, and it follows CommonMark on the cases the split versions got wrong:
+  a closing fence may not carry an info string, and a longer fence closes a shorter one.
 - Out of scope: how changes are grouped into categories, and the model's freedom to name its
   main section. Only the test and docs headings are reserved.
 

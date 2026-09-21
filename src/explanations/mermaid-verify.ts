@@ -119,9 +119,9 @@ async function fixMermaidFence(
 
     if (!roundTripsThroughFence(candidate)) {
       // A ``` line inside `candidate` would be read back as the fence's *closing* delimiter
-      // (see ../rendering/mermaid.ts's fence pattern), so what actually renders would be a
-      // truncated prefix of what was just validated — never accept this, no matter how the
-      // parser feels about `candidate` on its own.
+      // (see ../rendering/fences.ts), so what actually renders would be a truncated prefix of
+      // what was just validated — never accept this, no matter how the parser feels about
+      // `candidate` on its own.
       source = candidate;
       error =
         "the corrected source must not contain a line that is just ``` — that breaks how the " +
