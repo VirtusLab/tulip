@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
-import type { CategoryExplanation } from "../explanations/types.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { renderPage } from "./template.js";
 
@@ -8,27 +7,21 @@ import { renderPage } from "./template.js";
 const APP_JS = readFileSync(`${import.meta.dirname}/assets/app.js`, "utf8");
 
 /** Renders a page with the common one-category skeleton the app.js tests mount into jsdom.
- * Pass `markdown`, `fileDiffs` and/or `explanations` to override the defaults; `explanations`
- * replaces the single default category outright, for tests that need more than one. */
+ * Pass `markdown` and/or `fileDiffs` to override the defaults. */
 export function renderFixturePage(
-  overrides: {
-    markdown?: string;
-    fileDiffs?: Map<string, FileDiffData>;
-    explanations?: CategoryExplanation[];
-  } = {},
+  overrides: { markdown?: string; fileDiffs?: Map<string, FileDiffData> } = {},
 ): string {
-  const explanations = overrides.explanations ?? [
-    {
-      category: { id: "c1", name: "C", description: "d", attention: "normal" },
-      markdown: overrides.markdown ?? "Intro.\n\n## What changed\n\nBody.\n",
-    },
-  ];
   return renderPage({
     prTitle: "t",
     prDescription: "d",
     prUrl: "https://github.com/a/b/pull/1",
     fileDiffs: overrides.fileDiffs ?? new Map(),
-    explanations,
+    explanations: [
+      {
+        category: { id: "c1", name: "C", description: "d", attention: "normal" },
+        markdown: overrides.markdown ?? "Intro.\n\n## What changed\n\nBody.\n",
+      },
+    ],
   });
 }
 
