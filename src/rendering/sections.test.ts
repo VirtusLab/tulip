@@ -70,6 +70,20 @@ describe("splitCategoryMarkdown", () => {
     expect(result.intro).toContain("## Nor this");
   });
 
+  it("does not let a fence line with an info string close a quoted block", () => {
+    const result = splitCategoryMarkdown(
+      "Intro.\n\n```markdown\n```js\n## Not a section\n```\n\n## Tests\n\nT\n",
+    );
+    expect(result.subsections.map((s) => s.heading)).toEqual(["Tests"]);
+    expect(result.intro).toContain("## Not a section");
+  });
+
+  it("drops a ## line that names nothing, rather than leaving it in the prose", () => {
+    const result = splitCategoryMarkdown("Intro.\n\n## ###\n\nMore.\n");
+    expect(result.subsections).toEqual([]);
+    expect(result.intro).not.toContain("#");
+  });
+
   it("does not match a heading that isn't on its own line", () => {
     const result = splitCategoryMarkdown("Some text ## Tests more text\n");
     expect(result.subsections).toEqual([]);

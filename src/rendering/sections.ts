@@ -1,3 +1,5 @@
+import { findFences } from "./fences.js";
+
 /** Which heading family a subsection's text matched (docs/adr/0022): `test` and `docs` for the
  * headings the explaining prompt reserves, `main` for anything else. */
 export type SubsectionKind = "main" | "test" | "docs";
@@ -22,8 +24,6 @@ export interface CategorySections {
 // patterns only: the model's output is untrusted, and a lazy group before a trailing quantifier
 // backtracks quadratically on a long line.
 const H2_PATTERN = /^##[ \t]+(.+)$/;
-// CommonMark allows a fence to be indented by up to three spaces.
-const FENCE_PATTERN = /^[ \t]{0,3}(`{3,}|~{3,})/;
 
 // Keys are lowercase. "test code" is the pre-ADR-0003 heading, kept because it costs nothing.
 const KIND_BY_HEADING = new Map<string, SubsectionKind>([
@@ -39,20 +39,21 @@ const KIND_BY_HEADING = new Map<string, SubsectionKind>([
  * Splits a category's explanation markdown at every own-line `## ` heading outside a fenced code
  * block. `#` and `###` headings never split. Test and docs headings are recognized through a
  * short synonym list so a drifted heading still folds; anything else is a main section under
- * its own name.
+ * its own name. A `## ` line with no text left after cleaning is dropped from the output
+ * markdown entirely.
  */
 export function splitCategoryMarkdown(markdown: string): CategorySections {
-  const headings = findHeadings(markdown);
+  const { source, headings } = findHeadings(markdown);
   const first = headings[0];
   if (!first) {
-    return { intro: markdown, subsections: [] };
+    return { intro: source, subsections: [] };
   }
   const subsections = headings.map((heading, i) => ({
     kind: KIND_BY_HEADING.get(heading.text.toLowerCase()) ?? "main",
     heading: heading.text,
-    markdown: markdown.slice(heading.bodyStart, headings[i + 1]?.index ?? markdown.length),
+    markdown: source.slice(heading.bodyStart, headings[i + 1]?.index ?? source.length),
   }));
-  return { intro: markdown.slice(0, first.index), subsections };
+  return { intro: source.slice(0, first.index), subsections };
 }
 
 interface HeadingMatch {
@@ -63,34 +64,51 @@ interface HeadingMatch {
   text: string;
 }
 
+interface FoundHeadings {
+  /** The markdown the offsets below index into: the input minus its empty heading lines. */
+  source: string;
+  headings: HeadingMatch[];
+}
+
 /** Own-line `## ` headings with their character offsets, skipping fenced code blocks (the model
- * quotes markdown and diffs, and a `## ` line inside a quoted block must not split anything). */
-function findHeadings(markdown: string): HeadingMatch[] {
+ * quotes markdown and diffs, and a `## ` line inside a quoted block must not split anything).
+ *
+ * A heading that cleans to nothing (`## ###`) names no section, so it is cut out of `source`
+ * instead: left in place it would reach the renderer as prose and show up as an empty `<h2>`. */
+function findHeadings(markdown: string): FoundHeadings {
+  const fences = findFences(markdown);
   const headings: HeadingMatch[] = [];
+  const keptLines: string[] = [];
   let offset = 0;
-  let openFence: string | undefined;
+  let keptOffset = 0;
+  let fenceIndex = 0;
+
   for (const rawLine of markdown.split("\n")) {
     // Matched without the `\r`, measured with it, so offsets stay right for CRLF input.
     const line = rawLine.replace(/\r$/, "");
-    const fence = FENCE_PATTERN.exec(line)?.[1];
-    if (openFence !== undefined) {
-      if (fence?.startsWith(openFence)) {
-        openFence = undefined;
-      }
-    } else if (fence) {
-      openFence = fence;
-    } else {
-      const text = H2_PATTERN.exec(line)?.[1];
-      if (text !== undefined) {
-        const clean = cleanHeading(text);
-        if (clean !== "") {
-          headings.push({ index: offset, bodyStart: offset + rawLine.length, text: clean });
-        }
-      }
+    // Fences and lines are both in document order, so one shared cursor walks them together.
+    let fence = fences[fenceIndex];
+    while (fence && fence.end <= offset) {
+      fenceIndex++;
+      fence = fences[fenceIndex];
     }
+    const inFence = fence !== undefined && offset >= fence.start;
+    const text = inFence ? undefined : H2_PATTERN.exec(line)?.[1];
+    const clean = text === undefined ? undefined : cleanHeading(text);
+
+    if (clean === "") {
+      offset += rawLine.length + 1;
+      continue;
+    }
+    if (clean !== undefined) {
+      headings.push({ index: keptOffset, bodyStart: keptOffset + rawLine.length, text: clean });
+    }
+    keptLines.push(rawLine);
     offset += rawLine.length + 1;
+    keptOffset += rawLine.length + 1;
   }
-  return headings;
+
+  return { source: keptLines.join("\n"), headings };
 }
 
 /** Strips a closed-ATX tail (`## Tests ##`) and a trailing colon (`## Tests:`). The `#`s must
