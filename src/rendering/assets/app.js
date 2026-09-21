@@ -87,38 +87,32 @@
     });
   }
 
-  // A test/docs subsection is a closed <details> (docs/adr/0022). Navigating to something inside
-  // one opens every closed <details> above it, then scrolls: on load the browser's own scroll
-  // ran before this, and a TOC click on the already-current hash fires no hashchange.
-  function revealHashTarget() {
-    var id = location.hash.slice(1);
-    var target = id ? document.getElementById(id) : null;
-    if (!target) {
-      return;
-    }
-    var opened = false;
-    var folded = target.closest("details");
-    while (folded) {
-      if (!folded.open) {
-        folded.open = true;
-        opened = true;
-      }
-      folded = folded.parentElement ? folded.parentElement.closest("details") : null;
-    }
-    if (opened) {
+  // A test/docs subsection is a closed <details> (docs/adr/0022). Navigating to it opens it,
+  // then scrolls: on load the browser's own scroll ran before this.
+  function reveal(target) {
+    var folded = target ? target.closest("details") : null;
+    if (folded && !folded.open) {
+      folded.open = true;
       target.scrollIntoView();
     }
   }
 
-  function setupFoldedSections() {
+  function revealHashTarget() {
+    reveal(document.getElementById(location.hash.slice(1)));
+  }
+
+  // The click path reads the link itself: the hash is not yet updated inside the click event,
+  // and a click on the already-current hash fires no hashchange at all.
+  function setupHashReveal() {
     revealHashTarget();
     window.addEventListener("hashchange", revealHashTarget);
-    var toc = document.getElementById("toc");
-    if (toc) {
-      toc.addEventListener("click", () => {
-        setTimeout(revealHashTarget, 0);
-      });
-    }
+    document.addEventListener("click", (event) => {
+      var target = event.target;
+      var link = target instanceof Element ? target.closest("a[href^='#']") : null;
+      if (link) {
+        reveal(document.getElementById(link.getAttribute("href").slice(1)));
+      }
+    });
   }
 
   function loadMermaidSources() {
@@ -492,7 +486,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     setupThemeToggle();
     setupToc();
-    setupFoldedSections();
+    setupHashReveal();
     setupMermaid();
     setupSnippetExpansion();
     setupHighlighting();

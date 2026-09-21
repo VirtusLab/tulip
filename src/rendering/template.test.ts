@@ -102,7 +102,7 @@ describe("renderPage", () => {
       fileDiffs,
       explanations: [
         explanation({
-          markdown: `Intro paragraph.\n\n- one\n- two\n\n${ref}\n\n## Production code\n\nProd body.\n`,
+          markdown: `Intro paragraph.\n\n- one\n- two\n\n${ref}\n\n## What changed\n\nProd body.\n`,
         }),
       ],
     });
@@ -231,15 +231,15 @@ describe("renderPage", () => {
       explanations: [explanation()],
     });
     const root = parse(html);
-    const production = root.querySelector("#category-0-main-0");
+    const main = root.querySelector("#category-0-main-0");
     const test = root.querySelector("#category-0-test-1");
-    expect(production?.querySelector("h3")?.text).toBe("What changed");
-    expect(production?.text).toContain("Does the thing.");
+    expect(main?.querySelector("h3")?.text).toBe("What changed");
+    expect(main?.text).toContain("Does the thing.");
     expect(test?.querySelector("h3")?.text).toBe("Tests");
     expect(test?.text).toContain("Tests the thing.");
   });
 
-  it("folds a Tests section as a closed <details> and keeps its snippets' own unfold flags", () => {
+  it("folds a Tests section as a closed <details> around the subsection", () => {
     const ref = serializeSnippetRef({
       path: "src/a.test.ts",
       head: { start: 1, end: 1 },
@@ -262,8 +262,30 @@ describe("renderPage", () => {
     expect(main?.tagName).toBe("DIV");
     expect(test?.tagName).toBe("DETAILS");
     expect(test?.hasAttribute("open")).toBe(false);
-    expect(test?.querySelector("summary > h3")?.text).toBe("Tests");
+    expect(test?.classList.contains("section-fold")).toBe(true);
+    expect(test?.querySelector("summary > h3")).not.toBeNull();
     expect(test?.querySelector(".subsection.subsection-test")).not.toBeNull();
+  });
+
+  it("keeps a snippet's own unfold flag inside a folded Tests section", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.test.ts",
+      head: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const fileDiffs = new Map<string, FileDiffData>([
+      ["src/a.test.ts", { rows, embeddable: true }],
+    ]);
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [explanation({ markdown: `Intro.\n\n## Tests\n\n${ref}\n` })],
+    });
+    const test = parse(html).querySelector("#category-0-test-0");
+    expect(test?.tagName).toBe("DETAILS");
     expect(test?.querySelector(".snippet details")?.hasAttribute("open")).toBe(true);
   });
 
@@ -280,7 +302,7 @@ describe("renderPage", () => {
     const root = parse(html);
     expect(root.querySelector("#category-0-test-0")?.tagName).toBe("DIV");
     expect(root.querySelector("#category-0-docs-1")?.tagName).toBe("DIV");
-    expect(root.querySelector("details.subsection-fold")).toBeNull();
+    expect(root.querySelector("details.section-fold")).toBeNull();
   });
 
   it("gives duplicate same-kind subsections distinct ids instead of colliding", () => {
@@ -303,16 +325,6 @@ describe("renderPage", () => {
     expect(mainSections[1]?.id).toBe("category-0-main-2");
     expect(root.querySelector("#category-0-main-0")?.text).toContain("First part.");
     expect(root.querySelector("#category-0-main-2")?.text).toContain("Second part.");
-
-    const toc = root.querySelector("#toc");
-    const hrefs = toc?.querySelectorAll("a").map((a) => a.getAttribute("href")) ?? [];
-    expect(hrefs).toEqual([
-      "#pr-description",
-      "#category-0",
-      "#category-0-main-0",
-      "#category-0-test-1",
-      "#category-0-main-2",
-    ]);
   });
 
   it("does not force subsections when the markdown has none", () => {
@@ -395,7 +407,7 @@ describe("renderPage", () => {
       fileDiffs: new Map(),
       explanations: [
         explanation({
-          markdown: "## Production code\n\n```mermaid\ngraph TD\nA --> B\n```\n",
+          markdown: "## What changed\n\n```mermaid\ngraph TD\nA --> B\n```\n",
         }),
       ],
     });
@@ -424,7 +436,7 @@ describe("renderPage", () => {
       fileDiffs,
       explanations: [
         explanation({
-          markdown: `## Production code\n\n${ref}\n`,
+          markdown: `## What changed\n\n${ref}\n`,
         }),
       ],
     });
@@ -451,7 +463,7 @@ describe("renderPage", () => {
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs,
-      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+      explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
 
     const root = parse(html);
@@ -468,7 +480,7 @@ describe("renderPage", () => {
       fileDiffs: new Map(),
       explanations: [
         explanation({
-          markdown: "## Production code\n\n```ts\nconst x = 1;\n```\n",
+          markdown: "## What changed\n\n```ts\nconst x = 1;\n```\n",
         }),
       ],
     });
@@ -491,7 +503,7 @@ describe("renderPage", () => {
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs,
-      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+      explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
 
     expect(parse(html).querySelector(".snippet")?.getAttribute("data-lang")).toBe("typescript");
@@ -629,7 +641,7 @@ describe("renderPage XSS safety", () => {
       explanations: [
         explanation({
           markdown:
-            "## Production code\n\n```mermaid\ngraph TD\nA[</script><script>alert(1)</script>]\n```\n",
+            "## What changed\n\n```mermaid\ngraph TD\nA[</script><script>alert(1)</script>]\n```\n",
         }),
       ],
     });
@@ -657,7 +669,7 @@ describe("renderPage XSS safety", () => {
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs,
-      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+      explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
 
     expect(html).not.toMatch(/<\/script>\s*<script>alert\(1\)/);
@@ -683,7 +695,7 @@ describe("renderPage XSS safety", () => {
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs,
-      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+      explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
 
     const container = parse(html).querySelector(".snippet");

@@ -28,6 +28,26 @@ describe("splitCategoryMarkdown", () => {
     expect(splitCategoryMarkdown("## Tests: ##\n").subsections[0]?.heading).toBe("Tests");
   });
 
+  it("treats a heading that is an Object.prototype name as a main section", () => {
+    const result = splitCategoryMarkdown("## Constructor\n\nBody.\n");
+    expect(result.subsections.map((s) => [s.kind, s.heading])).toEqual([["main", "Constructor"]]);
+  });
+
+  it("keeps a # that belongs to the heading's last word", () => {
+    const headings = splitCategoryMarkdown(
+      "## Migrating to C#\n## Why F#\n## Tests ##\n",
+    ).subsections;
+    expect(headings.map((s) => s.heading)).toEqual(["Migrating to C#", "Why F#", "Tests"]);
+  });
+
+  it("splits CRLF markdown at the right offsets", () => {
+    const result = splitCategoryMarkdown("Intro.\r\n\r\n## Tests\r\n\r\nT\r\n");
+    expect(result.intro).toBe("Intro.\r\n\r\n");
+    expect(result.subsections).toEqual([
+      { kind: "test", heading: "Tests", markdown: "\r\n\r\nT\r\n" },
+    ]);
+  });
+
   it("keeps text before the first heading as intro", () => {
     const result = splitCategoryMarkdown("Some lead-in.\n\n## What changed\n\nBody.\n");
     expect(result.intro).toBe("Some lead-in.\n\n");

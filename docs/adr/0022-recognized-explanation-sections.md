@@ -49,7 +49,7 @@ fixed kind→label map goes away. Model-chosen headings can be long, so TOC labe
 
 - `test` and `docs` subsections render folded; `main` subsections render open. The main part is
   what a reviewer reads; tests and docs are there when wanted.
-- Markup: a full-bleed `<details id="…" class="subsection-fold">` holds the heading in its
+- Markup: a full-bleed `<details id="…" class="section-fold">` holds the heading in its
   summary (`<summary><h3>Tests</h3></summary>`, so the heading keeps its style and the document
   outline) and the ordinary `<div class="subsection subsection-test">` grid below it. The
   `<details>` cannot be the grid itself: it lays its light-DOM children out inside its own content
@@ -85,8 +85,8 @@ now what the parser recognizes.
 
 - A page gains real TOC children, one per section the model wrote, and its test and
   documentation sections arrive folded.
-- Verify a Mermaid diagram inside a collapsed `## Tests` section renders at the right size on
-  first open (`setupMermaid` runs while the section is `display: none`; ADR 0011 sizing history).
+- A Mermaid diagram inside a collapsed `## Tests` section renders while hidden and, checked in
+  headless Chrome, shows at its normal size once the section is opened.
 - A model-written `###` inside a section renders as `h3`, the same level as a subsection heading;
   accepted.
 - Stale comments and tests to update: `sections.ts`, `ids.ts`, `toc.ts`, `markdown.ts`,

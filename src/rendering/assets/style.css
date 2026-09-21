@@ -393,8 +393,7 @@ main pre.mermaid {
 
 /* Per-category attention badge (docs/adr/0010) — next to the name in a category's own h2
    (./template.ts) and inline before its label in the TOC (./toc.ts). Never shown on a
-   subsection. Three weights communicate the level without relying on color
-   alone (WCAG): "Read closely" is the strongest (warm accent + bolder), "Read through" is
+   subsection. Three weights communicate the level without relying on color alone (WCAG): "Read closely" is the strongest (warm accent + bolder), "Read through" is
    plain/neutral (no special treatment needed — it's the default, unmarked case), and "Skim" is
    muted/quiet via fill/border/weight only — never `opacity` on the text, which would blend
    --muted's already-reduced contrast below WCAG AA's 4.5:1. Sized down from the surrounding
@@ -437,7 +436,8 @@ main pre.mermaid {
   font-weight: 500;
 }
 
-.subsection {
+.subsection,
+.section-fold {
   margin-top: var(--space-3);
 }
 
@@ -475,7 +475,7 @@ main pre.mermaid {
 }
 
 :is(.page-section, .subsection) > :is(.snippet, pre),
-.page-section > .subsection {
+.page-section > :is(.subsection, .section-fold) {
   grid-column: 1 / -1;
 }
 
@@ -489,27 +489,22 @@ main pre.mermaid {
   margin-top: 0;
 }
 
-/* A folded test/docs subsection (docs/adr/0022): a full-bleed <details> holding the heading in
-   its summary and the `.subsection` grid below. A <details> lays its children out in its own
-   content box, so it can't be the grid itself; the summary is instead sized to the prose measure
-   and centered, which lands it exactly where grid column 2 would. */
-.page-section > .subsection-fold {
-  grid-column: 1 / -1;
-  margin-top: var(--space-3);
-}
-
-.subsection-fold > summary {
+/* A folded test/docs subsection (docs/adr/0022): a full-bleed <details> (see the rules above)
+   holding the heading in its summary and the `.subsection` grid below. A <details> lays its
+   children out in its own content box, so it can't be the grid itself; the summary is instead
+   sized to the prose measure and centered, which lands it exactly where grid column 2 would. */
+.section-fold > summary {
   width: min(var(--prose-measure), 100%);
   margin: 0 auto;
   cursor: pointer;
 }
 
-.subsection-fold > summary > h3 {
+.section-fold > summary > h3 {
   display: inline;
-  margin: 0;
 }
 
-.subsection-fold > .subsection {
+/* The inner grid keeps the heading-to-body gap, not a section-level jump. */
+.section-fold > .subsection {
   margin-top: var(--space-2);
 }
 

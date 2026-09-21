@@ -113,7 +113,7 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
 
   it("bleeds a folded subsection full width, with its summary sized to the prose column", () => {
     const doc = renderIntoJsdom();
-    const folded = doc.querySelector("#category-0 > details.subsection-fold");
+    const folded = doc.querySelector("#category-0 > details.section-fold");
     if (!folded) {
       throw new Error("expected a folded Tests subsection in the fixture");
     }

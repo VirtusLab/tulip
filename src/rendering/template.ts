@@ -149,16 +149,8 @@ function renderCategorySection(
   // snippet content that preceded a heading (a real, reviewer-reported bug: epic 6's coverage
   // check verifies every change is *referenced* somewhere in the markdown, not that the
   // renderer actually emits every part of the markdown).
-  const hasIntro = sections.intro.trim() !== "";
-  const introHtml = hasIntro ? renderCategoryMarkdown(sections.intro, ctx) : "";
-  // Tests/docs fold only when something else is open to read; otherwise the category would look
-  // empty (docs/adr/0022).
-  const foldable = hasIntro || sections.subsections.some((s) => s.kind === "main");
-  const subsectionsHtml = sections.subsections
-    .map((subsection, subsectionIndex) =>
-      renderSubsection(subsection, index, subsectionIndex, ctx, foldable),
-    )
-    .join("\n");
+  const introHtml = sections.intro.trim() !== "" ? renderCategoryMarkdown(sections.intro, ctx) : "";
+  const subsectionsHtml = renderSubsections(sections, index, ctx);
   const body = [introHtml, subsectionsHtml].filter((part) => part !== "").join("\n");
   // Serve mode appends the review box after the category body (docs/adr/0019); the static page
   // gets nothing here, keeping its output unchanged.
@@ -180,23 +172,45 @@ function renderReviewBox(index: number): string {
 </form>`;
 }
 
-/** A main subsection is a plain div. A test/docs one is wrapped in a closed `<details>` that
- * carries the id (the navigation target; ./assets/app.js opens it) with the heading in its
- * summary; the `.subsection` div stays inside, since a `<details>` lays its children out in its
- * own content box and can't be the grid itself (docs/adr/0022). */
+/** Tests/docs sections fold only when the category has something else open to read — an intro or
+ * a main section; otherwise the category would look empty (docs/adr/0022). */
+function renderSubsections(
+  sections: CategorySections,
+  categoryIndex: number,
+  ctx: MarkdownRenderContext,
+): string {
+  const hasOpenContent =
+    sections.intro.trim() !== "" || sections.subsections.some((s) => s.kind === "main");
+  return sections.subsections
+    .map((subsection, subsectionIndex) =>
+      renderSubsection(
+        subsection,
+        categoryIndex,
+        subsectionIndex,
+        ctx,
+        hasOpenContent && subsection.kind !== "main",
+      ),
+    )
+    .join("\n");
+}
+
+/** A folded subsection is wrapped in a closed `<details>` that carries the id (the navigation
+ * target; ./assets/app.js opens it) with the heading in its summary; the `.subsection` div stays
+ * inside, since a `<details>` lays its children out in its own content box and can't be the grid
+ * itself (docs/adr/0022). */
 function renderSubsection(
   subsection: CategorySubsection,
   categoryIndex: number,
   subsectionIndex: number,
   ctx: MarkdownRenderContext,
-  foldable: boolean,
+  fold: boolean,
 ): string {
   const id = subsectionId(categoryIndex, subsection.kind, subsectionIndex);
   const classes = `subsection subsection-${subsection.kind}`;
   const heading = `<h3>${escapeHtml(subsection.heading)}</h3>`;
   const body = renderCategoryMarkdown(subsection.markdown, ctx);
-  if (foldable && subsection.kind !== "main") {
-    return `<details id="${id}" class="subsection-fold">
+  if (fold) {
+    return `<details id="${id}" class="section-fold">
 <summary>${heading}</summary>
 <div class="${classes}">
 ${body}

@@ -25,7 +25,7 @@ describe("renderExplanations", () => {
         prTitle: "Add feature",
         prDescription: "desc",
         prUrl: "https://github.com/a/b/pull/1",
-        explanations: [explanation(`## Production code\n\n${ref}\n`)],
+        explanations: [explanation(`## What changed\n\n${ref}\n`)],
       },
       {
         checkout,
@@ -62,7 +62,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
-        explanations: [explanation(`## Production code\n\n${ref}\n`)],
+        explanations: [explanation(`## What changed\n\n${ref}\n`)],
         renamedFrom: new Map([["new/name.ts", "old/name.ts"]]),
       },
       {
@@ -96,7 +96,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
-        explanations: [explanation(`## Production code\n\n${ref}\n`)],
+        explanations: [explanation(`## What changed\n\n${ref}\n`)],
       },
       {
         checkout,

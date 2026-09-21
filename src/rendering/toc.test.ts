@@ -66,10 +66,13 @@ describe("renderTocHtml", () => {
       [[{ kind: "main", heading: "What changed", markdown: "" }]],
     );
     const html = renderTocHtml(toc);
+    expect(html).toContain("toc-children");
     const childrenHtml = html.slice(html.indexOf("toc-children"));
     expect(childrenHtml).not.toContain("attention-badge");
   });
+});
 
+describe("buildToc — subsection children", () => {
   it("labels every subsection child by its own heading text", () => {
     const toc = buildToc(
       [{ name: "Auth", attention: "close" }],
