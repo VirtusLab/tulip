@@ -98,14 +98,25 @@ export function buildRegionDiff(
 ): AlignedRow[] {
   const baseOffset = baseStart - 1;
   const headOffset = headStart - 1;
-  return buildAlignedDiff(baseLines.join("\n"), headLines.join("\n")).map((row) => ({
+  return buildAlignedDiff(terminated(baseLines), terminated(headLines)).map((row) => ({
     ...row,
     baseLine: row.baseLine === null ? null : row.baseLine + baseOffset,
     headLine: row.headLine === null ? null : row.headLine + headOffset,
   }));
 }
 
+/** Lines to content in git's convention: every line ends with a newline, so `[""]` is `"\n"`,
+ * distinct from `[]`, which is `""`. `lines.join("\n")` would lose a trailing blank line. */
+function terminated(lines: string[]): string {
+  return lines.map((line) => `${line}\n`).join("");
+}
+
+/** The lines of a diff part. A part is a run of newline-terminated lines (the file's last line
+ * may lack the newline), so `"\n"` is one blank line and only `""` is no lines at all. */
 function splitLines(value: string): string[] {
+  if (value === "") {
+    return [];
+  }
   const withoutTrailingNewline = value.endsWith("\n") ? value.slice(0, -1) : value;
-  return withoutTrailingNewline === "" ? [] : withoutTrailingNewline.split("\n");
+  return withoutTrailingNewline.split("\n");
 }

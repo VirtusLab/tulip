@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAlignedDiff } from "./line-diff.js";
+import { buildAlignedDiff, buildRegionDiff } from "./line-diff.js";
 
 describe("buildAlignedDiff", () => {
   it("aligns identical content as all-context rows", () => {
@@ -162,6 +162,43 @@ describe("buildAlignedDiff", () => {
         headText: "d",
         headType: "context",
       },
+    ]);
+  });
+});
+
+describe("buildAlignedDiff — blank lines", () => {
+  // jsdiff emits a lone blank line as its own part, "\n"; it is one line, not zero.
+  it("keeps a blank line between two changed runs, so later line numbers stay right", () => {
+    const rows = buildAlignedDiff("a\n\nb\n", "A\n\nB\n");
+    expect(rows.map((r) => [r.baseLine, r.baseText, r.headLine, r.headText])).toEqual([
+      [1, "a", 1, "A"],
+      [2, "", 2, ""],
+      [3, "b", 3, "B"],
+    ]);
+  });
+
+  it("keeps a blank line added at the end of the file", () => {
+    const rows = buildAlignedDiff("a\n", "a\n\n");
+    expect(rows.map((r) => [r.baseLine, r.headLine, r.headText, r.headType])).toEqual([
+      [1, 1, "a", "context"],
+      [null, 2, "", "add"],
+    ]);
+  });
+});
+
+describe("buildRegionDiff", () => {
+  it("renders a region that is a single blank line pair as one context row", () => {
+    const rows = buildRegionDiff([""], 106, [""], 108);
+    expect(rows.map((r) => [r.baseLine, r.baseText, r.headLine, r.headText])).toEqual([
+      [106, "", 108, ""],
+    ]);
+  });
+
+  it("keeps a region's trailing blank lines", () => {
+    const rows = buildRegionDiff(["x", ""], 96, ["y", ""], 97);
+    expect(rows.map((r) => [r.baseLine, r.baseText, r.headLine, r.headText])).toEqual([
+      [96, "x", 97, "y"],
+      [97, "", 98, ""],
     ]);
   });
 });
