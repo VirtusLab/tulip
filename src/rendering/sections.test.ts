@@ -43,8 +43,9 @@ describe("splitCategoryMarkdown", () => {
   it("splits CRLF markdown at the right offsets", () => {
     const result = splitCategoryMarkdown("Intro.\r\n\r\n## Tests\r\n\r\nT\r\n");
     expect(result.intro).toBe("Intro.\r\n\r\n");
+    // The heading line owns its `\r`; the body starts at the newline, as for LF input.
     expect(result.subsections).toEqual([
-      { kind: "test", heading: "Tests", markdown: "\r\n\r\nT\r\n" },
+      { kind: "test", heading: "Tests", markdown: "\n\r\nT\r\n" },
     ]);
   });
 
