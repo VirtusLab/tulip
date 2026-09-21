@@ -1,10 +1,5 @@
-import { readFileSync } from "node:fs";
-import { JSDOM } from "jsdom";
 import { describe, expect, it, vi } from "vitest";
-import { renderPage } from "./template.js";
-
-// `import.meta.dirname`, not `new URL(..., import.meta.url)` — see highlight-safety.test.ts.
-const APP_JS = readFileSync(`${import.meta.dirname}/assets/app.js`, "utf8");
+import { mountWithAppJs, renderFixturePage } from "./page.fixture.js";
 
 interface Mounted {
   win: Window & typeof globalThis;
@@ -17,27 +12,18 @@ interface Mounted {
  * its own JSDOM window with the real app.js running. `hashId` is the fragment the page loads
  * with. */
 function mount(hashId = ""): Mounted {
-  const html = renderPage({
-    prTitle: "t",
-    prDescription: "d",
-    prUrl: "https://github.com/a/b/pull/1",
-    fileDiffs: new Map(),
-    explanations: [
-      {
-        category: { id: "c1", name: "C", description: "d", attention: "normal" },
-        markdown: "Intro.\n\n## What changed\n\nMain.\n\n## Tests\n\nTest prose.\n",
-      },
-    ],
+  const html = renderFixturePage({
+    markdown: "Intro.\n\n## What changed\n\nMain.\n\n## Tests\n\nTest prose.\n",
   });
-  const url = hashId ? `http://localhost/#${hashId}` : "http://localhost/";
-  const dom = new JSDOM(html, { url, runScripts: "outside-only" });
-  const win = dom.window as unknown as Window & typeof globalThis;
   const scrolled: Element[] = [];
-  win.Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
-    scrolled.push(this);
+  const win = mountWithAppJs(html, {
+    ...(hashId ? { hash: hashId } : {}),
+    prepare(prepWin) {
+      prepWin.Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+        scrolled.push(this);
+      });
+    },
   });
-  win.eval(APP_JS);
-  win.document.dispatchEvent(new win.Event("DOMContentLoaded"));
   const tests = win.document.querySelector("details.section-fold#category-0-test-1");
   if (!tests) {
     throw new Error("expected a folded Tests section");

@@ -1,13 +1,9 @@
-import { readFileSync } from "node:fs";
-import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 import { serializeSnippetRef } from "../explanations/markup.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { buildAlignedDiff } from "./line-diff.js";
-import { renderPage } from "./template.js";
+import { mountWithAppJs, renderFixturePage } from "./page.fixture.js";
 
-// `import.meta.dirname`, not `new URL(..., import.meta.url)` — see highlight-safety.test.ts.
-const APP_JS = readFileSync(`${import.meta.dirname}/assets/app.js`, "utf8");
 const PATH = "src/a.ts";
 
 /** A 60-line file with single-line modifications at 10, 30 and 50, so whole-file row index
@@ -29,30 +25,15 @@ function ref(line: number): string {
 
 const DEFAULT_MARKDOWN = `Intro.\n\n${ref(10)}\n\n${ref(30)}\n\n## What changed\n\nBody.\n`;
 
-/** Renders a real page from `markdown` (default: a merged block for lines 10 and 30), loads it
- * into its own JSDOM window, runs the real app.js there, and fires DOMContentLoaded — one window
- * per test, so listeners never accumulate across tests. No <script src> is fetched by JSDOM.
- * Returns the page's first snippet block. */
+/** Renders a real page from `markdown` (default: a merged block for lines 10 and 30) and mounts
+ * it with the real app.js. Returns the page's first snippet block. */
 function mount(markdown: string = DEFAULT_MARKDOWN): Element {
   const fileDiffs = new Map<string, FileDiffData>([
     [PATH, { rows: fixtureRows(), embeddable: true }],
   ]);
-  const html = renderPage({
-    prTitle: "t",
-    prDescription: "d",
-    prUrl: "https://github.com/a/b/pull/1",
-    fileDiffs,
-    explanations: [
-      {
-        category: { id: "c1", name: "C", description: "d", attention: "normal" },
-        markdown,
-      },
-    ],
-  });
-  const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-only" });
-  dom.window.eval(APP_JS);
-  dom.window.document.dispatchEvent(new dom.window.Event("DOMContentLoaded"));
-  const container = dom.window.document.querySelector(".snippet");
+  const html = renderFixturePage({ markdown, fileDiffs });
+  const win = mountWithAppJs(html);
+  const container = win.document.querySelector(".snippet");
   if (!container) {
     throw new Error("expected a snippet block");
   }

@@ -1,10 +1,5 @@
-import { readFileSync } from "node:fs";
-import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { renderPage } from "./template.js";
-
-// `import.meta.dirname`, not `new URL(..., import.meta.url)` — see highlight-safety.test.ts.
-const APP_JS = readFileSync(`${import.meta.dirname}/assets/app.js`, "utf8");
+import { mountWithAppJs, renderFixturePage } from "./page.fixture.js";
 
 interface Mounted {
   pre: Element;
@@ -17,46 +12,40 @@ interface Mounted {
  * `max-width`; `undefined` renders none), then runs the real app.js. jsdom has no layout, so the
  * block's width is stubbed to `blockWidth`. */
 async function mountDiagram(naturalWidth: number | undefined, blockWidth = 900): Promise<Mounted> {
-  const html = renderPage({
-    prTitle: "t",
-    prDescription: "d",
-    prUrl: "https://github.com/a/b/pull/1",
-    fileDiffs: new Map(),
-    explanations: [
-      {
-        category: { id: "c1", name: "C", description: "d", attention: "normal" },
-        markdown: "Intro.\n\n```mermaid\ngraph LR\nA-->B\n```\n\n## Production code\n\nBody.\n",
-      },
-    ],
+  const html = renderFixturePage({
+    markdown: "Intro.\n\n```mermaid\ngraph LR\nA-->B\n```\n\n## Production code\n\nBody.\n",
   });
-  const dom = new JSDOM(html, { url: "http://localhost/", runScripts: "outside-only" });
   let width = naturalWidth;
-  const win = dom.window as unknown as Window & { mermaid?: unknown };
-  win.mermaid = {
-    initialize() {},
-    async run({ nodes }: { nodes: Iterable<Element> }) {
-      for (const node of nodes) {
-        node.innerHTML =
-          width === undefined
-            ? '<svg width="100%"></svg>'
-            : `<svg width="100%" style="max-width: ${width}px;"></svg>`;
+  let pre!: Element;
+  const win = mountWithAppJs(html, {
+    prepare(prepWin) {
+      const stubWin = prepWin as unknown as Window & { mermaid?: unknown };
+      stubWin.mermaid = {
+        initialize() {},
+        async run({ nodes }: { nodes: Iterable<Element> }) {
+          for (const node of nodes) {
+            node.innerHTML =
+              width === undefined
+                ? '<svg width="100%"></svg>'
+                : `<svg width="100%" style="max-width: ${width}px;"></svg>`;
+          }
+        },
+      };
+      const foundPre = prepWin.document.querySelector("pre.mermaid");
+      if (!foundPre) {
+        throw new Error("expected a diagram placeholder");
       }
+      Object.defineProperty(foundPre, "clientWidth", { value: blockWidth });
+      pre = foundPre;
     },
-  };
-  const pre = dom.window.document.querySelector("pre.mermaid");
-  if (!pre) {
-    throw new Error("expected a diagram placeholder");
-  }
-  Object.defineProperty(pre, "clientWidth", { value: blockWidth });
+  });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-  dom.window.eval(APP_JS);
-  dom.window.document.dispatchEvent(new dom.window.Event("DOMContentLoaded"));
   await settle();
   return {
     pre,
     async rerender(next) {
       width = next;
-      dom.window.document.dispatchEvent(new dom.window.Event("tulip:theme-change"));
+      win.document.dispatchEvent(new win.Event("tulip:theme-change"));
       await settle();
     },
   };
