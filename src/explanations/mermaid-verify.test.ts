@@ -272,9 +272,9 @@ describe("verifyMermaidDiagrams", () => {
   // The shared scanner (src/rendering/fences.ts) also closes a block on a longer backtick line
   // and on one indented by up to three spaces, so those truncate just as a bare ``` line does.
   it.each([
-    ["indented", "graph TD\n   ```\nA --> B"],
-    ["longer", "graph TD\n````\nA --> B"],
-  ])("rejects a fix response containing a %s backtick-only line", async (_case, rejected) => {
+    ["an indented", "graph TD\n   ```\nA --> B"],
+    ["a longer", "graph TD\n````\nA --> B"],
+  ])("rejects a fix response containing %s backtick-only line", async (_case, rejected) => {
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
       call++;

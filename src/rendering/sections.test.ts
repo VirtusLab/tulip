@@ -84,6 +84,8 @@ describe("splitCategoryMarkdown", () => {
     expect(result.intro).not.toContain("#");
     // Blanked, not removed: joining the neighbours would make "Intro" a setext heading.
     expect(splitCategoryMarkdown("Intro\n## ###\n---\n").intro).toBe("Intro\n\n---\n");
+    // The blanked line keeps its `\r`, so a CRLF document is not left with one lone LF.
+    expect(splitCategoryMarkdown("Intro\r\n## ###\r\n---\r\n").intro).toBe("Intro\r\n\r\n---\r\n");
   });
 
   it("splits on a heading that immediately follows a closing fence", () => {

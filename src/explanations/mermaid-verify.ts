@@ -22,13 +22,13 @@ export interface MermaidVerifyDeps extends RunnerDeps {
 
 /**
  * Task 6.6/docs/adr/0008: validates every mermaid fence in `markdown` — backtick or tilde, any
- * length or indent (see ../rendering/fences.ts) — with the same parser
- * the browser will use (see ../rendering/mermaid-validate.ts), so a diagram that renders as a
- * "Syntax error" box in the client is caught before the page ships. An invalid diagram is fixed
- * by resuming the explaining session with its exact source and mermaid's own error, asking for
- * just the corrected source — up to {@link MAX_MERMAID_FIX_ATTEMPTS} times. One still invalid
- * after that is replaced with a plain note (never left as a fence that would render broken), and
- * a warning is logged naming the category. Valid diagrams are left untouched — no LLM call.
+ * length or indent (see ../rendering/fences.ts) — with the same parser the browser will use (see
+ * ../rendering/mermaid-validate.ts), so a diagram that renders as a "Syntax error" box in the
+ * client is caught before the page ships. An invalid diagram is fixed by resuming the explaining
+ * session with its exact source and mermaid's own error, asking for just the corrected source —
+ * up to {@link MAX_MERMAID_FIX_ATTEMPTS} times. One still invalid after that is replaced with a
+ * plain note (never left as a fence that would render broken), and a warning is logged naming
+ * the category. Valid diagrams are left untouched — no LLM call.
  */
 export async function verifyMermaidDiagrams(
   markdown: string,

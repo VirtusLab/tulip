@@ -69,7 +69,10 @@ interface HeadingMatch {
  * left alone it reaches the renderer as prose and shows up as an empty `<h2>`. The line is kept,
  * blank, rather than removed: joining its neighbours could make the one above a setext heading. */
 function blankEmptyHeadings(markdown: string): string {
-  const lines = [...eachLine(markdown)].map((line) => (headingOf(line) === "" ? "" : line.raw));
+  const lines = [...eachLine(markdown)].map((line) =>
+    // The `\r` stays, or a CRLF document would be left with one lone LF.
+    headingOf(line) === "" ? (line.raw.endsWith("\r") ? "\r" : "") : line.raw,
+  );
   return lines.join("\n");
 }
 
