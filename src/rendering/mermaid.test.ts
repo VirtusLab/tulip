@@ -35,6 +35,10 @@ describe("findMermaidFences", () => {
     expect(markdown.slice(matches[0]?.start, matches[0]?.end)).toBe("````mermaid\ngraph TD\n````");
   });
 
+  it("ignores a mermaid fence quoted inside a longer fence", () => {
+    expect(findMermaidFences("````markdown\n```mermaid\ngraph TD\n```\n````\n")).toEqual([]);
+  });
+
   it("returns nothing when there are no fences", () => {
     expect(findMermaidFences("just prose")).toEqual([]);
   });

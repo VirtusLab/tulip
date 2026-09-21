@@ -106,6 +106,13 @@ describe("renderCategoryMarkdown", () => {
     expect(ctx.mermaidSources).toEqual(["A", "B"]);
   });
 
+  it("leaves a mermaid fence quoted inside a longer fence as code", () => {
+    const ctx = context();
+    const html = renderCategoryMarkdown("````markdown\n```mermaid\ngraph TD\n```\n````\n", ctx);
+    expect(html).not.toContain('<pre class="mermaid"');
+    expect(ctx.mermaidSources).toEqual([]);
+  });
+
   it("leaves markdown with no mermaid fences or snippet refs unaffected", () => {
     const ctx = context();
     const html = renderCategoryMarkdown("Just *text*.", ctx);

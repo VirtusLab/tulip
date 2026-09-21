@@ -8,8 +8,9 @@ export interface Fence {
   end: number;
   /** The opener's info string, trimmed; empty when there is none. */
   info: string;
-  /** The lines between the fences, without the newline ending the last one. An unterminated
-   * fence takes everything after its opening line verbatim. */
+  /** The lines between the fences, without the line ending before the closer — or before the
+   * end of the input, for a fence nothing closes. Each line has up to the opener's indent
+   * stripped, as CommonMark requires, so an indented block's content reads unindented. */
   content: string;
 }
 
@@ -17,7 +18,7 @@ export interface Fence {
 // more backticks or tildes, then the rest of the line. Greedy, single-quantifier parts only: the
 // markdown is untrusted model output, and a lazy group before a trailing quantifier backtracks
 // quadratically on a long line.
-const FENCE_LINE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const FENCE_LINE_PATTERN = /^( {0,3})(`{3,}|~{3,})(.*)$/;
 
 /**
  * Finds every fenced code block in `markdown`, in document order, as the CommonMark subset the
@@ -30,15 +31,15 @@ const FENCE_LINE_PATTERN = /^ {0,3}(`{3,}|~{3,})(.*)$/;
  */
 export function findFences(markdown: string): Fence[] {
   const fences: Fence[] = [];
-  let open: { start: number; contentStart: number; marker: string; info: string } | undefined;
+  let open: OpenFence | undefined;
   let offset = 0;
 
   for (const rawLine of markdown.split("\n")) {
     // Matched without the `\r`, measured with it, so offsets stay right for CRLF input.
     const line = rawLine.replace(/\r$/, "");
     const match = FENCE_LINE_PATTERN.exec(line);
-    const marker = match?.[1] ?? "";
-    const rest = match?.[2] ?? "";
+    const marker = match?.[2] ?? "";
+    const rest = match?.[3] ?? "";
 
     if (open) {
       if (marker[0] === open.marker[0] && marker.length >= open.marker.length && !rest.trim()) {
@@ -46,10 +47,7 @@ export function findFences(markdown: string): Fence[] {
           start: open.start,
           end: offset + line.length,
           info: open.info,
-          content: markdown.slice(
-            open.contentStart,
-            contentEnd(markdown, offset, open.contentStart),
-          ),
+          content: contentOf(markdown, open, offset),
         });
         open = undefined;
       }
@@ -61,6 +59,7 @@ export function findFences(markdown: string): Fence[] {
         contentStart: offset + rawLine.length + 1,
         marker,
         info: rest.trim(),
+        indent: match[1]?.length ?? 0,
       };
     }
 
@@ -72,20 +71,46 @@ export function findFences(markdown: string): Fence[] {
       start: open.start,
       end: markdown.length,
       info: open.info,
-      content: markdown.slice(open.contentStart),
+      content: contentOf(markdown, open, markdown.length),
     });
   }
   return fences;
 }
 
-/** Where a block's content stops: at the closing fence line, minus the line ending before it. */
-function contentEnd(markdown: string, closerOffset: number, contentStart: number): number {
-  let end = closerOffset;
-  if (end > contentStart && markdown[end - 1] === "\n") {
+interface OpenFence {
+  start: number;
+  /** Offset of the first content line. */
+  contentStart: number;
+  marker: string;
+  info: string;
+  /** Leading spaces on the opening fence line. */
+  indent: number;
+}
+
+/** A block's content: up to `stop` — the closing fence line, or the end of the input — minus the
+ * line ending just before it, and minus the opener's indent on every line. */
+function contentOf(markdown: string, open: OpenFence, stop: number): string {
+  let end = stop;
+  if (end > open.contentStart && markdown[end - 1] === "\n") {
     end--;
   }
-  if (end > contentStart && markdown[end - 1] === "\r") {
+  if (end > open.contentStart && markdown[end - 1] === "\r") {
     end--;
   }
-  return end;
+  const content = markdown.slice(open.contentStart, end);
+  if (open.indent === 0) {
+    return content;
+  }
+  return content
+    .split("\n")
+    .map((line) => stripIndent(line, open.indent))
+    .join("\n");
+}
+
+function stripIndent(line: string, indent: number): string {
+  let start = 0;
+  while (start < indent && line[start] === " ") {
+    start++;
+  }
+  return line.slice(start);
 }

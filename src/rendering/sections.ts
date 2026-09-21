@@ -39,11 +39,12 @@ const KIND_BY_HEADING = new Map<string, SubsectionKind>([
  * Splits a category's explanation markdown at every own-line `## ` heading outside a fenced code
  * block. `#` and `###` headings never split. Test and docs headings are recognized through a
  * short synonym list so a drifted heading still folds; anything else is a main section under
- * its own name. A `## ` line with no text left after cleaning is dropped from the output
- * markdown entirely.
+ * its own name. A `## ` line with no text left after cleaning is blanked out of the returned
+ * markdown, so it renders as nothing.
  */
 export function splitCategoryMarkdown(markdown: string): CategorySections {
-  const { source, headings } = findHeadings(markdown);
+  const source = blankEmptyHeadings(markdown);
+  const headings = findHeadings(source);
   const first = headings[0];
   if (!first) {
     return { intro: source, subsections: [] };
@@ -64,51 +65,67 @@ interface HeadingMatch {
   text: string;
 }
 
-interface FoundHeadings {
-  /** The markdown the offsets below index into: the input minus its empty heading lines. */
-  source: string;
-  headings: HeadingMatch[];
+/** Empties every `## ` line that cleans to nothing (`## ###`). Such a line names no section, and
+ * left alone it reaches the renderer as prose and shows up as an empty `<h2>`. The line is kept,
+ * blank, rather than removed: joining its neighbours could make the one above a setext heading. */
+function blankEmptyHeadings(markdown: string): string {
+  const lines = [...eachLine(markdown)].map((line) => (headingOf(line) === "" ? "" : line.raw));
+  return lines.join("\n");
 }
 
-/** Own-line `## ` headings with their character offsets, skipping fenced code blocks (the model
- * quotes markdown and diffs, and a `## ` line inside a quoted block must not split anything).
- *
- * A heading that cleans to nothing (`## ###`) names no section, so it is cut out of `source`
- * instead: left in place it would reach the renderer as prose and show up as an empty `<h2>`. */
-function findHeadings(markdown: string): FoundHeadings {
-  const fences = findFences(markdown);
+/** Own-line `## ` headings with their character offsets into `markdown`. */
+function findHeadings(markdown: string): HeadingMatch[] {
   const headings: HeadingMatch[] = [];
-  const keptLines: string[] = [];
-  let offset = 0;
-  let keptOffset = 0;
-  let fenceIndex = 0;
+  for (const line of eachLine(markdown)) {
+    const text = headingOf(line);
+    if (text) {
+      headings.push({ index: line.offset, bodyStart: line.offset + line.raw.length, text });
+    }
+  }
+  return headings;
+}
 
-  for (const rawLine of markdown.split("\n")) {
-    // Matched without the `\r`, measured with it, so offsets stay right for CRLF input.
-    const line = rawLine.replace(/\r$/, "");
-    // Fences and lines are both in document order, so one shared cursor walks them together.
+/** This line's cleaned `## ` heading text, or undefined if it is not one. */
+function headingOf(line: SourceLine): string | undefined {
+  if (line.inFence) {
+    return undefined;
+  }
+  const text = H2_PATTERN.exec(line.text)?.[1];
+  return text === undefined ? undefined : cleanHeading(text);
+}
+
+interface SourceLine {
+  /** The line as it appears in the source, a trailing `\r` included. */
+  raw: string;
+  /** The same line without that `\r`, so patterns match alike on LF and CRLF input. */
+  text: string;
+  /** Offset of the line's first character. */
+  offset: number;
+  inFence: boolean;
+}
+
+/** Walks `markdown` line by line, telling each line whether it falls inside a fenced code block —
+ * the model quotes markdown and diffs, and a `## ` line inside a quoted block must not split
+ * anything. */
+function* eachLine(markdown: string): Generator<SourceLine> {
+  const fences = findFences(markdown);
+  let fenceIndex = 0;
+  let offset = 0;
+  for (const raw of markdown.split("\n")) {
+    // Fences and lines are both in document order, so one cursor walks them together.
     let fence = fences[fenceIndex];
     while (fence && fence.end <= offset) {
       fenceIndex++;
       fence = fences[fenceIndex];
     }
-    const inFence = fence !== undefined && offset >= fence.start;
-    const text = inFence ? undefined : H2_PATTERN.exec(line)?.[1];
-    const clean = text === undefined ? undefined : cleanHeading(text);
-
-    if (clean === "") {
-      offset += rawLine.length + 1;
-      continue;
-    }
-    if (clean !== undefined) {
-      headings.push({ index: keptOffset, bodyStart: keptOffset + rawLine.length, text: clean });
-    }
-    keptLines.push(rawLine);
-    offset += rawLine.length + 1;
-    keptOffset += rawLine.length + 1;
+    yield {
+      raw,
+      text: raw.replace(/\r$/, ""),
+      offset,
+      inFence: fence !== undefined && offset >= fence.start,
+    };
+    offset += raw.length + 1;
   }
-
-  return { source: keptLines.join("\n"), headings };
 }
 
 /** Strips a closed-ATX tail (`## Tests ##`) and a trailing colon (`## Tests:`). The `#`s must

@@ -24,9 +24,14 @@ describe("findFences", () => {
     expect(findFences("~~~  mermaid  \na\n~~~\n")[0]?.info).toBe("mermaid");
   });
 
-  it("allows up to three spaces of indent, but not four", () => {
+  it("allows up to three spaces of indent, but not four, and not a tab", () => {
     expect(findFences("   ```\na\n   ```\n")).toHaveLength(1);
     expect(findFences("    ```\na\n    ```\n")).toEqual([]);
+    expect(findFences("\t```\na\n\t```\n")).toEqual([]);
+  });
+
+  it("strips the opener's indent from every content line", () => {
+    expect(findFences("  ```ts\n  a\n    b\n  ```\n")[0]?.content).toBe("a\n  b");
   });
 
   it("closes on a longer fence, but not on a shorter one", () => {
@@ -34,6 +39,10 @@ describe("findFences", () => {
     expect(findFences("`````\na\n```\nb\n`````\n").map((fence) => fence.content)).toEqual([
       "a\n```\nb",
     ]);
+  });
+
+  it("closes on a fence line with trailing whitespace", () => {
+    expect(findFences("```\na\n```  \n").map((fence) => fence.content)).toEqual(["a"]);
   });
 
   it("does not close on a fence line that carries an info string", () => {
@@ -61,7 +70,15 @@ describe("findFences", () => {
     const fences = findFences(markdown);
     expect(fences).toHaveLength(1);
     expect(fences[0]?.end).toBe(markdown.length);
-    expect(fences[0]?.content).toBe("never closed\n");
+    expect(fences[0]?.content).toBe("never closed");
+  });
+
+  it("opens a fence on a last line that has no trailing newline", () => {
+    const markdown = "text\n```";
+    const fences = findFences(markdown);
+    expect(fences).toHaveLength(1);
+    expect(fences[0]?.content).toBe("");
+    expect(fences[0]?.end).toBe(markdown.length);
   });
 
   it("computes offsets over CRLF line endings", () => {

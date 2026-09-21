@@ -78,10 +78,17 @@ describe("splitCategoryMarkdown", () => {
     expect(result.intro).toContain("## Not a section");
   });
 
-  it("drops a ## line that names nothing, rather than leaving it in the prose", () => {
+  it("blanks a ## line that names nothing, rather than leaving it in the prose", () => {
     const result = splitCategoryMarkdown("Intro.\n\n## ###\n\nMore.\n");
     expect(result.subsections).toEqual([]);
     expect(result.intro).not.toContain("#");
+    // Blanked, not removed: joining the neighbours would make "Intro" a setext heading.
+    expect(splitCategoryMarkdown("Intro\n## ###\n---\n").intro).toBe("Intro\n\n---\n");
+  });
+
+  it("splits on a heading that immediately follows a closing fence", () => {
+    const result = splitCategoryMarkdown("```\n## Quoted\n```\n## Tests\n\nT\n");
+    expect(result.subsections.map((s) => s.heading)).toEqual(["Tests"]);
   });
 
   it("does not match a heading that isn't on its own line", () => {
