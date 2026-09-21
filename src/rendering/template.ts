@@ -149,8 +149,9 @@ function renderCategorySection(
   // snippet content that preceded a heading (a real, reviewer-reported bug: epic 6's coverage
   // check verifies every change is *referenced* somewhere in the markdown, not that the
   // renderer actually emits every part of the markdown).
-  const introHtml = sections.intro.trim() !== "" ? renderCategoryMarkdown(sections.intro, ctx) : "";
-  const subsectionsHtml = renderSubsections(sections, index, ctx);
+  const hasIntro = sections.intro.trim() !== "";
+  const introHtml = hasIntro ? renderCategoryMarkdown(sections.intro, ctx) : "";
+  const subsectionsHtml = renderSubsections(sections, hasIntro, index, ctx);
   const body = [introHtml, subsectionsHtml].filter((part) => part !== "").join("\n");
   // Serve mode appends the review box after the category body (docs/adr/0019); the static page
   // gets nothing here, keeping its output unchanged.
@@ -176,11 +177,11 @@ function renderReviewBox(index: number): string {
  * a main section; otherwise the category would look empty (docs/adr/0022). */
 function renderSubsections(
   sections: CategorySections,
+  hasIntro: boolean,
   categoryIndex: number,
   ctx: MarkdownRenderContext,
 ): string {
-  const hasOpenContent =
-    sections.intro.trim() !== "" || sections.subsections.some((s) => s.kind === "main");
+  const hasOpenContent = hasIntro || sections.subsections.some((s) => s.kind === "main");
   return sections.subsections
     .map((subsection, subsectionIndex) =>
       renderSubsection(

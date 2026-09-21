@@ -14,7 +14,8 @@ interface Mounted {
 }
 
 /** A page with an intro, a main section and a folded Tests section (`#category-0-test-1`), in
- * its own JSDOM window with the real app.js running. `hashId` is the fragment the page loads with. */
+ * its own JSDOM window with the real app.js running. `hashId` is the fragment the page loads
+ * with. */
 function mount(hashId = ""): Mounted {
   const html = renderPage({
     prTitle: "t",
