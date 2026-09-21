@@ -14,14 +14,18 @@ describe("escapeHtml", () => {
 });
 
 describe("escapeInlineScript", () => {
-  it("neutralizes a closing </script> sequence, case-insensitively", () => {
-    expect(escapeInlineScript('{"x":"</script><img onerror=1>"}')).toBe(
-      '{"x":"<\\/script><img onerror=1>"}',
-    );
-    expect(escapeInlineScript("</SCRIPT>")).toBe("<\\/SCRIPT>");
+  it("neutralizes every `<`, so neither </script> nor <!-- can reach the HTML tokenizer", () => {
+    const escaped = escapeInlineScript('{"x":"</script><!--<script><img onerror=1>"}');
+    expect(escaped).not.toContain("<");
+    expect(escaped).toBe('{"x":"\\u003C/script>\\u003C!--\\u003Cscript>\\u003Cimg onerror=1>"}');
   });
 
-  it("leaves text with no such sequence untouched", () => {
+  it("stays valid JSON that parses back to the original text", () => {
+    const original = { x: "</SCRIPT><!--<script>" };
+    expect(JSON.parse(escapeInlineScript(JSON.stringify(original)))).toEqual(original);
+  });
+
+  it("leaves text with no `<` untouched", () => {
     expect(escapeInlineScript('{"a":1}')).toBe('{"a":1}');
   });
 });

@@ -13,8 +13,10 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch] as string);
 }
 
-/** Escapes a JSON string (or any text) for safe embedding inside an inline `<script>` element:
- * neutralizes `</script` sequences that would otherwise prematurely close the tag. */
+/** Escapes JSON text for embedding inside an inline `<script>` element. Every `<` becomes the
+ * JSON escape `\u003C`, which parses back to `<`, so the HTML tokenizer never sees `</script`
+ * (which would close the element early) or `<!--` (which would put it into the escaped-script
+ * state and swallow every later `<script>` on the page). */
 export function escapeInlineScript(text: string): string {
-  return text.replace(/<\/(script)/gi, "<\\/$1");
+  return text.replace(/</g, "\\u003C");
 }
