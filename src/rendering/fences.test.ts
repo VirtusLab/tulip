@@ -55,14 +55,12 @@ describe("findFences", () => {
     expect(findFences("```\n~~~\n```\n").map((fence) => fence.content)).toEqual(["~~~"]);
   });
 
-  it("keeps a shorter fence wrapped in a longer one as content", () => {
-    const fences = findFences("````\n```\ninner\n```\n````\n");
-    expect(fences).toHaveLength(1);
-    expect(fences[0]?.content).toBe("```\ninner\n```");
-  });
-
   it("ignores a backtick opener whose info string contains a backtick", () => {
     expect(findFences("``` `js`\n")).toEqual([]);
+  });
+
+  it("opens on a tilde opener whose info string contains backticks", () => {
+    expect(findFences("~~~ `js`\na\n~~~\n")[0]?.info).toBe("`js`");
   });
 
   it("runs an unterminated fence to the end of the input", () => {

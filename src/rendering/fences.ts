@@ -21,10 +21,11 @@ export interface Fence {
 const FENCE_LINE_PATTERN = /^( {0,3})(`{3,}|~{3,})(.*)$/;
 
 /**
- * Finds every fenced code block in `markdown`, in document order, as the CommonMark subset the
- * model's output actually uses. Shared by the section parser (which must not split on a `## `
- * line quoted inside a fence) and the Mermaid finder (which splices diagram placeholders over
- * whole blocks), so the two can never disagree on where a code block starts and ends.
+ * Finds every fenced code block in `markdown`, in document order — a deliberate subset of
+ * CommonMark, covering what the model's output actually uses. Shared by the section parser
+ * (which must not split on a `## ` line quoted inside a fence) and the Mermaid finder (which
+ * splices diagram placeholders over whole blocks), so the two can never disagree on where a
+ * code block starts and ends.
  *
  * A closer is a line of the opener's character, at least as long, with nothing but whitespace
  * after it — an info string on it means it is not a closer.
@@ -40,9 +41,17 @@ export function findFences(markdown: string): Fence[] {
     const match = FENCE_LINE_PATTERN.exec(line);
     const marker = match?.[2] ?? "";
     const rest = match?.[3] ?? "";
+    // A backtick opener's info string may not contain a backtick, so ``` `x` ``` stays a code
+    // span rather than opening a block.
+    const opens = match !== null && !(marker[0] === "`" && rest.includes("`"));
 
     if (open) {
-      if (marker[0] === open.marker[0] && marker.length >= open.marker.length && !rest.trim()) {
+      if (
+        match &&
+        marker[0] === open.marker[0] &&
+        marker.length >= open.marker.length &&
+        !rest.trim()
+      ) {
         fences.push({
           start: open.start,
           end: offset + line.length,
@@ -51,9 +60,7 @@ export function findFences(markdown: string): Fence[] {
         });
         open = undefined;
       }
-    } else if (match && !(marker[0] === "`" && rest.includes("`"))) {
-      // A backtick opener's info string may not contain a backtick, so ``` `x` ``` stays a code
-      // span rather than opening a block.
+    } else if (opens) {
       open = {
         start: offset,
         contentStart: offset + rawLine.length + 1,
@@ -87,17 +94,10 @@ interface OpenFence {
   indent: number;
 }
 
-/** A block's content: up to `stop` — the closing fence line, or the end of the input — minus the
- * line ending just before it, and minus the opener's indent on every line. */
-function contentOf(markdown: string, open: OpenFence, stop: number): string {
-  let end = stop;
-  if (end > open.contentStart && markdown[end - 1] === "\n") {
-    end--;
-  }
-  if (end > open.contentStart && markdown[end - 1] === "\r") {
-    end--;
-  }
-  const content = markdown.slice(open.contentStart, end);
+/** A block's content: up to `contentEnd` — the closing fence line, or the end of the input —
+ * minus the line ending just before it, and minus the opener's indent on every line. */
+function contentOf(markdown: string, open: OpenFence, contentEnd: number): string {
+  const content = markdown.slice(open.contentStart, contentEnd).replace(/\r?\n$/, "");
   if (open.indent === 0) {
     return content;
   }
@@ -107,6 +107,7 @@ function contentOf(markdown: string, open: OpenFence, stop: number): string {
     .join("\n");
 }
 
+/** Removes up to `indent` leading spaces; a tab is not indentation here. */
 function stripIndent(line: string, indent: number): string {
   let start = 0;
   while (start < indent && line[start] === " ") {

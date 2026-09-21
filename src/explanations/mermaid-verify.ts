@@ -21,14 +21,14 @@ export interface MermaidVerifyDeps extends RunnerDeps {
 }
 
 /**
- * Task 6.6/docs/adr/0008: validates every mermaid fence in `markdown` — backtick or tilde, any
- * length or indent (see ../rendering/fences.ts) — with the same parser the browser will use (see
- * ../rendering/mermaid-validate.ts), so a diagram that renders as a "Syntax error" box in the
- * client is caught before the page ships. An invalid diagram is fixed by resuming the explaining
- * session with its exact source and mermaid's own error, asking for just the corrected source —
- * up to {@link MAX_MERMAID_FIX_ATTEMPTS} times. One still invalid after that is replaced with a
- * plain note (never left as a fence that would render broken), and a warning is logged naming
- * the category. Valid diagrams are left untouched — no LLM call.
+ * Task 6.6/docs/adr/0008: validates every mermaid fence in `markdown` — backtick or tilde, three
+ * or more, indented by up to three spaces (see ../rendering/fences.ts) — with the same parser
+ * the browser will use (see ../rendering/mermaid-validate.ts), so a diagram that renders as a
+ * "Syntax error" box in the client is caught before the page ships. An invalid diagram is fixed
+ * by resuming the explaining session with its exact source and mermaid's own error, asking for
+ * just the corrected source — up to {@link MAX_MERMAID_FIX_ATTEMPTS} times. One still invalid
+ * after that is replaced with a plain note (never left as a fence that would render broken), and
+ * a warning is logged naming the category. Valid diagrams are left untouched — no LLM call.
  */
 export async function verifyMermaidDiagrams(
   markdown: string,
@@ -126,7 +126,7 @@ async function fixMermaidFence(
       source = candidate;
       error =
         "the corrected source must not contain a line that is only backticks — three or more, " +
-        "indented or not — that breaks how the diagram is embedded in the page (it would be " +
+        "indented or not: that breaks how the diagram is embedded in the page (it would be " +
         "read as the fence's closing delimiter, truncating everything after it)";
       continue;
     }
@@ -153,8 +153,8 @@ function renderMermaidFence(source: string): string {
 /** True only if wrapping `source` in a mermaid fence and reading it back with the exact same
  * fence parser the renderer uses (`findMermaidFences`) yields `source` unchanged — i.e. splicing
  * `renderMermaidFence(source)` into the markdown is guaranteed to validate and render the same
- * text. Guards against a fix response that itself contains a ``` line, which would otherwise be
- * mistaken for the fence's closing delimiter on the next parse. */
+ * text. Guards against a fix response that itself contains a backtick-only line, which would
+ * otherwise be mistaken for the fence's closing delimiter on the next parse. */
 function roundTripsThroughFence(source: string): boolean {
   return findMermaidFences(renderMermaidFence(source))[0]?.source === source;
 }

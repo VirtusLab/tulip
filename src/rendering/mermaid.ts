@@ -1,9 +1,9 @@
 import { escapeHtml } from "./escape.js";
 import { findFences } from "./fences.js";
 
-/** One mermaid fenced code block found in a markdown string — backtick or tilde, any length or
- * indent — with its exact character span (including the fence markers) so a renderer can splice
- * a diagram placeholder in its place. */
+/** One mermaid fenced code block found in a markdown string — backtick or tilde, three or more,
+ * indented by up to three spaces — with its exact character span (including the fence markers)
+ * so a renderer can splice a diagram placeholder in its place. */
 export interface MermaidFenceMatch {
   source: string;
   start: number;

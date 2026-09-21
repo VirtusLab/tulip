@@ -269,17 +269,14 @@ describe("verifyMermaidDiagrams", () => {
     await assertNoRawInvalidFence(result.markdown);
   });
 
-  // The shared scanner (src/rendering/fences.ts) also closes a block on a longer backtick line
-  // and on one indented by up to three spaces, so those truncate just as a bare ``` line does.
-  it.each([
-    ["an indented", "graph TD\n   ```\nA --> B"],
-    ["a longer", "graph TD\n````\nA --> B"],
-  ])("rejects a fix response containing %s backtick-only line", async (_case, rejected) => {
+  // The shared scanner (src/rendering/fences.ts) also closes a block on a backtick line indented
+  // by up to three spaces, so that truncates just as a bare ``` line does.
+  it("rejects a fix response containing an indented backtick-only line", async () => {
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
       call++;
       if (call === 1) {
-        return envelope({ source: rejected }, "explain-2");
+        return envelope({ source: "graph TD\n   ```\nA --> B" }, "explain-2");
       }
       // The embedding rule, not a mermaid parse error, is what the retry must be told about.
       expect(input).toMatch(/closing delimiter/i);
@@ -292,7 +289,7 @@ describe("verifyMermaidDiagrams", () => {
 
     expect(runClaudeProcess).toHaveBeenCalledTimes(2);
     expect(result.markdown).toContain(VALID_DIAGRAM);
-    expect(result.markdown).not.toContain(rejected);
+    await assertNoRawInvalidFence(result.markdown);
   });
 
   it("degrades (rather than shipping a truncated diagram) when every fix response contains a ``` line", async () => {

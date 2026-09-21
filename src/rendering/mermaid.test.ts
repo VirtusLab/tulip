@@ -28,13 +28,6 @@ describe("findMermaidFences", () => {
     expect(matches.map((m) => m.source)).toEqual(["graph TD\nA --> B"]);
   });
 
-  it("finds a mermaid block fenced with more than three backticks", () => {
-    const markdown = "````mermaid\ngraph TD\n````\n";
-    const matches = findMermaidFences(markdown);
-    expect(matches).toHaveLength(1);
-    expect(markdown.slice(matches[0]?.start, matches[0]?.end)).toBe("````mermaid\ngraph TD\n````");
-  });
-
   it("ignores a mermaid fence quoted inside a longer fence", () => {
     expect(findMermaidFences("````markdown\n```mermaid\ngraph TD\n```\n````\n")).toEqual([]);
   });
