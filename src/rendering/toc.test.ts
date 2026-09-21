@@ -63,7 +63,7 @@ describe("renderTocHtml", () => {
   it("renders no attention badge for subsection children", () => {
     const toc = buildToc(
       [{ name: "Auth", attention: "close" }],
-      [[{ kind: "main", heading: "What changed", markdown: "" }]],
+      [[{ id: "category-0-main-0", heading: "What changed" }]],
     );
     const html = renderTocHtml(toc);
     expect(html).toContain("toc-children");
@@ -73,14 +73,14 @@ describe("renderTocHtml", () => {
 });
 
 describe("buildToc — subsection children", () => {
-  it("labels every subsection child by its own heading text", () => {
+  it("passes each subsection's precomputed id and heading through as the child's id and label", () => {
     const toc = buildToc(
       [{ name: "Auth", attention: "close" }],
       [
         [
-          { kind: "main", heading: "Why key by the stage", markdown: "" },
-          { kind: "test", heading: "Tests", markdown: "" },
-          { kind: "docs", heading: "Docs", markdown: "" },
+          { id: "category-0-main-0", heading: "Why key by the stage" },
+          { id: "category-0-test-1", heading: "Tests" },
+          { id: "category-0-docs-2", heading: "Docs" },
         ],
       ],
     );

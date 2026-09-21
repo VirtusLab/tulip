@@ -1,8 +1,7 @@
 import type { Attention } from "../categories/types.js";
 import { renderAttentionBadge } from "./attention-badge.js";
 import { escapeHtml } from "./escape.js";
-import { categoryId, PR_DESCRIPTION_ID, subsectionId } from "./ids.js";
-import type { CategorySubsection } from "./sections.js";
+import { categoryId, PR_DESCRIPTION_ID } from "./ids.js";
 
 /** One entry in the floating table-of-contents: a category, with a child per `## ` subsection
  * its markdown has, labelled by the heading text (docs/adr/0022). `attention` is set only for
@@ -18,10 +17,13 @@ export interface TocEntry {
 /** Builds the TOC structure for the page: the PR's original description first (task: it's the
  * PR author's own text, not Tulip's analysis — always present, unlike categories, so it's
  * unconditional), then one entry per category in presentation order, with a child entry per
- * subsection that category's markdown has. */
+ * subsection that category's markdown has. Each subsection's `id` is the caller's (./template.ts
+ * computes it once from the same parsed subsection list used for the section markup, so a TOC
+ * link and its target can't drift apart — docs/adr/0022 folds the target into a `<details>`,
+ * so a mismatch would open the wrong one). */
 export function buildToc(
   categories: { name: string; attention: Attention }[],
-  subsectionsPerCategory: CategorySubsection[][],
+  subsectionsPerCategory: { id: string; heading: string }[][],
 ): TocEntry[] {
   const prDescriptionEntry: TocEntry = {
     id: PR_DESCRIPTION_ID,
@@ -32,8 +34,8 @@ export function buildToc(
     id: categoryId(index),
     label: category.name,
     attention: category.attention,
-    children: (subsectionsPerCategory[index] ?? []).map((subsection, subsectionIndex) => ({
-      id: subsectionId(index, subsection.kind, subsectionIndex),
+    children: (subsectionsPerCategory[index] ?? []).map((subsection) => ({
+      id: subsection.id,
       label: subsection.heading,
     })),
   }));

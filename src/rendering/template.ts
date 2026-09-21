@@ -35,6 +35,13 @@ export interface PageInput {
 
 const EMPTY_SECTIONS: CategorySections = { intro: "", subsections: [] };
 
+/** A subsection paired with the DOM id it renders under, computed once in `renderPage` and
+ * shared by the TOC and the section markup (see `subsectionId` in ./ids.ts). */
+interface IdentifiedSubsection {
+  subsection: CategorySubsection;
+  id: string;
+}
+
 /** Renders the full, self-contained HTML page (assumes `assets/style.css`, `assets/app.js` and
  * `assets/vendor/{mermaid,highlight}.min.js` sit alongside `index.html` — see ./assemble.ts). */
 export function renderPage(input: PageInput): string {
@@ -43,9 +50,21 @@ export function renderPage(input: PageInput): string {
   const parsedSections = input.explanations.map((explanation) =>
     splitCategoryMarkdown(explanation.markdown),
   );
+  // Each subsection's id, derived once here instead of separately by the TOC and the section
+  // markup — the two used to walk the same array independently and only lined up because they
+  // walked it in the same order (docs/adr/0022 folds TOC targets into <details>, so a drift
+  // would open the wrong one).
+  const subsectionsPerCategory: IdentifiedSubsection[][] = parsedSections.map((sections, index) =>
+    sections.subsections.map((subsection, subsectionIndex) => ({
+      subsection,
+      id: subsectionId(index, subsection.kind, subsectionIndex),
+    })),
+  );
   const toc = buildToc(
     input.explanations.map((explanation) => explanation.category),
-    parsedSections.map((sections) => sections.subsections),
+    subsectionsPerCategory.map((subsections) =>
+      subsections.map(({ id, subsection }) => ({ id, heading: subsection.heading })),
+    ),
   );
 
   // Category id -> {array index, title}, so an inline {{catref}} in any section's prose resolves
@@ -69,6 +88,7 @@ export function renderPage(input: PageInput): string {
         explanation,
         index,
         parsedSections[index] ?? EMPTY_SECTIONS,
+        subsectionsPerCategory[index] ?? [],
         ctx,
         input.serve ?? false,
       ),
@@ -130,6 +150,7 @@ function renderCategorySection(
   explanation: CategoryExplanation,
   index: number,
   sections: CategorySections,
+  subsections: IdentifiedSubsection[],
   ctx: MarkdownRenderContext,
   serve: boolean,
 ): string {
@@ -151,7 +172,7 @@ function renderCategorySection(
   // renderer actually emits every part of the markdown).
   const hasIntro = sections.intro.trim() !== "";
   const introHtml = hasIntro ? renderCategoryMarkdown(sections.intro, ctx) : "";
-  const subsectionsHtml = renderSubsections(sections, hasIntro, index, ctx);
+  const subsectionsHtml = renderSubsections(subsections, hasIntro, ctx);
   const body = [introHtml, subsectionsHtml].filter((part) => part !== "").join("\n");
   // Serve mode appends the review box after the category body (docs/adr/0019); the static page
   // gets nothing here, keeping its output unchanged.
@@ -176,21 +197,15 @@ function renderReviewBox(index: number): string {
 /** Tests/docs sections fold only when the category has something else open to read — an intro or
  * a main section; otherwise the category would look empty (docs/adr/0022). */
 function renderSubsections(
-  sections: CategorySections,
+  subsections: IdentifiedSubsection[],
   hasIntro: boolean,
-  categoryIndex: number,
   ctx: MarkdownRenderContext,
 ): string {
-  const hasOpenContent = hasIntro || sections.subsections.some((s) => s.kind === "main");
-  return sections.subsections
-    .map((subsection, subsectionIndex) =>
-      renderSubsection(
-        subsection,
-        categoryIndex,
-        subsectionIndex,
-        ctx,
-        hasOpenContent && subsection.kind !== "main",
-      ),
+  const hasOpenContent =
+    hasIntro || subsections.some(({ subsection }) => subsection.kind === "main");
+  return subsections
+    .map(({ subsection, id }) =>
+      renderSubsection(subsection, id, ctx, hasOpenContent && subsection.kind !== "main"),
     )
     .join("\n");
 }
@@ -201,12 +216,10 @@ function renderSubsections(
  * itself (docs/adr/0022). */
 function renderSubsection(
   subsection: CategorySubsection,
-  categoryIndex: number,
-  subsectionIndex: number,
+  id: string,
   ctx: MarkdownRenderContext,
   fold: boolean,
 ): string {
-  const id = subsectionId(categoryIndex, subsection.kind, subsectionIndex);
   const classes = `subsection subsection-${subsection.kind}`;
   const heading = `<h3>${escapeHtml(subsection.heading)}</h3>`;
   const body = renderCategoryMarkdown(subsection.markdown, ctx);
