@@ -14,18 +14,25 @@ export interface TocEntry {
   children: { id: string; label: string }[];
 }
 
+/** The shape `buildToc` needs from a subsection: enough to link to it and label it. Structurally
+ * satisfied by ./ids.ts's `SubsectionWithId`, which callers pass straight through. */
+export interface TocSubsection {
+  id: string;
+  heading: string;
+}
+
 /** Builds the TOC structure for the page: the PR's original description first (task: it's the
  * PR author's own text, not Tulip's analysis — always present, unlike categories, so it's
  * unconditional), then one entry per category in presentation order, with a child entry per
- * subsection that category's markdown has. Each subsection's `id` is the caller's: ./template.ts
- * computes it once, from the same parsed subsection list used for the section markup, and passes
- * it into both places. Before that, the TOC and the section markup each derived a subsection's id
- * independently while walking the same list, staying in sync only because both walked it in the
- * same order — since docs/adr/0022 the TOC links into folded `<details>` targets, so a drift
- * between the two would silently open the wrong section. */
+ * subsection that category's markdown has.
+ *
+ * Each subsection's `id` comes from the caller: ./template.ts derives it once, via
+ * ./ids.ts's `withSubsectionIds`, and uses it for both the TOC and the section markup. Since
+ * docs/adr/0022 a TOC link opens a folded `<details>`, so a mismatch between the two would
+ * silently open the wrong section. */
 export function buildToc(
   categories: { name: string; attention: Attention }[],
-  subsectionsPerCategory: { id: string; heading: string }[][],
+  subsectionsPerCategory: TocSubsection[][],
 ): TocEntry[] {
   const prDescriptionEntry: TocEntry = {
     id: PR_DESCRIPTION_ID,
