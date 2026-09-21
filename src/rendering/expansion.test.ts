@@ -27,7 +27,7 @@ function ref(line: number): string {
   });
 }
 
-const DEFAULT_MARKDOWN = `Intro.\n\n${ref(10)}\n\n${ref(30)}\n\n## Production code\n\nBody.\n`;
+const DEFAULT_MARKDOWN = `Intro.\n\n${ref(10)}\n\n${ref(30)}\n\n## What changed\n\nBody.\n`;
 
 /** Renders a real page from `markdown` (default: a merged block for lines 10 and 30), loads it
  * into its own JSDOM window, runs the real app.js there, and fires DOMContentLoaded — one window
@@ -107,7 +107,7 @@ describe("gap-row expansion in a real DOM (app.js under jsdom)", () => {
   });
 
   it("expands a large top gap upward in steps, one step short of the file start", () => {
-    const container = mount(`Intro.\n\n${ref(50)}\n\n## Production code\n\nBody.\n`);
+    const container = mount(`Intro.\n\n${ref(50)}\n\n## What changed\n\nBody.\n`);
     click(container, "top", "up");
     expect(lineNumbers(container, "head")).toEqual([
       ...Array.from({ length: 20 }, (_, i) => 30 + i),

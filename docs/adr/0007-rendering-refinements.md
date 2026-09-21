@@ -116,6 +116,9 @@ snippets keep honoring `unfold` exactly as before. The category intro and the PR
 description path don't pass the option (default `false`), since neither is
 attributable to a "test" subsection.
 
+*(Superseded by ADR 0022: the whole Tests section folds, and its snippets keep their own
+`unfold` flags; `forceSnippetsCollapsed` is gone.)*
+
 ## Amendment: layout review findings
 
 A review of the initial implementation above found the full-width breakout (item 1)

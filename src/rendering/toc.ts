@@ -4,10 +4,10 @@ import { escapeHtml } from "./escape.js";
 import { categoryId, PR_DESCRIPTION_ID, subsectionId } from "./ids.js";
 import type { CategorySubsection } from "./sections.js";
 
-/** One entry in the floating table-of-contents: a category, optionally with its Production/Test
- * subsection children (present only when the category's markdown actually has them). `attention`
- * is set only for category entries — the PR-description entry and subsection children have none
- * of their own, so they render without a badge (docs/adr/0010). */
+/** One entry in the floating table-of-contents: a category, with a child per `## ` subsection
+ * its markdown has, labelled by the heading text (docs/adr/0022). `attention` is set only for
+ * category entries — the PR-description entry and subsection children have none of their own,
+ * so they render without a badge (docs/adr/0010). */
 export interface TocEntry {
   id: string;
   label: string;
@@ -15,15 +15,10 @@ export interface TocEntry {
   children: { id: string; label: string }[];
 }
 
-const SUBSECTION_LABEL: Record<CategorySubsection["kind"], string> = {
-  production: "Production code",
-  test: "Test code",
-};
-
 /** Builds the TOC structure for the page: the PR's original description first (task: it's the
  * PR author's own text, not Tulip's analysis — always present, unlike categories, so it's
- * unconditional), then one entry per category in presentation order, with child entries for
- * whichever Production/Test subsections that category's markdown has. */
+ * unconditional), then one entry per category in presentation order, with a child entry per
+ * subsection that category's markdown has. */
 export function buildToc(
   categories: { name: string; attention: Attention }[],
   subsectionsPerCategory: CategorySubsection[][],
@@ -39,7 +34,7 @@ export function buildToc(
     attention: category.attention,
     children: (subsectionsPerCategory[index] ?? []).map((subsection, subsectionIndex) => ({
       id: subsectionId(index, subsection.kind, subsectionIndex),
-      label: SUBSECTION_LABEL[subsection.kind],
+      label: subsection.heading,
     })),
   }));
   return [prDescriptionEntry, ...categoryEntries];

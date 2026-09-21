@@ -64,7 +64,6 @@ export type SnippetPiece =
 export function buildSnippetPieces(
   refs: SnippetRef[],
   fileDiffs: Map<string, FileDiffData>,
-  forceCollapsed: boolean,
 ): SnippetPiece[] {
   const first = refs[0];
   if (!first) {
@@ -87,7 +86,7 @@ export function buildSnippetPieces(
     if (pending.length > 0) {
       pieces.push({
         kind: "block",
-        block: assembleBlock(first.path, pending, data, forceCollapsed),
+        block: assembleBlock(first.path, pending, data),
       });
     }
     pending = [];
@@ -129,12 +128,7 @@ function buildRegion(ref: SnippetRef, rows: AlignedRow[]): SnippetRegion | undef
   };
 }
 
-function assembleBlock(
-  path: string,
-  regions: SnippetRegion[],
-  data: FileDiffData,
-  forceCollapsed: boolean,
-): SnippetBlock {
+function assembleBlock(path: string, regions: SnippetRegion[], data: FileDiffData): SnippetBlock {
   // A stable sort keeps document order for regions starting on the same row.
   const sorted = [...regions].sort((a, b) => a.firstRow - b.firstRow);
 
@@ -154,7 +148,7 @@ function assembleBlock(
     paneMode: paneModeForRows(data.rows),
     items,
     embeddable: data.embeddable,
-    open: regions.some((region) => region.ref.unfold) && !forceCollapsed,
+    open: regions.some((region) => region.ref.unfold),
   };
 }
 

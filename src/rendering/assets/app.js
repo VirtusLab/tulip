@@ -87,6 +87,34 @@
     });
   }
 
+  // A test/docs subsection is a closed <details> (docs/adr/0022). Navigating to it opens it,
+  // then scrolls: on load the browser's own scroll ran before this.
+  function reveal(target) {
+    var folded = target ? target.closest("details") : null;
+    if (folded && !folded.open) {
+      folded.open = true;
+      target.scrollIntoView();
+    }
+  }
+
+  function revealHashTarget() {
+    reveal(document.getElementById(location.hash.slice(1)));
+  }
+
+  // The click path reads the link itself: the hash is not yet updated inside the click event,
+  // and a click on the already-current hash fires no hashchange at all.
+  function setupHashReveal() {
+    revealHashTarget();
+    window.addEventListener("hashchange", revealHashTarget);
+    document.addEventListener("click", (event) => {
+      var target = event.target;
+      var link = target instanceof Element ? target.closest("a[href^='#']") : null;
+      if (link) {
+        reveal(document.getElementById(link.getAttribute("href").slice(1)));
+      }
+    });
+  }
+
   function loadMermaidSources() {
     var el = document.getElementById("tulip-mermaid-sources");
     if (!el) {
@@ -482,6 +510,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     setupThemeToggle();
     setupToc();
+    setupHashReveal();
     setupMermaid();
     setupSnippetExpansion();
     setupHighlighting();

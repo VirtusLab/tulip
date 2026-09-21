@@ -1,68 +1,111 @@
-/** The two subsection headings an explanation's markdown may use (see src/explanations — the
- * explaining prompt asks for "## Production code" / "## Test code" headings, but doesn't
- * enforce them structurally, so a category's markdown may have neither, either, or both). */
-export type SubsectionKind = "production" | "test";
+/** Which heading family a subsection's text matched (docs/adr/0022): `test` and `docs` for the
+ * headings the explaining prompt reserves, `main` for anything else. */
+export type SubsectionKind = "main" | "test" | "docs";
 
 export interface CategorySubsection {
   kind: SubsectionKind;
-  /** Original heading text, e.g. "Production code". */
+  /** Heading text with a trailing colon and closing `#`s trimmed, e.g. "Tests". */
   heading: string;
-  /** Markdown body between this heading and the next recognized heading (or end of string),
-   * with the heading line itself stripped. */
+  /** Markdown body between this heading and the next (or end of string), heading line stripped. */
   markdown: string;
 }
 
-/** One category's markdown, split into its recognized subsections plus any leading text. */
+/** One category's markdown, split into its `## ` subsections plus any leading text. */
 export interface CategorySections {
-  /** Markdown appearing before the first recognized subsection heading. Usually empty, since
-   * the explaining prompt asks for the whole explanation to be organized under the two
-   * headings, but nothing enforces that structurally. */
+  /** Markdown before the first `## ` heading: the big-picture lead-in the prompt asks for, so
+   * this is the normal case, not an exception. */
   intro: string;
   subsections: CategorySubsection[];
 }
 
-const SUBSECTION_HEADING_PATTERN = /^##[ \t]+(Production code|Test code)[ \t]*$/gim;
+// The mandatory blank after `##` is what keeps `###` from matching. Greedy, single-quantifier
+// patterns only: the model's output is untrusted, and a lazy group before a trailing quantifier
+// backtracks quadratically on a long line.
+const H2_PATTERN = /^##[ \t]+(.+)$/;
+// CommonMark allows a fence to be indented by up to three spaces.
+const FENCE_PATTERN = /^[ \t]{0,3}(`{3,}|~{3,})/;
 
-const KIND_BY_HEADING: Record<string, SubsectionKind> = {
-  "production code": "production",
-  "test code": "test",
-};
+// Keys are lowercase. "test code" is the pre-ADR-0003 heading, kept because it costs nothing.
+const KIND_BY_HEADING = new Map<string, SubsectionKind>([
+  ["tests", "test"],
+  ["test", "test"],
+  ["testing", "test"],
+  ["test code", "test"],
+  ["documentation", "docs"],
+  ["docs", "docs"],
+]);
 
 /**
- * Splits a category's explanation markdown into Production/Test subsections "as present in the
- * markdown" (spec: subsections are rendered only when the model actually produced the matching
- * heading — never forced). Recognizes only the exact, own-line "## Production code" / "## Test
- * code" headings (case-insensitive); anything else is left inside `intro` untouched.
+ * Splits a category's explanation markdown at every own-line `## ` heading outside a fenced code
+ * block. `#` and `###` headings never split. Test and docs headings are recognized through a
+ * short synonym list so a drifted heading still folds; anything else is a main section under
+ * its own name.
  */
 export function splitCategoryMarkdown(markdown: string): CategorySections {
-  const headings = [...markdown.matchAll(SUBSECTION_HEADING_PATTERN)];
-
-  if (headings.length === 0) {
+  const headings = findHeadings(markdown);
+  const first = headings[0];
+  if (!first) {
     return { intro: markdown, subsections: [] };
   }
+  const subsections = headings.map((heading, i) => ({
+    kind: KIND_BY_HEADING.get(heading.text.toLowerCase()) ?? "main",
+    heading: heading.text,
+    markdown: markdown.slice(heading.bodyStart, headings[i + 1]?.index ?? markdown.length),
+  }));
+  return { intro: markdown.slice(0, first.index), subsections };
+}
 
-  const firstHeading = headings[0];
-  if (firstHeading?.index === undefined) {
-    return { intro: markdown, subsections: [] };
-  }
-  const intro = markdown.slice(0, firstHeading.index);
+interface HeadingMatch {
+  /** Offset of the heading line. */
+  index: number;
+  /** Offset of the heading line's newline, so every body starts with it. */
+  bodyStart: number;
+  text: string;
+}
 
-  const subsections: CategorySubsection[] = [];
-  for (let i = 0; i < headings.length; i++) {
-    const heading = headings[i];
-    if (heading?.index === undefined) {
-      continue;
+/** Own-line `## ` headings with their character offsets, skipping fenced code blocks (the model
+ * quotes markdown and diffs, and a `## ` line inside a quoted block must not split anything). */
+function findHeadings(markdown: string): HeadingMatch[] {
+  const headings: HeadingMatch[] = [];
+  let offset = 0;
+  let openFence: string | undefined;
+  for (const rawLine of markdown.split("\n")) {
+    // Matched without the `\r`, measured with it, so offsets stay right for CRLF input.
+    const line = rawLine.replace(/\r$/, "");
+    const fence = FENCE_PATTERN.exec(line)?.[1];
+    if (openFence !== undefined) {
+      if (fence?.startsWith(openFence)) {
+        openFence = undefined;
+      }
+    } else if (fence) {
+      openFence = fence;
+    } else {
+      const text = H2_PATTERN.exec(line)?.[1];
+      if (text !== undefined) {
+        const clean = cleanHeading(text);
+        if (clean !== "") {
+          headings.push({ index: offset, bodyStart: offset + rawLine.length, text: clean });
+        }
+      }
     }
-    const headingText = heading[1] ?? "";
-    const bodyStart = heading.index + heading[0].length;
-    const nextHeading = headings[i + 1];
-    const bodyEnd = nextHeading?.index ?? markdown.length;
-    subsections.push({
-      kind: KIND_BY_HEADING[headingText.toLowerCase()] ?? "production",
-      heading: headingText,
-      markdown: markdown.slice(bodyStart, bodyEnd),
-    });
+    offset += rawLine.length + 1;
   }
+  return headings;
+}
 
-  return { intro, subsections };
+/** Strips a closed-ATX tail (`## Tests ##`) and a trailing colon (`## Tests:`). The `#`s must
+ * follow whitespace, so `## Why F#` keeps its `#`. */
+function cleanHeading(text: string): string {
+  let heading = text.trim();
+  let end = heading.length;
+  while (end > 0 && heading[end - 1] === "#") {
+    end--;
+  }
+  if (
+    end < heading.length &&
+    (end === 0 || heading[end - 1] === " " || heading[end - 1] === "\t")
+  ) {
+    heading = heading.slice(0, end).trimEnd();
+  }
+  return heading.replace(/:$/, "").trimEnd();
 }

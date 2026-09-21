@@ -14,7 +14,7 @@ function explanation(overrides: Partial<CategoryExplanation> = {}): CategoryExpl
       description: "Authentication changes",
       attention: "normal",
     },
-    markdown: "## Production code\n\nDoes the thing.\n\n## Test code\n\nTests the thing.\n",
+    markdown: "## What changed\n\nDoes the thing.\n\n## Tests\n\nTests the thing.\n",
     ...overrides,
   };
 }
@@ -102,7 +102,7 @@ describe("renderPage", () => {
       fileDiffs,
       explanations: [
         explanation({
-          markdown: `Intro paragraph.\n\n- one\n- two\n\n${ref}\n\n## Production code\n\nProd body.\n`,
+          markdown: `Intro paragraph.\n\n- one\n- two\n\n${ref}\n\n## What changed\n\nProd body.\n`,
         }),
       ],
     });
@@ -210,7 +210,7 @@ describe("renderPage", () => {
     expect(badge(2)?.classNames).toContain("attention-skim");
   });
 
-  it("renders no attention badge on a Production/Test subsection", () => {
+  it("renders no attention badge on a subsection", () => {
     const html = renderPage({
       prTitle: "t",
       prDescription: "d",
@@ -222,7 +222,7 @@ describe("renderPage", () => {
     expect(root.querySelector(".subsection .attention-badge")).toBeNull();
   });
 
-  it("splits a category into Production/Test subsections when the markdown has them", () => {
+  it("splits a category into subsections when the markdown has ## headings", () => {
     const html = renderPage({
       prTitle: "t",
       prDescription: "d",
@@ -231,28 +231,22 @@ describe("renderPage", () => {
       explanations: [explanation()],
     });
     const root = parse(html);
-    const production = root.querySelector("#category-0-production-0");
+    const main = root.querySelector("#category-0-main-0");
     const test = root.querySelector("#category-0-test-1");
-    expect(production?.querySelector("h3")?.text).toBe("Production code");
-    expect(production?.text).toContain("Does the thing.");
-    expect(test?.querySelector("h3")?.text).toBe("Test code");
+    expect(main?.querySelector("h3")?.text).toBe("What changed");
+    expect(main?.text).toContain("Does the thing.");
+    expect(test?.querySelector("h3")?.text).toBe("Tests");
     expect(test?.text).toContain("Tests the thing.");
   });
 
-  it("defaults a test-subsection snippet to collapsed even when unfold=yes, but keeps a production one honoring unfold=yes", () => {
-    const prodRef = serializeSnippetRef({
-      path: "src/a.ts",
-      head: { start: 1, end: 1 },
-      unfold: true,
-    });
-    const testRef = serializeSnippetRef({
+  it("folds a Tests section as a closed <details> around the subsection", () => {
+    const ref = serializeSnippetRef({
       path: "src/a.test.ts",
       head: { start: 1, end: 1 },
       unfold: true,
     });
     const rows = buildAlignedDiff("a\n", "a\n");
     const fileDiffs = new Map<string, FileDiffData>([
-      ["src/a.ts", { rows, embeddable: true }],
       ["src/a.test.ts", { rows, embeddable: true }],
     ]);
     const html = renderPage({
@@ -260,17 +254,55 @@ describe("renderPage", () => {
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs,
+      explanations: [explanation({ markdown: `## What changed\n\nMain.\n\n## Tests\n\n${ref}\n` })],
+    });
+    const root = parse(html);
+    const main = root.querySelector("#category-0-main-0");
+    const test = root.querySelector("#category-0-test-1");
+    expect(main?.tagName).toBe("DIV");
+    expect(test?.tagName).toBe("DETAILS");
+    expect(test?.hasAttribute("open")).toBe(false);
+    expect(test?.classList.contains("section-fold")).toBe(true);
+    expect(test?.querySelector("summary > h3")).not.toBeNull();
+    expect(test?.querySelector(".subsection.subsection-test")).not.toBeNull();
+  });
+
+  it("keeps a snippet's own unfold flag inside a folded Tests section", () => {
+    const ref = serializeSnippetRef({
+      path: "src/a.test.ts",
+      head: { start: 1, end: 1 },
+      unfold: true,
+    });
+    const rows = buildAlignedDiff("a\n", "a\n");
+    const fileDiffs = new Map<string, FileDiffData>([
+      ["src/a.test.ts", { rows, embeddable: true }],
+    ]);
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs,
+      explanations: [explanation({ markdown: `Intro.\n\n## Tests\n\n${ref}\n` })],
+    });
+    const test = parse(html).querySelector("#category-0-test-0");
+    expect(test?.tagName).toBe("DETAILS");
+    expect(test?.querySelector(".snippet details")?.hasAttribute("open")).toBe(true);
+  });
+
+  it("renders Tests and Documentation open when the category has no main content", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
       explanations: [
-        explanation({
-          markdown: `## Production code\n\n${prodRef}\n\n## Test code\n\n${testRef}\n`,
-        }),
+        explanation({ markdown: "\n## Tests\n\nOnly tests here.\n\n## Documentation\n\nDocs.\n" }),
       ],
     });
     const root = parse(html);
-    const production = root.querySelector("#category-0-production-0");
-    const test = root.querySelector("#category-0-test-1");
-    expect(production?.querySelector("details")?.hasAttribute("open")).toBe(true);
-    expect(test?.querySelector("details")?.hasAttribute("open")).toBe(false);
+    expect(root.querySelector("#category-0-test-0")?.tagName).toBe("DIV");
+    expect(root.querySelector("#category-0-docs-1")?.tagName).toBe("DIV");
+    expect(root.querySelector("details.section-fold")).toBeNull();
   });
 
   it("gives duplicate same-kind subsections distinct ids instead of colliding", () => {
@@ -282,27 +314,17 @@ describe("renderPage", () => {
       explanations: [
         explanation({
           markdown:
-            "## Production code\n\nFirst part.\n\n## Test code\n\nT\n\n## Production code\n\nSecond part.\n",
+            "## First part\n\nFirst part.\n\n## Tests\n\nT\n\n## Second part\n\nSecond part.\n",
         }),
       ],
     });
     const root = parse(html);
-    const productionSections = root.querySelectorAll('[id^="category-0-production"]');
-    expect(productionSections).toHaveLength(2);
-    expect(productionSections[0]?.id).toBe("category-0-production-0");
-    expect(productionSections[1]?.id).toBe("category-0-production-2");
-    expect(root.querySelector("#category-0-production-0")?.text).toContain("First part.");
-    expect(root.querySelector("#category-0-production-2")?.text).toContain("Second part.");
-
-    const toc = root.querySelector("#toc");
-    const hrefs = toc?.querySelectorAll("a").map((a) => a.getAttribute("href")) ?? [];
-    expect(hrefs).toEqual([
-      "#pr-description",
-      "#category-0",
-      "#category-0-production-0",
-      "#category-0-test-1",
-      "#category-0-production-2",
-    ]);
+    const mainSections = root.querySelectorAll('[id^="category-0-main"]');
+    expect(mainSections).toHaveLength(2);
+    expect(mainSections[0]?.id).toBe("category-0-main-0");
+    expect(mainSections[1]?.id).toBe("category-0-main-2");
+    expect(root.querySelector("#category-0-main-0")?.text).toContain("First part.");
+    expect(root.querySelector("#category-0-main-2")?.text).toContain("Second part.");
   });
 
   it("does not force subsections when the markdown has none", () => {
@@ -314,7 +336,7 @@ describe("renderPage", () => {
       explanations: [explanation({ markdown: "Just some prose, no headings." })],
     });
     const root = parse(html);
-    expect(root.querySelector("#category-0-production-0")).toBeNull();
+    expect(root.querySelector("#category-0-main-0")).toBeNull();
     expect(root.querySelector("#category-0-test-1")).toBeNull();
     expect(root.querySelector("#category-0")?.text).toContain("Just some prose, no headings.");
   });
@@ -335,7 +357,7 @@ describe("renderPage", () => {
       fileDiffs,
       explanations: [
         explanation({
-          markdown: `Intro prose.\n\n\`\`\`mermaid\ngraph TD\nA --> B\n\`\`\`\n\n${ref}\n\n## Production code\n\nProd body.\n\n## Test code\n\nTest body.\n`,
+          markdown: `Intro prose.\n\n\`\`\`mermaid\ngraph TD\nA --> B\n\`\`\`\n\n${ref}\n\n## What changed\n\nProd body.\n\n## Tests\n\nTest body.\n`,
         }),
       ],
     });
@@ -346,7 +368,7 @@ describe("renderPage", () => {
     expect(category?.querySelector("pre.mermaid")).not.toBeNull();
     expect(category?.querySelector(".snippet")).not.toBeNull();
     // ...and the subsections still render too.
-    expect(root.querySelector("#category-0-production-0")?.text).toContain("Prod body.");
+    expect(root.querySelector("#category-0-main-0")?.text).toContain("Prod body.");
     expect(root.querySelector("#category-0-test-1")?.text).toContain("Test body.");
   });
 
@@ -371,7 +393,7 @@ describe("renderPage", () => {
     expect(links).toEqual([
       "#pr-description",
       "#category-0",
-      "#category-0-production-0",
+      "#category-0-main-0",
       "#category-0-test-1",
       "#category-1",
     ]);
@@ -385,7 +407,7 @@ describe("renderPage", () => {
       fileDiffs: new Map(),
       explanations: [
         explanation({
-          markdown: "## Production code\n\n```mermaid\ngraph TD\nA --> B\n```\n",
+          markdown: "## What changed\n\n```mermaid\ngraph TD\nA --> B\n```\n",
         }),
       ],
     });
@@ -414,7 +436,7 @@ describe("renderPage", () => {
       fileDiffs,
       explanations: [
         explanation({
-          markdown: `## Production code\n\n${ref}\n`,
+          markdown: `## What changed\n\n${ref}\n`,
         }),
       ],
     });
@@ -441,7 +463,7 @@ describe("renderPage", () => {
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs,
-      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+      explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
 
     const root = parse(html);
@@ -458,7 +480,7 @@ describe("renderPage", () => {
       fileDiffs: new Map(),
       explanations: [
         explanation({
-          markdown: "## Production code\n\n```ts\nconst x = 1;\n```\n",
+          markdown: "## What changed\n\n```ts\nconst x = 1;\n```\n",
         }),
       ],
     });
@@ -481,7 +503,7 @@ describe("renderPage", () => {
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs,
-      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+      explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
 
     expect(parse(html).querySelector(".snippet")?.getAttribute("data-lang")).toBe("typescript");
@@ -619,7 +641,7 @@ describe("renderPage XSS safety", () => {
       explanations: [
         explanation({
           markdown:
-            "## Production code\n\n```mermaid\ngraph TD\nA[</script><script>alert(1)</script>]\n```\n",
+            "## What changed\n\n```mermaid\ngraph TD\nA[</script><script>alert(1)</script>]\n```\n",
         }),
       ],
     });
@@ -647,7 +669,7 @@ describe("renderPage XSS safety", () => {
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs,
-      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+      explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
 
     expect(html).not.toMatch(/<\/script>\s*<script>alert\(1\)/);
@@ -673,7 +695,7 @@ describe("renderPage XSS safety", () => {
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
       fileDiffs,
-      explanations: [explanation({ markdown: `## Production code\n\n${ref}\n` })],
+      explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
 
     const container = parse(html).querySelector(".snippet");

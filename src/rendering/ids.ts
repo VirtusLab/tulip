@@ -10,9 +10,8 @@ export function categoryId(categoryIndex: number): string {
 }
 
 /** DOM id for one category's subsection. `subsectionIndex` is its position among that
- * category's subsections (see src/rendering/sections.ts) — included so two subsections of the
- * same kind (e.g. a markdown with two "## Production code" headings) still get distinct ids,
- * rather than colliding on `${categoryId}-${kind}`. */
+ * category's subsections (see src/rendering/sections.ts): a category may have several main
+ * sections, and an index keeps their ids distinct and stable while the model's headings vary. */
 export function subsectionId(
   categoryIndex: number,
   kind: SubsectionKind,

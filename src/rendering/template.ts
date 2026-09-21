@@ -144,16 +144,14 @@ function renderCategorySection(
   // (docs/adr/0015), which renders no tree.
   const tree = renderFileTree(explanation.files ?? []);
 
-  // The intro (anything before the first recognized subsection heading) must render
-  // unconditionally, alongside any subsections — not only when there are no subsections.
-  // Dropping it silently discarded prose/mermaid/snippet content that happened to precede a
-  // "## Production code"/"## Test code" heading (a real, reviewer-reported bug: epic 6's
-  // coverage check verifies every change is *referenced* somewhere in the markdown, not that
-  // the renderer actually emits every part of the markdown).
-  const introHtml = sections.intro.trim() ? renderCategoryMarkdown(sections.intro, ctx) : "";
-  const subsectionsHtml = sections.subsections
-    .map((subsection, subsectionIndex) => renderSubsection(subsection, index, subsectionIndex, ctx))
-    .join("\n");
+  // The intro (anything before the first `## ` heading) renders unconditionally, alongside any
+  // subsections — not only when there are none. Dropping it silently discarded prose/mermaid/
+  // snippet content that preceded a heading (a real, reviewer-reported bug: epic 6's coverage
+  // check verifies every change is *referenced* somewhere in the markdown, not that the
+  // renderer actually emits every part of the markdown).
+  const hasIntro = sections.intro.trim() !== "";
+  const introHtml = hasIntro ? renderCategoryMarkdown(sections.intro, ctx) : "";
+  const subsectionsHtml = renderSubsections(sections, hasIntro, index, ctx);
   const body = [introHtml, subsectionsHtml].filter((part) => part !== "").join("\n");
   // Serve mode appends the review box after the category body (docs/adr/0019); the static page
   // gets nothing here, keeping its output unchanged.
@@ -175,18 +173,50 @@ function renderReviewBox(index: number): string {
 </form>`;
 }
 
+/** Tests/docs sections fold only when the category has something else open to read — an intro or
+ * a main section; otherwise the category would look empty (docs/adr/0022). */
+function renderSubsections(
+  sections: CategorySections,
+  hasIntro: boolean,
+  categoryIndex: number,
+  ctx: MarkdownRenderContext,
+): string {
+  const hasOpenContent = hasIntro || sections.subsections.some((s) => s.kind === "main");
+  return sections.subsections
+    .map((subsection, subsectionIndex) =>
+      renderSubsection(
+        subsection,
+        categoryIndex,
+        subsectionIndex,
+        ctx,
+        hasOpenContent && subsection.kind !== "main",
+      ),
+    )
+    .join("\n");
+}
+
+/** A folded subsection is wrapped in a closed `<details>` that carries the id (the navigation
+ * target; ./assets/app.js opens it) with the heading in its summary; the `.subsection` div stays
+ * inside, since a `<details>` lays its children out in its own content box and can't be the grid
+ * itself (docs/adr/0022). */
 function renderSubsection(
   subsection: CategorySubsection,
   categoryIndex: number,
   subsectionIndex: number,
   ctx: MarkdownRenderContext,
+  fold: boolean,
 ): string {
-  // Test-code snippets default to folded regardless of their own unfold flag (task: keep test
-  // code out of the way until the reader chooses to look) — production subsections keep
-  // honoring `unfold` exactly as before. See ./sections.ts for how "test" is recognized.
-  const markdownOptions = { forceSnippetsCollapsed: subsection.kind === "test" };
-  return `<div id="${subsectionId(categoryIndex, subsection.kind, subsectionIndex)}" class="subsection subsection-${subsection.kind}">
-<h3>${escapeHtml(subsection.heading)}</h3>
-${renderCategoryMarkdown(subsection.markdown, ctx, markdownOptions)}
-</div>`;
+  const id = subsectionId(categoryIndex, subsection.kind, subsectionIndex);
+  const classes = `subsection subsection-${subsection.kind}`;
+  const heading = `<h3>${escapeHtml(subsection.heading)}</h3>`;
+  const body = renderCategoryMarkdown(subsection.markdown, ctx);
+  if (fold) {
+    return `<details id="${id}" class="section-fold">
+<summary>${heading}</summary>
+<div class="${classes}">
+${body}
+</div>
+</details>`;
+  }
+  return `<div id="${id}" class="${classes}">\n${heading}\n${body}\n</div>`;
 }
