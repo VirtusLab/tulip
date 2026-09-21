@@ -277,7 +277,10 @@ main img {
    centering either way. */
 main pre.mermaid {
   display: flex;
-  justify-content: center;
+  /* `safe`: an svg that overflows the block (app.js's fitDiagram floors its scale) aligns to
+     the start instead — a centered overflowing item is clipped on both sides and its left part
+     can't be scrolled to. */
+  justify-content: safe center;
   /* An explicit width, not just max-width: the svg inside sizes with `width: 100%`, so a flex
      container left to shrink-wrap would collapse to the svg's tiny min-content and the percentage
      would resolve against that (the diagram stayed tiny). A definite width gives the percentage
@@ -287,15 +290,11 @@ main pre.mermaid {
   justify-self: center;
 }
 
-/* A diagram wider than the 900px block (app.js's fitDiagram adds the class) gets the whole
-   column before it has to scale down; app.js also floors the scale, so a very wide one scrolls
-   sideways instead of shrinking to illegibility. */
+/* A diagram whose scale floor would overflow the block (app.js's fitDiagram adds the class)
+   gets the whole column before it has to scroll. */
 main pre.mermaid.mermaid-wide {
   width: 100%;
   max-width: 100%;
-  /* Not centered: a centered flex item that overflows is clipped on both sides and its left
-     part can't be scrolled to. */
-  justify-content: flex-start;
 }
 
 /* Mermaid's `useMaxWidth` default caps each rendered svg at its natural width via an inline

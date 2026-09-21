@@ -90,6 +90,15 @@ mermaid's `fontSize` theme variable from the page's computed body font size, so 
 equal if the body font changes. A diagram wider than the block still scales down to fit (mermaid's
 `useMaxWidth` behavior), preferred over sideways scrolling in prose.
 
+## Amendment: a readability floor for wide diagrams
+
+The amendment above preferred scaling a wide diagram down over sideways scrolling. Unbounded, that
+made a two-flow diagram unreadable. `app.js` now keeps each svg at no less than 70% of its natural
+width; a diagram whose floor would not fit its block gets the whole column (`mermaid-wide`) and
+then scrolls sideways. The block uses `justify-content: safe center`, since a centered flex item
+that overflows cannot be scrolled to its left edge. The explain prompt asks for narrow, top-down
+diagrams so this stays the exception.
+
 ## References
 
 - ADR 0009 (rendering fixes batch 2) — the mermaid-centering attempt this ADR replaces, and the

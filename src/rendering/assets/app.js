@@ -136,18 +136,21 @@
   // natural size the text stops being readable, so the svg keeps at least this much and the
   // block scrolls sideways instead.
   var MIN_DIAGRAM_SCALE = 0.7;
-  // style.css caps a diagram block at this width; a wider diagram gets the whole column.
-  var DIAGRAM_BLOCK_WIDTH_PX = 900;
 
   // Mermaid reports a diagram's natural width as an inline `max-width` on the svg it inserts.
+  // The wide class is cleared before measuring, so the block is measured at its normal width on
+  // every render and a theme toggle can't flip the decision.
   function fitDiagram(node) {
+    node.classList.remove("mermaid-wide");
     var svg = node.querySelector("svg");
     var natural = svg ? parseFloat(svg.style.maxWidth) : NaN;
     if (!(natural > 0)) {
       return;
     }
-    node.classList.toggle("mermaid-wide", natural > DIAGRAM_BLOCK_WIDTH_PX);
-    svg.style.minWidth = `${Math.round(natural * MIN_DIAGRAM_SCALE)}px`;
+    var floor = Math.round(natural * MIN_DIAGRAM_SCALE);
+    svg.style.minWidth = `${floor}px`;
+    // The floor would overflow the block: give the diagram the whole column first.
+    node.classList.toggle("mermaid-wide", floor > node.clientWidth);
   }
 
   // Mermaid replaces each `.mermaid` element's content with rendered SVG in place, so a
