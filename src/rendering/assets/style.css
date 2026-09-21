@@ -287,6 +287,17 @@ main pre.mermaid {
   justify-self: center;
 }
 
+/* A diagram wider than the 900px block (app.js's fitDiagram adds the class) gets the whole
+   column before it has to scale down; app.js also floors the scale, so a very wide one scrolls
+   sideways instead of shrinking to illegibility. */
+main pre.mermaid.mermaid-wide {
+  width: 100%;
+  max-width: 100%;
+  /* Not centered: a centered flex item that overflows is clipped on both sides and its left
+     part can't be scrolled to. */
+  justify-content: flex-start;
+}
+
 /* Mermaid's `useMaxWidth` default caps each rendered svg at its natural width via an inline
    `max-width`, and at that width the diagram's text is the body font size (app.js sets mermaid's
    fontSize from it). Nothing here overrides the cap: an earlier `max-width: none !important`

@@ -36,6 +36,10 @@ describe("style.css", () => {
     expect(css).not.toMatch(/\bbody\s*\{[^}]*overflow-x:\s*auto/);
   });
 
+  it("lets a wide diagram's block use the full column", () => {
+    expect(css).toMatch(/pre\.mermaid\.mermaid-wide\s*\{[^}]*max-width:\s*100%/);
+  });
+
   it("styles gap rows and their inline buttons", () => {
     expect(css).toMatch(/\.snippet-table \.snippet-gap td\s*\{[^}]*text-align:\s*center/);
     expect(css).toMatch(/\.snippet-gap-btn\s*\{/);
