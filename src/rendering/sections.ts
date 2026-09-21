@@ -1,3 +1,5 @@
+import { findFences } from "./fences.js";
+
 /** Which heading family a subsection's text matched (docs/adr/0022): `test` and `docs` for the
  * headings the explaining prompt reserves, `main` for anything else. */
 export type SubsectionKind = "main" | "test" | "docs";
@@ -18,12 +20,11 @@ export interface CategorySections {
   subsections: CategorySubsection[];
 }
 
-// The mandatory blank after `##` is what keeps `###` from matching. Greedy, single-quantifier
-// patterns only: the model's output is untrusted, and a lazy group before a trailing quantifier
-// backtracks quadratically on a long line.
-const H2_PATTERN = /^##[ \t]+(.+)$/;
-// CommonMark allows a fence to be indented by up to three spaces.
-const FENCE_PATTERN = /^[ \t]{0,3}(`{3,}|~{3,})/;
+// The mandatory blank after `##` is what keeps `###` from matching; the tail is optional so a
+// bare `##` is seen too, and blanked below rather than left to render as an empty heading.
+// Greedy, single-quantifier patterns only: the model's output is untrusted, and a lazy group
+// before a trailing quantifier backtracks quadratically on a long line.
+const H2_PATTERN = /^##([ \t].*)?$/gm;
 
 // Keys are lowercase. "test code" is the pre-ADR-0003 heading, kept because it costs nothing.
 const KIND_BY_HEADING = new Map<string, SubsectionKind>([
@@ -39,20 +40,24 @@ const KIND_BY_HEADING = new Map<string, SubsectionKind>([
  * Splits a category's explanation markdown at every own-line `## ` heading outside a fenced code
  * block. `#` and `###` headings never split. Test and docs headings are recognized through a
  * short synonym list so a drifted heading still folds; anything else is a main section under
- * its own name.
+ * its own name. A `## ` line with no text left after cleaning is blanked out of the returned
+ * markdown, so it renders as nothing.
  */
 export function splitCategoryMarkdown(markdown: string): CategorySections {
-  const headings = findHeadings(markdown);
+  // Two passes, each scanning fences afresh: blanking only empties lines that are already
+  // outside every fence, so it cannot move a fence boundary the second pass would see.
+  const blanked = blankEmptyHeadings(markdown);
+  const headings = findHeadings(blanked);
   const first = headings[0];
   if (!first) {
-    return { intro: markdown, subsections: [] };
+    return { intro: blanked, subsections: [] };
   }
   const subsections = headings.map((heading, i) => ({
     kind: KIND_BY_HEADING.get(heading.text.toLowerCase()) ?? "main",
     heading: heading.text,
-    markdown: markdown.slice(heading.bodyStart, headings[i + 1]?.index ?? markdown.length),
+    markdown: blanked.slice(heading.bodyStart, headings[i + 1]?.index ?? blanked.length),
   }));
-  return { intro: markdown.slice(0, first.index), subsections };
+  return { intro: blanked.slice(0, first.index), subsections };
 }
 
 interface HeadingMatch {
@@ -63,34 +68,57 @@ interface HeadingMatch {
   text: string;
 }
 
-/** Own-line `## ` headings with their character offsets, skipping fenced code blocks (the model
- * quotes markdown and diffs, and a `## ` line inside a quoted block must not split anything). */
+/** Empties every `##` line that cleans to nothing — `##`, `## `, `## ###`. Such a line names no
+ * section, and left alone it reaches the renderer as prose and shows up as an empty `<h2>`. The
+ * line is kept, blank, rather than removed: joining its neighbours could make the one above a
+ * setext heading. */
+function blankEmptyHeadings(markdown: string): string {
+  let blanked = "";
+  let copiedTo = 0;
+  for (const match of headingMatches(markdown)) {
+    if (cleanHeading(match[1] ?? "") !== "") {
+      continue;
+    }
+    // `$` stops before a CRLF line's `\r`, so the `\r` is outside the match and survives —
+    // dropping it would leave the document with one lone LF.
+    blanked += markdown.slice(copiedTo, match.index);
+    copiedTo = match.index + match[0].length;
+  }
+  return blanked + markdown.slice(copiedTo);
+}
+
+/** Own-line `## ` headings with their character offsets into `markdown`. */
 function findHeadings(markdown: string): HeadingMatch[] {
   const headings: HeadingMatch[] = [];
-  let offset = 0;
-  let openFence: string | undefined;
-  for (const rawLine of markdown.split("\n")) {
-    // Matched without the `\r`, measured with it, so offsets stay right for CRLF input.
-    const line = rawLine.replace(/\r$/, "");
-    const fence = FENCE_PATTERN.exec(line)?.[1];
-    if (openFence !== undefined) {
-      if (fence?.startsWith(openFence)) {
-        openFence = undefined;
-      }
-    } else if (fence) {
-      openFence = fence;
-    } else {
-      const text = H2_PATTERN.exec(line)?.[1];
-      if (text !== undefined) {
-        const clean = cleanHeading(text);
-        if (clean !== "") {
-          headings.push({ index: offset, bodyStart: offset + rawLine.length, text: clean });
-        }
-      }
+  for (const match of headingMatches(markdown)) {
+    const text = cleanHeading(match[1] ?? "");
+    if (text) {
+      // `$` stops before a CRLF line's `\r`, so step over it: the heading line owns its `\r`,
+      // and every body starts at the newline.
+      const lineEnd = match.index + match[0].length;
+      const bodyStart = markdown[lineEnd] === "\r" ? lineEnd + 1 : lineEnd;
+      headings.push({ index: match.index, bodyStart, text });
     }
-    offset += rawLine.length + 1;
   }
   return headings;
+}
+
+/** Every own-line `##` match outside a fenced code block: the model quotes markdown and diffs,
+ * and a `## ` line inside a quoted block must not split anything. */
+function* headingMatches(markdown: string): Generator<RegExpExecArray> {
+  const fences = findFences(markdown);
+  let fenceIndex = 0;
+  for (const match of markdown.matchAll(H2_PATTERN)) {
+    // Fences and matches are both in document order, so one cursor walks them together.
+    let fence = fences[fenceIndex];
+    while (fence && fence.end <= match.index) {
+      fenceIndex++;
+      fence = fences[fenceIndex];
+    }
+    if (fence === undefined || match.index < fence.start) {
+      yield match;
+    }
+  }
 }
 
 /** Strips a closed-ATX tail (`## Tests ##`) and a trailing colon (`## Tests:`). The `#`s must

@@ -1,31 +1,22 @@
 import { escapeHtml } from "./escape.js";
+import { findFences } from "./fences.js";
 
-/** One ```mermaid fenced code block found in a markdown string, with its exact character span
- * (including the fence markers) so a renderer can splice a diagram placeholder in its place. */
+/** One mermaid fenced code block found in a markdown string — backtick or tilde, three or more,
+ * indented by up to three spaces — with its exact character span (including the fence markers)
+ * so a renderer can splice a diagram placeholder in its place. */
 export interface MermaidFenceMatch {
   source: string;
   start: number;
   end: number;
 }
 
-// Mirrors marked's own fenced-code-block recognition for the "mermaid" language tag: the
-// fence markers must each be alone on their line.
-const MERMAID_FENCE_PATTERN = /^```mermaid[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gm;
-
-/** Finds every ```mermaid fenced code block in `markdown`, in document order. */
+/** Finds every mermaid fenced code block in `markdown`, in document order: every fence (see
+ * ./fences.ts) whose info string is exactly "mermaid". A fence nested inside a longer one is
+ * part of that block's content, so a quoted mermaid fence is not a diagram. */
 export function findMermaidFences(markdown: string): MermaidFenceMatch[] {
-  const matches: MermaidFenceMatch[] = [];
-  for (const match of markdown.matchAll(MERMAID_FENCE_PATTERN)) {
-    if (match.index === undefined) {
-      continue;
-    }
-    matches.push({
-      source: match[1] ?? "",
-      start: match.index,
-      end: match.index + match[0].length,
-    });
-  }
-  return matches;
+  return findFences(markdown)
+    .filter((fence) => fence.info === "mermaid")
+    .map((fence) => ({ source: fence.content, start: fence.start, end: fence.end }));
 }
 
 /**

@@ -70,6 +70,22 @@ describe("splitCategoryMarkdown", () => {
     expect(result.intro).toContain("## Nor this");
   });
 
+  // Blanked rather than removed: joining the neighbours would make "Intro" a setext heading.
+  it.each(["## ###", "##", "## "])("blanks a %s line that names nothing, keeping the line", (h) => {
+    const result = splitCategoryMarkdown(`Intro\n${h}\n---\n`);
+    expect(result.subsections).toEqual([]);
+    expect(result.intro).toBe("Intro\n\n---\n");
+  });
+
+  it("keeps the blanked line's \\r on CRLF input", () => {
+    expect(splitCategoryMarkdown("Intro\r\n## ###\r\n---\r\n").intro).toBe("Intro\r\n\r\n---\r\n");
+  });
+
+  it("splits on a heading that immediately follows a closing fence", () => {
+    const result = splitCategoryMarkdown("```\n## Quoted\n```\n## Tests\n\nT\n");
+    expect(result.subsections.map((s) => s.heading)).toEqual(["Tests"]);
+  });
+
   it("does not match a heading that isn't on its own line", () => {
     const result = splitCategoryMarkdown("Some text ## Tests more text\n");
     expect(result.subsections).toEqual([]);

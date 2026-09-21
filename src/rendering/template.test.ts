@@ -126,6 +126,21 @@ describe("renderPage", () => {
     expect(subsection?.parentNode).toBe(category);
   });
 
+  it("renders no empty heading for a ## line that names nothing", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [explanation({ markdown: "Intro.\n\n## ###\n\nMore.\n" })],
+    });
+    const root = parse(html);
+    // The count too, so this can't pass on a page that happens to have no headings at all.
+    const headings = root.querySelectorAll("h2").map((h) => h.text.trim());
+    expect(headings).toHaveLength(2);
+    expect(headings).not.toContain("");
+  });
+
   it("renders one section per category, in given order", () => {
     const html = renderPage({
       prTitle: "t",

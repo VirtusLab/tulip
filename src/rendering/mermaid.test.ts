@@ -23,6 +23,15 @@ describe("findMermaidFences", () => {
     expect(findMermaidFences(markdown)).toEqual([]);
   });
 
+  it("finds a tilde-fenced mermaid block", () => {
+    const matches = findMermaidFences("~~~mermaid\ngraph TD\nA --> B\n~~~\n");
+    expect(matches.map((m) => m.source)).toEqual(["graph TD\nA --> B"]);
+  });
+
+  it("ignores a mermaid fence quoted inside a longer fence", () => {
+    expect(findMermaidFences("````markdown\n```mermaid\ngraph TD\n```\n````\n")).toEqual([]);
+  });
+
   it("returns nothing when there are no fences", () => {
     expect(findMermaidFences("just prose")).toEqual([]);
   });
