@@ -72,22 +72,39 @@ regardless of rating; see "Trigger vs. rating" below), not whether a change is s
 tight rating you fold a snippet, not drop it.
 
 Structure it top-down. Open, before any snippet, with the big picture: in a few sentences, what
-this category does as a whole and how the changed pieces fit together. Where the flow of calls
-is worth a picture, put an orienting diagram here — a call-sequence or flow/architecture diagram,
-before/after wherever the flow changed — so the reviewer grasps the shape before the parts. Keep
-this a lead-in, not its own "## " section. ONLY THEN drill into the individual changes: for each,
-lead with its interface in prose — name, parameters, return type, what it promises, and what its
-body does at a high level (a sentence, a short numbered list, or pseudocode often carries this
-better than the code, especially for a large method) — then its code. Point back to the overview
-for how a change fits rather than re-narrating the flow, and never lead with a low-level detail
-the reviewer can't yet place. Scale both the overview and the per-change prose to the rating — a
-sentence or two for a Skim or single-file category, and no diagram when the flow is trivial. The
-first diagram orients the whole category; later ones illustrate a specific mechanism.
+this category does as a whole and how the changed pieces fit together. Where a picture carries
+that shape better than prose, put an orienting diagram here (kind per "Choosing a diagram"
+below), so the reviewer grasps the shape before the parts. Keep this a lead-in, not its own
+"## " section. ONLY THEN drill into the individual changes: for each, lead with its interface in
+prose — name, parameters, return type, what it promises, and what its body does at a high level
+(a sentence, a short numbered list, or pseudocode often carries this better than the code,
+especially for a large method) — then its code. Point back to the overview for how a change fits
+rather than re-narrating the flow, and never lead with a low-level detail the reviewer can't yet
+place. Scale both the overview and the per-change prose to the rating — a sentence or two for
+a Skim or single-file category, and no diagram when the shape is trivial. The first diagram
+orients the whole category; later ones illustrate a specific mechanism.
+
+Choosing a diagram: pick the kind by what changed, not by habit.
+- new modules or packages, or new imports between them — a dependency graph: `flowchart TD`, a
+  node per module, an edge per import, limited to the modules the PR touches and their direct
+  neighbours. Mark added modules with `classDef added stroke-width:3px` (a stroke, not a colour —
+  the page has a dark theme) and added imports with a thick link `==>`. Group by package with
+  subgraphs only when more than one package is involved, chained with `~~~` so they stack.
+- data parsed, transformed, or handed through stages — a data-flow diagram: a flowchart whose
+  nodes are the steps and whose edge labels name the data passed along.
+- branching logic or a reworked algorithm — a flowchart of the control flow.
+- new or reworked types, interfaces, or hierarchies — a `classDiagram` of the types and their
+  relations, with members only where they matter.
+- a lifecycle, status field, retry loop, or other state machine — a `stateDiagram-v2`.
+- database schema or migration changes — an `erDiagram`.
+- the order of calls between components, when that order is the point — a `sequenceDiagram`.
+For any kind, draw before and after only where the shape changed. Use only these kinds.
 
 A diagram must fit the width of the surrounding text without scrolling. Lay flowcharts out
 top-down (`flowchart TD`); stack before/after or alternative subgraphs under each other, never
-side by side; keep at most five nodes across, and at most five participants in a sequence
-diagram. Split anything wider into two diagrams.
+side by side; keep at most five nodes across in a flowchart or state diagram, three classes or
+entities across, and five participants in a sequence diagram. Split anything wider into two
+diagrams.
 
 Write "## ..." sections only for facets that have something to explain:
 - a section on the main change — name it for what it covers, not "production";
