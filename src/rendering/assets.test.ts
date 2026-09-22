@@ -146,11 +146,13 @@ describe("style.css", () => {
 describe("app.js", () => {
   const js = readAsset("app.js");
 
-  it("wires up highlight.js via its safe, escaping element API", () => {
+  it("wires up highlight.js via its escaping APIs only", () => {
     expect(js).toContain("window.hljs.highlightElement");
-    // Never hand raw/untrusted text to innerHTML directly — highlight.js's own safe API does
-    // that internally, from the element's already-escaped textContent.
-    expect(js).not.toMatch(/\.innerHTML\s*=\s*(?!"")[a-zA-Z_]/);
+    expect(js).toContain("window.hljs.highlight(text,");
+    // Never hand raw/untrusted text to innerHTML: the one write is highlight.js's own output,
+    // which escapes all text, split per diff cell.
+    expect(js.match(/\.innerHTML\s*=/g)).toHaveLength(1);
+    expect(js).toContain('code.innerHTML = lines[index] ?? ""');
   });
 
   it("re-highlights rows inserted by a gap expansion", () => {
@@ -164,9 +166,10 @@ describe("app.js", () => {
     expect(js).toContain("window.hljs.getLanguage(lang)");
   });
 
-  it("skips highlighting a pathologically large code cell", () => {
+  it("skips highlighting a pathologically large prose block or diff run", () => {
     expect(js).toMatch(/MAX_HIGHLIGHT_CHARS\s*=\s*\d+/);
     expect(js).toMatch(/textContent\.length\s*>\s*MAX_HIGHLIGHT_CHARS/);
+    expect(js).toMatch(/text\.length\s*>\s*MAX_HIGHLIGHT_CHARS/);
   });
 
   it("references no external network resources", () => {

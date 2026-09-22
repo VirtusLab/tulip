@@ -447,18 +447,20 @@
   }
 
   // Syntax highlighting (task: highlighting.md). Runs client-side, against text the server (or
-  // ./renderSnippetRow above) already HTML-escaped into `<code>` elements — highlight.js's
-  // `highlightElement` reads the element's plain-text content (`textContent`, which the browser
-  // has already unescaped back to the raw string) and rewrites the element's markup itself,
-  // re-escaping everything it emits. Nothing here ever assigns raw/untrusted text to
-  // `innerHTML` — that's what keeps this safe against a malicious PR's file content, no matter
-  // what it contains (see snippets.test.ts / template.test.ts's XSS cases, and this file's own
-  // safety test in highlight-safety.test.ts).
-  // A pathological single line (e.g. a minified/generated file) shouldn't jank the local
-  // viewer just because it happens to be in a diff — highlight.js's own tokenizing cost grows
-  // with input size, and this all runs on the main thread. Leaves the (already-safe, escaped)
-  // plain text as-is past this length rather than highlighting it.
-  var MAX_HIGHLIGHT_CHARS = 20000;
+  // ./renderSnippetRow above) already HTML-escaped into `<code>` elements. Nothing here ever
+  // assigns raw/untrusted text to `innerHTML` — that's what keeps this safe against a malicious
+  // PR's file content, no matter what it contains. Prose blocks go through highlight.js's
+  // `highlightElement`, which reads the element's plain text (`textContent`, already unescaped
+  // by the browser) and rewrites its markup itself, re-escaping everything it emits. Diff cells
+  // get the `.value` of `hljs.highlight`, which escapes every character of text in the same
+  // way; `splitHighlightedLines` below only re-emits the tags highlight.js produced. (See
+  // snippets.test.ts / template.test.ts's XSS cases, highlight-safety.test.ts and
+  // highlight-runs.test.ts.)
+  // highlight.js's tokenizing cost grows with input size, and this all runs on the main thread,
+  // so a pathological input (a minified/generated file in a diff, or a whole file revealed by
+  // gap expansion) is left as plain, already-escaped text past this length. The limit applies to
+  // a whole run of diff lines at once, hence far above any single line's plausible length.
+  var MAX_HIGHLIGHT_CHARS = 200000;
 
   function highlightElementSafely(code, lang) {
     if (!window.hljs || !lang || !window.hljs.getLanguage(lang)) {
@@ -475,21 +477,100 @@
     }
   }
 
-  // Highlights a `{{snippet}}` diff block's code cells (task 7.3's `.snippet`, see
-  // ./snippets.ts) using the language ./snippets.ts guessed from the file path and recorded on
-  // the container as `data-lang`. `:not([data-highlighted])` scopes this to cells highlight.js
-  // hasn't already processed, so calling it again after a gap row is expanded (see
-  // setupSnippetExpansion) only touches the newly-inserted rows.
-  function highlightSnippetContainer(container) {
-    var lang = container.getAttribute("data-lang");
-    if (!lang) {
+  // `hljs.highlight`'s output holds only `<span class="…">`, `</span>`, newlines and escaped
+  // text, so it can be cut at each newline: spans open at the cut are closed there and re-opened
+  // on the next line, leaving every line a self-contained fragment.
+  function splitHighlightedLines(value) {
+    var lines = [];
+    var open = [];
+    var current = "";
+    var tokens = /<span[^>]*>|<\/span>|\n|[^<\n]+|</g;
+    var match = tokens.exec(value);
+    while (match) {
+      const token = match[0];
+      if (token === "\n") {
+        current += "</span>".repeat(open.length);
+        lines.push(current);
+        current = open.join("");
+      } else if (token === "</span>") {
+        open.pop();
+        current += token;
+      } else if (token.charAt(0) === "<") {
+        open.push(token);
+        current += token;
+      } else {
+        current += token;
+      }
+      match = tokens.exec(value);
+    }
+    lines.push(current);
+    return lines;
+  }
+
+  // One side's code cells between gap rows, in document order: the side's text is contiguous
+  // there. A blank cell (no `type-*` class: this side has no line at that row) is skipped
+  // without breaking the run.
+  function sideRuns(container, side) {
+    var runs = [];
+    var run = [];
+    container.querySelectorAll("tr").forEach((row) => {
+      if (row.classList.contains("snippet-gap")) {
+        if (run.length > 0) {
+          runs.push(run);
+        }
+        run = [];
+        return;
+      }
+      var cell = row.querySelector(`.snippet-cell-${side}`);
+      var code = cell ? cell.querySelector("code") : null;
+      if (code && /(^| )type-/.test(cell.className)) {
+        run.push(code);
+      }
+    });
+    if (run.length > 0) {
+      runs.push(run);
+    }
+    return runs;
+  }
+
+  // Highlights a run as one text, so a construct spanning lines (a block comment, a template
+  // string) keeps its state from cell to cell. Already-highlighted cells are redone with the
+  // rest: rows revealed by a gap expansion can change what the rows below them are.
+  function highlightRun(codes, lang) {
+    var text = codes.map((code) => code.textContent).join("\n");
+    if (text.length > MAX_HIGHLIGHT_CHARS) {
       return;
     }
-    var codes = container.querySelectorAll(
-      ".snippet-cell-base code:not([data-highlighted]), .snippet-cell-head code:not([data-highlighted])",
-    );
-    codes.forEach((code) => {
-      highlightElementSafely(code, lang);
+    var lines;
+    try {
+      const result = window.hljs.highlight(text, { language: lang, ignoreIllegals: true });
+      lines = splitHighlightedLines(result.value);
+    } catch (_e) {
+      // Leave the (already-safe, escaped) plain text as-is on any highlighter failure.
+      return;
+    }
+    codes.forEach((code, index) => {
+      code.innerHTML = lines[index] ?? "";
+      code.classList.add("hljs", `language-${lang}`);
+      code.dataset.highlighted = "yes";
+    });
+  }
+
+  // Highlights a `{{snippet}}` diff block's code cells (see ./snippets.ts), per side and per
+  // run, in the language ./snippets.ts guessed from the file path (`data-lang`). A run with no
+  // new cell is left alone, so calling this again after a gap expansion (setupSnippetExpansion)
+  // only touches the runs that expansion changed.
+  function highlightSnippetContainer(container) {
+    var lang = container.getAttribute("data-lang");
+    if (!window.hljs || !lang || !window.hljs.getLanguage(lang)) {
+      return;
+    }
+    ["base", "head"].forEach((side) => {
+      sideRuns(container, side).forEach((codes) => {
+        if (codes.some((code) => !code.hasAttribute("data-highlighted"))) {
+          highlightRun(codes, lang);
+        }
+      });
     });
   }
 
