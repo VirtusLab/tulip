@@ -1,4 +1,6 @@
 import { config } from "../config.js";
+import { formatDuration } from "../logging/duration.js";
+import type { Logger } from "../logging/logger.js";
 import { claudeConcurrencyLimiter } from "./concurrency.js";
 import { ClaudeOutputError } from "./errors.js";
 import { type ClaudeProcessRunner, runClaudeProcess } from "./exec.js";
@@ -19,6 +21,8 @@ export interface ClaudeEnvelope {
   structured_output?: unknown;
   total_cost_usd?: number;
   usage?: unknown;
+  num_turns?: number;
+  duration_ms?: number;
   [key: string]: unknown;
 }
 
@@ -46,6 +50,9 @@ export interface RunnerDeps {
   /** Collects per-model token usage across the run for the end-of-run summary (see
    * src/claude/usage.ts). When set, every `claude` invocation (including retries) is recorded. */
   usage?: UsageLedger;
+  /** The pipeline's logger, threaded to every phase so progress lines share one sink. Modules
+   * fall back to `createLogger()` when absent; the runner itself only logs at debug level. */
+  logger?: Logger;
 }
 
 const RETRY_PREFIX = "Your previous reply did not parse as JSON matching the required schema";
@@ -64,6 +71,7 @@ export async function invokeClaude<T = unknown>(
 
   const first = await execute(invocation, runProcess, deps.cwd);
   deps.usage?.record(invocation, first);
+  logCall(invocation, first, deps.logger);
   const firstAttempt = extractStructuredOutput<T>(first, invocation.schema);
   if (firstAttempt.ok) {
     return { result: firstAttempt.value, sessionId: first.session_id, envelope: first };
@@ -76,6 +84,7 @@ export async function invokeClaude<T = unknown>(
   };
   const second = await execute(retry, runProcess, deps.cwd);
   deps.usage?.record(retry, second);
+  logCall(retry, second, deps.logger);
   const secondAttempt = extractStructuredOutput<T>(second, invocation.schema);
   if (secondAttempt.ok) {
     return { result: secondAttempt.value, sessionId: second.session_id, envelope: second };
@@ -84,6 +93,22 @@ export async function invokeClaude<T = unknown>(
   throw new ClaudeOutputError(
     `claude's structured output was still invalid after a retry: ${secondAttempt.error}`,
   );
+}
+
+/** `--verbose` trace of one finished call. `num_turns`/`duration_ms` aren't part of the CLI's
+ * documented envelope, so a missing one prints as `?` rather than being assumed. */
+function logCall(
+  invocation: ClaudeInvocation,
+  envelope: ClaudeEnvelope,
+  logger: Logger | undefined,
+): void {
+  if (!logger) {
+    return;
+  }
+  const label = invocation.model ?? "resume";
+  const turns = envelope.num_turns ?? "?";
+  const duration = envelope.duration_ms === undefined ? "?" : formatDuration(envelope.duration_ms);
+  logger.debug(`claude ${label}: ${turns} turn(s), ${duration}`);
 }
 
 /**

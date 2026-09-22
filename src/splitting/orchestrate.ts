@@ -4,7 +4,7 @@ import type { RunnerDeps } from "../claude/runner.js";
 import { runSession } from "../claude/session.js";
 import { config } from "../config.js";
 import { changeDiffLines, type ParsedDiff } from "../diff/change.js";
-import { createLogger, type Logger } from "../logging/logger.js";
+import { createLogger } from "../logging/logger.js";
 import { buildPartition, isSplitCandidate } from "./partition.js";
 import { buildSplitPrompt, type SplitCandidate } from "./prompt.js";
 import { SPLIT_SCHEMA, type SplitBoundary, type SplitResponse } from "./wire.js";
@@ -15,10 +15,7 @@ export interface SplitLargeChangesInput {
   categories: Category[];
 }
 
-export interface SplitLargeChangesDeps extends RunnerDeps {
-  /** Defaults to a fresh non-verbose logger. Used only for the fail-soft warning below. */
-  logger?: Logger;
-}
+export type SplitLargeChangesDeps = RunnerDeps;
 
 /** Full diff text of a candidate, the size unit its batches are bounded by. */
 function diffTextSize(candidate: SplitCandidate): number {
@@ -49,6 +46,7 @@ export async function splitLargeChanges(
       .map((change) => ({ change, status: file.status })),
   );
   if (candidates.length === 0) {
+    logger.info(`no changes above the split threshold (${config.limits.splitThreshold} lines)`);
     return input.diff;
   }
 
@@ -58,6 +56,7 @@ export async function splitLargeChanges(
     config.limits.maxSplitBatchDiffChars,
     diffTextSize,
   );
+  logger.info(`splitting ${candidates.length} large change(s) in ${batches.length} batch(es)...`);
 
   const boundariesByChange = new Map<string, SplitBoundary[]>();
   for (const batch of batches) {
@@ -83,12 +82,23 @@ export async function splitLargeChanges(
     }
   }
 
-  return {
-    files: input.diff.files.map((file) => ({
-      ...file,
-      changes: file.changes.flatMap((change) =>
-        buildPartition(change, boundariesByChange.get(change.id) ?? []),
-      ),
-    })),
-  };
+  // Counted while rebuilding: a candidate only counts as split if it actually produced > 1 piece,
+  // which depends on buildPartition's validation of the boundaries, not on the model's reply.
+  let splitCount = 0;
+  let pieceCount = 0;
+  const files = input.diff.files.map((file) => ({
+    ...file,
+    changes: file.changes.flatMap((change) => {
+      const pieces = buildPartition(change, boundariesByChange.get(change.id) ?? []);
+      if (pieces.length > 1) {
+        splitCount++;
+        pieceCount += pieces.length;
+      }
+      return pieces;
+    }),
+  }));
+  logger.info(
+    `split ${splitCount} of ${candidates.length} large change(s) into ${pieceCount} pieces`,
+  );
+  return { files };
 }

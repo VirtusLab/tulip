@@ -1,4 +1,5 @@
 import { type CategoryChangeSet, type ChangeOwner, isPrimary } from "../classification/group.js";
+import { startTimer } from "../logging/duration.js";
 import { createLogger } from "../logging/logger.js";
 import type { CategoryFile } from "../rendering/file-tree.js";
 import { verifySnippetCoverage } from "./coverage.js";
@@ -119,7 +120,9 @@ async function explainOneCategory(
     isPrimary(input.changeOwners, change.id, set.category.id),
   );
 
-  logger.info(`explaining category "${set.category.name}"...`);
+  const changeCount = set.production.length + set.test.length;
+  logger.info(`explaining category "${set.category.name}" (${changeCount} change(s))...`);
+  const elapsed = startTimer();
 
   try {
     const generated = await explainCategory(
@@ -141,6 +144,7 @@ async function explainOneCategory(
       generated.markdown,
       generated.sessionId,
       primaryChanges,
+      set.category.name,
       deps,
     );
 
@@ -161,7 +165,7 @@ async function explainOneCategory(
       deps,
     );
 
-    logger.info(`finished explaining category "${set.category.name}"`);
+    logger.info(`finished explaining category "${set.category.name}" in ${elapsed()}`);
     return { category: set.category, markdown: verified.markdown, files: primaryFiles(input, set) };
   } catch (error) {
     throw new CategoryExplanationError(set.category.name, error);

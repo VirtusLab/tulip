@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClaudeProcessResult } from "../claude/exec.js";
 import { config } from "../config.js";
+import { createLogger } from "../logging/logger.js";
 import type { ResolvedChange } from "./classify.js";
 import { type ClassificationState, resolveNoneClassifications } from "./escape-hatch.js";
 import type { ClassifiableChange } from "./types.js";
@@ -134,6 +135,57 @@ describe("resolveNoneClassifications", () => {
     expect(state.acceptedNewCategories).toBe(1);
     expect(state.phase1SessionId).toBe("phase1-session-2");
     expect(state.classifierSessionId).toBe("classifier-session-2");
+  });
+
+  it("logs the consultation and each genuinely new category it accepts", async () => {
+    const resolved = new Map<string, ResolvedChange>([
+      [
+        "c1",
+        {
+          kind: "none",
+          suggestedCategory: {
+            name: "Metrics",
+            description: "Adds counters.",
+            attention: "normal",
+          },
+          existingAssignments: [],
+        },
+      ],
+    ]);
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+      call++;
+      if (call === 1) {
+        return envelope(
+          {
+            accept: true,
+            category: { name: "Metrics", description: "Adds counters.", attention: "normal" },
+          },
+          "phase1-session-2",
+        );
+      }
+      return envelope(
+        {
+          classifications: [
+            { changeId: "c1", assignments: [{ category: "c2", codeType: "production" }] },
+          ],
+        },
+        "classifier-session-2",
+      );
+    });
+    const write = vi.fn();
+
+    await resolveNoneClassifications(resolved, new Map([["c1", change("c1")]]), baseState(), {
+      runClaudeProcess,
+      logger: createLogger({ write }),
+    });
+
+    expect(write.mock.calls.map((c) => String(c[0]))).toEqual([
+      expect.stringContaining(
+        "[INFO] 1 change(s) matched no category; consulting the category session...",
+      ),
+      expect.stringContaining('[INFO] accepted new category "Metrics"'),
+    ]);
   });
 
   it("defaults a newly accepted category's attention to 'normal', regardless of what the phase-1 reply says", async () => {

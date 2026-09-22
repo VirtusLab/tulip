@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Category } from "../categories/types.js";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import { createLogger } from "../logging/logger.js";
 import { type AfterBatchHook, classifyInBatches, resolveRawClassification } from "./classify.js";
 import type { ClassifiableChange } from "./types.js";
 import type { RawChangeClassification } from "./wire.js";
@@ -152,6 +153,49 @@ describe("classifyInBatches", () => {
     );
     expect(secondPrompt).toContain("New area");
     expect(secondPrompt).toContain("Escape-hatch addition.");
+  });
+
+  it("logs the batch count up front, then each batch's completion when there are several", async () => {
+    const changes = Array.from({ length: 25 }, (_, i) => change(`c${i}`));
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+      call++;
+      const batch = call === 1 ? changes.slice(0, 20) : changes.slice(20);
+      return envelope(
+        batch.map((c) => ({
+          changeId: c.id,
+          assignments: [{ category: "c1", codeType: "production" }],
+        })),
+      );
+    });
+    const write = vi.fn();
+
+    await classifyInBatches(CATEGORIES, changes, passThrough, {
+      runClaudeProcess,
+      logger: createLogger({ write }),
+    });
+
+    expect(write.mock.calls.map((c) => String(c[0]))).toEqual([
+      expect.stringContaining("[INFO] classifying 25 change(s) in 2 batch(es)..."),
+      expect.stringContaining("[INFO] classified batch 1/2"),
+      expect.stringContaining("[INFO] classified batch 2/2"),
+    ]);
+  });
+
+  it("does not log per-batch progress for a single batch", async () => {
+    const runClaudeProcess = vi.fn(async () =>
+      envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
+    );
+    const write = vi.fn();
+
+    await classifyInBatches(CATEGORIES, [change("c1")], passThrough, {
+      runClaudeProcess,
+      logger: createLogger({ write }),
+    });
+
+    expect(write.mock.calls.map((c) => String(c[0]))).toEqual([
+      expect.stringContaining("[INFO] classifying 1 change(s) in 1 batch(es)..."),
+    ]);
   });
 
   it("parses assignments, keyed by changeId", async () => {

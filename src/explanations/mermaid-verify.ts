@@ -15,10 +15,7 @@ const MAX_MERMAID_FIX_ATTEMPTS = config.limits.maxMermaidFixAttempts;
  * fence the browser would render as its own "Syntax error" box (docs/adr/0008). */
 const DEGRADED_DIAGRAM_NOTE = "> _(A diagram was omitted here because it failed to render.)_";
 
-export interface MermaidVerifyDeps extends RunnerDeps {
-  /** Defaults to a fresh non-verbose logger. Used to log validation/fix/degradation progress. */
-  logger?: Logger;
-}
+export type MermaidVerifyDeps = RunnerDeps;
 
 /**
  * Task 6.6/docs/adr/0008: validates every mermaid fence in `markdown` — backtick or tilde, three

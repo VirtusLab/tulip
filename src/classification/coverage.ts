@@ -2,6 +2,7 @@ import type { Category } from "../categories/types.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
+import { createLogger } from "../logging/logger.js";
 import { categoryIdsMatch } from "./category-match.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
 import { type ClassificationState, resolveNoneClassifications } from "./escape-hatch.js";
@@ -91,6 +92,7 @@ export async function verifyAndRepairCoverage(
   state: ClassificationState,
   deps: RunnerDeps = {},
 ): Promise<Map<string, ResolvedChange>> {
+  const logger = deps.logger ?? createLogger();
   let current = resolved;
 
   for (let attempt = 0; attempt < MAX_COVERAGE_REPAIR_ATTEMPTS; attempt++) {
@@ -98,6 +100,10 @@ export async function verifyAndRepairCoverage(
     if (missing.length === 0) {
       return current;
     }
+    logger.info(
+      `${missing.length} change(s) still unclassified; ` +
+        `repair attempt ${attempt + 1}/${MAX_COVERAGE_REPAIR_ATTEMPTS}`,
+    );
 
     const response = await resumeSession<ClassifyBatchResponse>(
       {

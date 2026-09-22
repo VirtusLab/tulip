@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { config } from "../config.js";
+import { createLogger } from "../logging/logger.js";
 import { ClaudeBinaryMissingError, ClaudeOutputError } from "./errors.js";
 import type { ClaudeProcessResult } from "./exec.js";
 import { type ClaudeInvocation, invokeClaude } from "./runner.js";
@@ -228,6 +229,38 @@ describe("invokeClaude", () => {
       ClaudeBinaryMissingError,
     );
     expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs each call's model, turn count and duration at debug level", async () => {
+    const runClaudeProcess = vi.fn(async () =>
+      processResult(envelope({ num_turns: 4, duration_ms: 63_000 })),
+    );
+    const write = vi.fn();
+    const logger = createLogger({ write, verbose: true });
+
+    await invokeClaude(BASE_INVOCATION, { runClaudeProcess, logger });
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(write.mock.calls[0]?.[0]).toMatch(/\[DEBUG\] claude sonnet: 4 turn\(s\), 1m3s$/);
+  });
+
+  it("logs the retry as a resume, printing ? for envelope fields the CLI omitted", async () => {
+    const runClaudeProcess = vi
+      .fn()
+      .mockResolvedValueOnce(
+        processResult(
+          envelope({ structured_output: { ok: "nope" }, num_turns: 1, duration_ms: 2_000 }),
+        ),
+      )
+      .mockResolvedValueOnce(processResult(envelope({ session_id: "session-2" })));
+    const write = vi.fn();
+    const logger = createLogger({ write, verbose: true });
+
+    await invokeClaude(BASE_INVOCATION, { runClaudeProcess, logger });
+
+    const lines = write.mock.calls.map((call) => String(call[0]));
+    expect(lines[0]).toMatch(/claude sonnet: 1 turn\(s\), 2s$/);
+    expect(lines[1]).toMatch(/claude resume: \? turn\(s\), \?$/);
   });
 
   it("never runs more than 3 claude processes concurrently", async () => {

@@ -3,6 +3,7 @@ import { ClaudeOutputError } from "../claude/errors.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession, runSession } from "../claude/session.js";
 import { config } from "../config.js";
+import { createLogger } from "../logging/logger.js";
 import { batchChanges } from "./batch.js";
 import { buildBatchClassifyPrompt, buildInitialClassifyPrompt } from "./prompt.js";
 import {
@@ -71,10 +72,19 @@ export async function classifyInBatches(
   afterBatch: AfterBatchHook,
   deps: RunnerDeps = {},
 ): Promise<BatchClassifyResult> {
+  const logger = deps.logger ?? createLogger();
   const [firstBatch, ...restBatches] = batchChanges(changes);
   if (!firstBatch) {
     throw new ClaudeOutputError("classifyInBatches was called with no changes to classify");
   }
+  const batchCount = restBatches.length + 1;
+  logger.info(`classifying ${changes.length} change(s) in ${batchCount} batch(es)...`);
+  // Per-batch progress is noise for the common single-batch PR.
+  const logBatchDone = (index: number) => {
+    if (batchCount > 1) {
+      logger.info(`classified batch ${index}/${batchCount}`);
+    }
+  };
 
   const firstResponse = await runSession<ClassifyBatchResponse>(
     {
@@ -90,8 +100,9 @@ export async function classifyInBatches(
   resolved = after.resolved;
   let sessionId = after.classifierSessionId;
   let currentCategories = after.categories;
+  logBatchDone(1);
 
-  for (const batch of restBatches) {
+  for (const [index, batch] of restBatches.entries()) {
     const response = await resumeSession<ClassifyBatchResponse>(
       {
         sessionId,
@@ -105,6 +116,7 @@ export async function classifyInBatches(
     resolved = after.resolved;
     sessionId = after.classifierSessionId;
     currentCategories = after.categories;
+    logBatchDone(index + 2);
   }
 
   return { sessionId, resolved, categories: currentCategories };

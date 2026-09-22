@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Category } from "../categories/types.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import { createLogger } from "../logging/logger.js";
 import type { ResolvedChange } from "./classify.js";
 import {
   findUncoveredChangeIds,
@@ -177,6 +178,36 @@ describe("verifyAndRepairCoverage", () => {
     });
     expect(runClaudeProcess).toHaveBeenCalledTimes(1);
     expect(state.classifierSessionId).toBe("classifier-session-2");
+  });
+
+  it("logs each repair attempt with the number of still-unclassified changes", async () => {
+    const changes = [change("c1"), change("c2")];
+    const changesById = new Map(changes.map((c) => [c.id, c]));
+    let call = 0;
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+      call++;
+      // First repair covers only c1; the second covers c2.
+      const changeId = call === 1 ? "c1" : "c2";
+      return envelope(
+        {
+          classifications: [
+            { changeId, assignments: [{ category: "c1", codeType: "production" }] },
+          ],
+        },
+        `classifier-session-${call}`,
+      );
+    });
+    const write = vi.fn();
+
+    await verifyAndRepairCoverage(changes, changesById, new Map(), baseState(), {
+      runClaudeProcess,
+      logger: createLogger({ write }),
+    });
+
+    expect(write.mock.calls.map((c) => String(c[0]))).toEqual([
+      expect.stringContaining("[INFO] 2 change(s) still unclassified; repair attempt 1/3"),
+      expect.stringContaining("[INFO] 1 change(s) still unclassified; repair attempt 2/3"),
+    ]);
   });
 
   it("treats a change assigned to an unknown category as uncovered and repairs it", async () => {

@@ -4,6 +4,7 @@ import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
 import type { ChangeSideContent } from "../diff/change.js";
+import { createLogger, type Logger } from "../logging/logger.js";
 import { categoryNamesMatch } from "./category-match.js";
 import { type ResolvedChange, resolveRawClassification } from "./classify.js";
 import { buildEscapeHatchResumePrompt, type EscapeHatchOutcome } from "./prompt.js";
@@ -55,8 +56,12 @@ export async function resolveNoneClassifications(
   if (noneChangeIds.length === 0) {
     return resolved;
   }
+  const logger = deps.logger ?? createLogger();
+  logger.info(
+    `${noneChangeIds.length} change(s) matched no category; consulting the category session...`,
+  );
 
-  const outcomes = await consultOnEach(noneChangeIds, resolved, changesById, state, deps);
+  const outcomes = await consultOnEach(noneChangeIds, resolved, changesById, state, logger, deps);
   const response = await resumeSession<ClassifyBatchResponse>(
     {
       sessionId: state.classifierSessionId,
@@ -86,6 +91,7 @@ async function consultOnEach(
   resolved: Map<string, ResolvedChange>,
   changesById: Map<string, ClassifiableChange>,
   state: ClassificationState,
+  logger: Logger,
   deps: RunnerDeps,
 ): Promise<EscapeHatchOutcome[]> {
   const outcomes: EscapeHatchOutcome[] = [];
@@ -143,6 +149,7 @@ async function consultOnEach(
         };
         state.categories = [...state.categories, acceptedCategory];
         state.acceptedNewCategories++;
+        logger.info(`accepted new category "${acceptedCategory.name}"`);
         outcomes.push({ change, accepted: true, category: acceptedCategory });
       }
     } else {
