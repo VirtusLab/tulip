@@ -516,8 +516,10 @@
   // rest: rows revealed by a gap expansion can change what the rows below them are.
   function highlightRun(codes, lang) {
     // A cell is one line by construction; the HTML parser turns a CRLF file's trailing `\r`
-    // into a newline, which would otherwise double the split.
-    var text = codes.map((code) => code.textContent.replace(/\n/g, "")).join("\n");
+    // into a newline, which would otherwise double the split. Only the trailing one is dropped:
+    // a `\r` inside a line also becomes a newline, and then the count check below leaves the
+    // run alone rather than silently joining what the cell displays.
+    var text = codes.map((code) => code.textContent.replace(/\n$/, "")).join("\n");
     if (text.length > MAX_RUN_HIGHLIGHT_CHARS) {
       return;
     }
