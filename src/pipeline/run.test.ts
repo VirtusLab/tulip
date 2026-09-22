@@ -3,6 +3,7 @@ import type { GenerateCategoriesResult } from "../categories/generate.js";
 import type { CategoryReviewLoopResult } from "../categories/review.js";
 import { IncompleteCoverageError } from "../classification/coverage.js";
 import type { ClassifyChangesResult } from "../classification/orchestrate.js";
+import type { ClassifiableChange } from "../classification/types.js";
 import { ClaudeBinaryMissingError, ClaudeOutputError } from "../claude/errors.js";
 import type { UsageLedger } from "../claude/usage.js";
 import type { ParsedDiff } from "../diff/change.js";
@@ -249,7 +250,7 @@ describe("run", () => {
         description: "Adds a greeting helper.",
         files: [{ path: "src/new.ts", status: "added" }],
       },
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
     );
     expect(deps.reviewAndAmendCategories).toHaveBeenCalledWith(
       {
@@ -261,7 +262,7 @@ describe("run", () => {
         ],
         generateSessionId: "s1",
       },
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
     );
     expect(deps.classifyChanges).toHaveBeenCalledWith(
       {
@@ -271,7 +272,7 @@ describe("run", () => {
         ],
         phase1SessionId: "s1",
       },
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
     );
     expect(deps.explainCategories).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -395,11 +396,66 @@ describe("run", () => {
     await run(options(), deps);
 
     const lines = infoLines(deps);
-    expect(lines.some((line) => line.includes("generated 1 categories: Greeting"))).toBe(true);
+    expect(lines).toContainEqual(
+      expect.stringMatching(/^generated 1 categories in \d+s: Greeting$/),
+    );
+    expect(lines).toContainEqual(
+      expect.stringMatching(/^categories after review \(\d+s\): Greeting$/),
+    );
     expect(lines.some((line) => line.includes("phase 1"))).toBe(true);
     expect(lines.some((line) => line.includes("phase 2"))).toBe(true);
-    expect(lines.some((line) => line.includes("phase 3"))).toBe(true);
+    expect(lines).toContain("phase 3: generating explanations for 1 categories...");
+    expect(lines).toContainEqual(
+      expect.stringMatching(/^generated explanations for 1 categories in \d+s$/),
+    );
     expect(lines.some((line) => line.includes("preparing output page"))).toBe(true);
+  });
+
+  it("summarizes classification: total, elapsed, per-category counts and the ignored count", async () => {
+    const deps = baseDeps();
+    const first = [...classificationResult().changesById.values()][0] as ClassifiableChange;
+    const second = { ...first, id: "second" };
+    const third = { ...first, id: "third" };
+    deps.classifyChanges = vi.fn(async () => ({
+      categories: [
+        { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" },
+        { id: "c2", name: "Tests", description: "Covers hello().", attention: "skim" },
+      ],
+      assignments: new Map([
+        [CHANGE_ID, [{ category: "c1", codeType: "production" as const }]],
+        [
+          "second",
+          [
+            { category: "c1", codeType: "production" as const },
+            { category: "c2", codeType: "test" as const },
+          ],
+        ],
+      ]),
+      ignoredChangeIds: new Set(["third"]),
+      changesById: new Map([
+        [CHANGE_ID, first],
+        ["second", second],
+        ["third", third],
+      ]),
+    }));
+
+    await run(options(), deps);
+
+    expect(infoLines(deps)).toContainEqual(
+      expect.stringMatching(
+        /^classified 3 changes in \d+s: Greeting \(2\), Tests \(1\); 1 ignored$/,
+      ),
+    );
+  });
+
+  it("omits the ignored count from the classification summary when nothing was ignored", async () => {
+    const deps = baseDeps();
+
+    await run(options(), deps);
+
+    expect(infoLines(deps)).toContainEqual(
+      expect.stringMatching(/^classified 1 changes in \d+s: Greeting \(1\)$/),
+    );
   });
 
   it("warns when PrMetadata.files and the parsed diff disagree", async () => {
@@ -525,7 +581,7 @@ describe("run", () => {
         ],
         phase1SessionId: "s1-amended",
       }),
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
     );
   });
 
@@ -552,7 +608,7 @@ describe("run", () => {
     // Only classification gets the split diff.
     expect(deps.classifyChanges).toHaveBeenCalledWith(
       expect.objectContaining({ diff: splitDiff }),
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object) },
+      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
     );
   });
 

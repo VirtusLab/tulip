@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
 import { generateCategories } from "../categories/generate.js";
 import { reviewAndAmendCategories } from "../categories/review.js";
-import { groupChangesByCategory } from "../classification/group.js";
-import { classifyChanges } from "../classification/orchestrate.js";
+import type { Category } from "../categories/types.js";
+import { type CategoryChangeSet, groupChangesByCategory } from "../classification/group.js";
+import { type ClassifyChangesResult, classifyChanges } from "../classification/orchestrate.js";
 import { prepareClassifiableChanges } from "../classification/prepare.js";
 import { ClaudeBinaryMissingError } from "../claude/errors.js";
 import { createUsageLedger, formatUsageSummary } from "../claude/usage.js";
@@ -14,6 +15,7 @@ import { checkGhAuth } from "../github/gh-auth.js";
 import { materializeChangeArtifacts } from "../github/materialize.js";
 import { fetchPrMetadata, type PrMetadata } from "../github/pr-fetcher.js";
 import type { PrRef } from "../github/pr-url.js";
+import { startTimer } from "../logging/duration.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
 import { serveForReview } from "../serve/server.js";
@@ -143,18 +145,20 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     const changedFiles = diff.files.map((file) => ({ path: file.path, status: file.status }));
 
     logger.info("phase 1: generating categories...");
+    const generateElapsed = startTimer();
     const phase1 = await runPhase("phase 1 (generating categories)", () =>
       doGenerateCategories(
         { title: metadata.title, description: metadata.body, files: changedFiles },
-        { cwd: checkoutDir, usage },
+        { cwd: checkoutDir, usage, logger },
       ),
     );
     logger.info(
-      `generated ${phase1.categories.length} categories: ` +
-        phase1.categories.map((category) => category.name).join(", "),
+      `generated ${phase1.categories.length} categories in ${generateElapsed()}: ` +
+        categoryNamesOf(phase1.categories),
     );
 
     logger.info("phase 1: reviewing categories...");
+    const reviewElapsed = startTimer();
     const categoryReview = await runPhase("phase 1 (reviewing categories)", () =>
       doReviewAndAmendCategories(
         {
@@ -164,12 +168,11 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categories: phase1.categories,
           generateSessionId: phase1.sessionId,
         },
-        { cwd: checkoutDir, usage },
+        { cwd: checkoutDir, usage, logger },
       ),
     );
-    logger.debug(
-      `category review done: ${categoryReview.categories.length} categories: ` +
-        categoryReview.categories.map((category) => category.name).join(", "),
+    logger.info(
+      `categories after review (${reviewElapsed()}): ${categoryNamesOf(categoryReview.categories)}`,
     );
 
     // Splits over-threshold changes into per-concern sub-changes (docs/adr/0016), so
@@ -186,6 +189,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     );
 
     logger.info("phase 2: classifying changes...");
+    const classifyElapsed = startTimer();
     const classification = await runPhase("phase 2 (classifying changes)", () =>
       doClassifyChanges(
         {
@@ -193,17 +197,15 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categories: categoryReview.categories,
           phase1SessionId: categoryReview.sessionId,
         },
-        { cwd: checkoutDir, usage },
+        { cwd: checkoutDir, usage, logger },
       ),
-    );
-    logger.debug(
-      `classification done: ${classification.assignments.size} change(s) categorized, ` +
-        `${classification.ignoredChangeIds.size} ignored`,
     );
 
     const { sets: categorySets, owners: changeOwners } = groupChangesByCategory(classification);
+    logger.info(describeClassification(classification, categorySets, classifyElapsed()));
 
-    logger.info("phase 3: generating explanations...");
+    logger.info(`phase 3: generating explanations for ${categorySets.length} categories...`);
+    const explainElapsed = startTimer();
     const explanations = await runPhase("phase 3 (generating explanations)", () =>
       doExplainCategories(
         {
@@ -218,7 +220,9 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
         { logger, cwd: checkoutDir, usage },
       ),
     );
-    logger.info(`generated explanations for ${explanations.length} categories`);
+    logger.info(
+      `generated explanations for ${explanations.length} categories in ${explainElapsed()}`,
+    );
 
     logger.info("preparing output page...");
     const renamedFrom = buildRenamedFromMap(diff);
@@ -334,6 +338,28 @@ function describeFailure(error: unknown): string {
 
 function causeMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function categoryNamesOf(categories: Category[]): string {
+  return categories.map((category) => category.name).join(", ");
+}
+
+/** Phase 2 summary line. The total is `changesById.size` — every classifiable change, ignored ones
+ * included — so the per-category counts (a change can be in several) plus the ignored count are
+ * read against the number of changes that actually went in. */
+function describeClassification(
+  classification: ClassifyChangesResult,
+  categorySets: CategoryChangeSet[],
+  elapsed: string,
+): string {
+  const perCategory = categorySets
+    .map((set) => `${set.category.name} (${set.production.length + set.test.length})`)
+    .join(", ");
+  const ignored = classification.ignoredChangeIds.size;
+  return (
+    `classified ${classification.changesById.size} changes in ${elapsed}: ${perCategory}` +
+    (ignored > 0 ? `; ${ignored} ignored` : "")
+  );
 }
 
 /** Maps each renamed file's head-side path to its base-side path, for rendering's base-content

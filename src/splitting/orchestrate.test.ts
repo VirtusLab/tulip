@@ -210,6 +210,41 @@ describe("splitLargeChanges", () => {
     ]);
   });
 
+  it("logs that nothing was above the threshold when there are no candidates", async () => {
+    const diff: ParsedDiff = { files: [file([change("src/a.ts", "head", 1, 3)])] };
+    const messages: string[] = [];
+    const logger: Logger = { info: (m) => messages.push(m), debug: () => {} };
+
+    await splitLargeChanges(
+      { diff, categories: CATEGORIES },
+      { runClaudeProcess: vi.fn(), logger },
+    );
+
+    expect(messages).toEqual(["no changes above the split threshold (120 lines)"]);
+  });
+
+  it("logs the batch count before splitting and how many candidates were split into how many pieces", async () => {
+    // Two candidates, one batch; only the first gets a boundary (-> 2 pieces), the second stays whole.
+    const first = change("src/a.ts", "head", 1, 130);
+    const second = change("src/b.ts", "head", 1, 130);
+    const diff: ParsedDiff = { files: [file([first]), file([second])] };
+    const runClaudeProcess = mockProcess({
+      splits: [
+        { changeId: first.id, boundaries: [{ side: "head", line: 50 }] },
+        { changeId: second.id, boundaries: [] },
+      ],
+    });
+    const messages: string[] = [];
+    const logger: Logger = { info: (m) => messages.push(m), debug: () => {} };
+
+    await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess, logger });
+
+    expect(messages).toEqual([
+      "splitting 2 large change(s) in 1 batch(es)...",
+      "split 1 of 2 large change(s) into 2 pieces",
+    ]);
+  });
+
   it("runs one session per batch when candidates exceed the count cap", async () => {
     // 25 candidates > maxBatchSize (20) -> two batches -> two fresh sessions.
     const changes = Array.from({ length: 25 }, (_, i) => change(`src/f${i}.ts`, "head", 1, 130));

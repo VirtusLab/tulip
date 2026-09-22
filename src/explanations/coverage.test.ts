@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClassifiableChange } from "../classification/types.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import { createLogger } from "../logging/logger.js";
 import {
   findUnreferencedChanges,
   SnippetCoverageError,
@@ -129,7 +130,9 @@ describe("verifySnippetCoverage", () => {
     });
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
 
-    const result = await verifySnippetCoverage(ref, "session-1", [change()], { runClaudeProcess });
+    const result = await verifySnippetCoverage(ref, "session-1", [change()], "Retry logic", {
+      runClaudeProcess,
+    });
 
     expect(result).toEqual({ markdown: ref, sessionId: "session-1" });
     expect(runClaudeProcess).not.toHaveBeenCalled();
@@ -148,9 +151,15 @@ describe("verifySnippetCoverage", () => {
       return envelope({ markdown: `amended\n\n${ref}` }, "session-2");
     });
 
-    const result = await verifySnippetCoverage("original, no refs", "session-1", [change()], {
-      runClaudeProcess,
-    });
+    const result = await verifySnippetCoverage(
+      "original, no refs",
+      "session-1",
+      [change()],
+      "Retry logic",
+      {
+        runClaudeProcess,
+      },
+    );
 
     expect(result.sessionId).toBe("session-2");
     expect(result.markdown).toContain("amended");
@@ -163,16 +172,40 @@ describe("verifySnippetCoverage", () => {
     );
 
     await expect(
-      verifySnippetCoverage("no refs", "session-1", [change()], { runClaudeProcess }),
+      verifySnippetCoverage("no refs", "session-1", [change()], "Retry logic", {
+        runClaudeProcess,
+      }),
     ).rejects.toThrow(SnippetCoverageError);
     expect(runClaudeProcess).toHaveBeenCalledTimes(3);
+  });
+
+  it("logs each amend attempt, naming the category and the number of uncovered changes", async () => {
+    const runClaudeProcess = vi.fn(async () => envelope({ markdown: "still no refs" }, "s"));
+    const write = vi.fn();
+
+    await expect(
+      verifySnippetCoverage("no refs", "session-1", [change()], "Retry logic", {
+        runClaudeProcess,
+        logger: createLogger({ write }),
+      }),
+    ).rejects.toThrow(SnippetCoverageError);
+
+    expect(write.mock.calls.map((c) => String(c[0]))).toEqual([
+      expect.stringContaining(
+        '[INFO] category "Retry logic": 1 change(s) lack snippets, amending (attempt 1/3)',
+      ),
+      expect.stringContaining("amending (attempt 2/3)"),
+      expect.stringContaining("amending (attempt 3/3)"),
+    ]);
   });
 
   it("includes the missing change's location in the thrown error", async () => {
     const runClaudeProcess = vi.fn(async () => envelope({ markdown: "no refs" }, "s"));
 
     await expect(
-      verifySnippetCoverage("no refs", "session-1", [change()], { runClaudeProcess }),
+      verifySnippetCoverage("no refs", "session-1", [change()], "Retry logic", {
+        runClaudeProcess,
+      }),
     ).rejects.toThrow(/src\/fetch\.ts.*head 10-14/);
   });
 });

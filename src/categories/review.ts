@@ -2,7 +2,7 @@ import { ClaudeOutputError } from "../claude/errors.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession, runSession } from "../claude/session.js";
 import { config } from "../config.js";
-import { createLogger, type Logger } from "../logging/logger.js";
+import { createLogger } from "../logging/logger.js";
 import { type CategoryInputFile, GENERATE_CATEGORIES_SCHEMA } from "./generate.js";
 import { buildCategoryReviewAmendPrompt, buildCategoryReviewPrompt } from "./prompt.js";
 import { assignCategoryIds, type Category, type CategoryProposal } from "./types.js";
@@ -25,10 +25,7 @@ export interface CategoryReviewLoopInput {
   generateSessionId: string;
 }
 
-export interface CategoryReviewLoopDeps extends RunnerDeps {
-  /** Defaults to a fresh non-verbose logger. Used only to log the round-cap warning below. */
-  logger?: Logger;
-}
+export type CategoryReviewLoopDeps = RunnerDeps;
 
 /** Reviewed (and, if amended, re-id-assigned) category list, plus the category-generating
  * session's latest id — NOT the reviewer's. Phase 2's escape hatch
@@ -57,7 +54,6 @@ export async function reviewAndAmendCategories(
   let generateSessionId = input.generateSessionId;
 
   for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
-    logger.debug(`category review round ${round}/${MAX_REVIEW_ROUNDS}`);
     const review = await runSession<CategoryReviewResponse>(
       {
         model: config.models.review,
@@ -73,6 +69,7 @@ export async function reviewAndAmendCategories(
     );
 
     if (review.result.approved || review.result.issues.length === 0) {
+      logger.info(`category review round ${round}/${MAX_REVIEW_ROUNDS}: approved`);
       return { categories, sessionId: generateSessionId };
     }
 
@@ -84,6 +81,10 @@ export async function reviewAndAmendCategories(
       return { categories, sessionId: generateSessionId };
     }
 
+    logger.info(
+      `category review round ${round}/${MAX_REVIEW_ROUNDS}: ` +
+        `${review.result.issues.length} issue(s), amending...`,
+    );
     const amended = await resumeSession<{ categories: CategoryProposal[] }>(
       {
         sessionId: generateSessionId,

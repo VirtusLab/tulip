@@ -142,11 +142,12 @@ describe("reviewAndAmendCategories", () => {
       { id: "c1", name: "Retry logic", description: "amended 4", attention: "normal" },
     ]);
     expect(result.sessionId).toBe("generate-session-4");
-    expect(write).toHaveBeenCalledTimes(1);
-    expect(write.mock.calls[0]?.[0]).toMatch(/warning.*category split.*3 rounds/i);
+    // One "amending" line per non-final round, then the warning.
+    expect(write).toHaveBeenCalledTimes(MAX_REVIEW_ROUNDS);
+    expect(write.mock.calls.at(-1)?.[0]).toMatch(/warning.*category split.*3 rounds/i);
   });
 
-  it("logs each review round at debug level when verbose", async () => {
+  it("logs each review round's outcome at info level", async () => {
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
@@ -165,15 +166,15 @@ describe("reviewAndAmendCategories", () => {
       return envelope({ approved: true, issues: [] }, "review-2");
     });
     const write = vi.fn();
-    const logger = createLogger({ write, verbose: true });
+    const logger = createLogger({ write });
 
     await reviewAndAmendCategories(baseInput(), { runClaudeProcess, logger });
 
-    const debugLines = write.mock.calls
-      .map((call) => String(call[0]))
-      .filter((line) => line.includes("[DEBUG]"));
-    expect(debugLines).toContainEqual(expect.stringContaining("category review round 1/3"));
-    expect(debugLines).toContainEqual(expect.stringContaining("category review round 2/3"));
+    const lines = write.mock.calls.map((call) => String(call[0]));
+    expect(lines).toEqual([
+      expect.stringContaining("[INFO] category review round 1/3: 1 issue(s), amending..."),
+      expect.stringContaining("[INFO] category review round 2/3: approved"),
+    ]);
   });
 
   it("rejects an empty amended category list", async () => {

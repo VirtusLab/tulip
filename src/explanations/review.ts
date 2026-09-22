@@ -2,7 +2,7 @@ import { isPrimary } from "../classification/group.js";
 import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession, runSession } from "../claude/session.js";
 import { config } from "../config.js";
-import { createLogger, type Logger } from "../logging/logger.js";
+import { createLogger } from "../logging/logger.js";
 import { verifySnippetCoverage } from "./coverage.js";
 import { buildReviewAmendPrompt, buildReviewPrompt } from "./prompt.js";
 import type { ExplainCategoryInput } from "./types.js";
@@ -25,10 +25,7 @@ export interface ReviewLoopInput extends ExplainCategoryInput {
   explainSessionId: string;
 }
 
-export interface ReviewLoopDeps extends RunnerDeps {
-  /** Defaults to a fresh non-verbose logger. Used only to log the round-cap warning below. */
-  logger?: Logger;
-}
+export type ReviewLoopDeps = RunnerDeps;
 
 /** Reviewed (and, if amended, coverage-reverified) markdown, plus the explaining session's
  * latest id — needed by anything that must resume that same session afterward (e.g. mermaid
@@ -59,7 +56,6 @@ export async function reviewAndAmend(
   let explainSessionId = input.explainSessionId;
 
   for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
-    logger.debug(`category "${input.category.name}": review round ${round}/${MAX_REVIEW_ROUNDS}`);
     const review = await runSession<ReviewResponse>(
       {
         model: config.models.review,
@@ -81,6 +77,7 @@ export async function reviewAndAmend(
     );
 
     if (review.result.approved || review.result.issues.length === 0) {
+      logger.info(`category "${input.category.name}": review approved (round ${round})`);
       return { markdown, explainSessionId };
     }
 
@@ -92,6 +89,10 @@ export async function reviewAndAmend(
       return { markdown, explainSessionId };
     }
 
+    logger.info(
+      `category "${input.category.name}": review round ${round}/${MAX_REVIEW_ROUNDS} found ` +
+        `${review.result.issues.length} issue(s), amending...`,
+    );
     const amended = await resumeSession<ExplanationResponse>(
       {
         sessionId: explainSessionId,
@@ -105,6 +106,7 @@ export async function reviewAndAmend(
       amended.result.markdown,
       amended.sessionId,
       primaryChanges,
+      input.category.name,
       deps,
     );
     markdown = covered.markdown;

@@ -473,10 +473,14 @@ describe("explainCategories", () => {
     await explainCategories(input, { runClaudeProcess, logger: { info, debug: vi.fn() } });
 
     const lines = info.mock.calls.map((call) => String(call[0]));
-    expect(lines).toContain('explaining category "A"...');
-    expect(lines).toContain('finished explaining category "A"');
-    expect(lines).toContain('explaining category "B"...');
-    expect(lines).toContain('finished explaining category "B"');
+    expect(lines).toContain('explaining category "A" (1 change(s))...');
+    expect(lines).toContainEqual(
+      expect.stringMatching(/^finished explaining category "A" in \d+s$/),
+    );
+    expect(lines).toContain('explaining category "B" (1 change(s))...');
+    expect(lines).toContainEqual(
+      expect.stringMatching(/^finished explaining category "B" in \d+s$/),
+    );
   });
 
   it("attributes a failure to its category and doesn't hide a concurrent failure in another", async () => {

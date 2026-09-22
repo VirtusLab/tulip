@@ -3,6 +3,7 @@ import type { RunnerDeps } from "../claude/runner.js";
 import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
 import type { LineRange } from "../diff/change.js";
+import { createLogger } from "../logging/logger.js";
 import { parseSnippetRefs, type SnippetRef } from "./markup.js";
 import { buildCoverageAmendPrompt } from "./prompt.js";
 import { EXPLANATION_SCHEMA, type ExplanationResponse } from "./wire.js";
@@ -88,14 +89,16 @@ function mergeRanges(ranges: LineRange[]): LineRange[] {
  * (its line range fully covered by same-file+side refs). For any that aren't, resumes the
  * explaining session listing the missing changes and asking it to amend, up to
  * {@link MAX_SNIPPET_COVERAGE_ATTEMPTS} times. Throws {@link SnippetCoverageError} if changes
- * remain unreferenced afterward.
+ * remain unreferenced afterward. `categoryName` only labels the progress lines.
  */
 export async function verifySnippetCoverage(
   markdown: string,
   sessionId: string,
   changes: ClassifiableChange[],
+  categoryName: string,
   deps: RunnerDeps = {},
 ): Promise<{ markdown: string; sessionId: string }> {
+  const logger = deps.logger ?? createLogger();
   let currentMarkdown = markdown;
   let currentSessionId = sessionId;
 
@@ -104,6 +107,10 @@ export async function verifySnippetCoverage(
     if (missing.length === 0) {
       return { markdown: currentMarkdown, sessionId: currentSessionId };
     }
+    logger.info(
+      `category "${categoryName}": ${missing.length} change(s) lack snippets, amending ` +
+        `(attempt ${attempt + 1}/${MAX_SNIPPET_COVERAGE_ATTEMPTS})`,
+    );
 
     const response = await resumeSession<ExplanationResponse>(
       {
