@@ -51,20 +51,18 @@ Review the explanation for:
   leading with a specific method or snippet before the overall shape is set, or an orienting
   diagram buried at the end. Scale to the rating — a Skim or trivial single-file category needs
   only a sentence or two, and no diagram when the shape is trivial.
-- diagram kind — is each diagram the kind that fits what changed? New modules, packages, or
-  imports between them want a dependency graph; data moving through stages wants a data-flow
-  diagram; new types want a class diagram; a state machine wants a state diagram; a database
-  schema wants an ER diagram; a sequence diagram fits only when the order of calls is the point.
-  Flag a sequence diagram whose subject is structure — modules, types, states, schema — rather
-  than the order of calls, and a non-trivial structural change whose shape the prose doesn't
-  carry and no diagram shows.
+- diagram kind — flag a sequence diagram whose subject is structure (modules, types, states,
+  schema) rather than the order of calls, and any diagram that isn't a flowchart, sequence,
+  class, state, or ER diagram.
 - clarity — is it easy to follow for a reviewer who hasn't seen the code yet?
 - conciseness and minimalism — is it concise and minimal? Flag over-explaining the obvious,
   restating what the code plainly shows, and dwelling on trivial or boilerplate parts. Every
   sentence should earn its place — flag padding, redundancy, and belaboring a simple point.
 - correctness — does every claim actually match the changes above? Flag anything invented,
   mistaken, or unsupported by them. Where the explanation summarizes a method or sketches
-  pseudocode, check that summary against the referenced real code and flag drift.
+  pseudocode, check that summary against the referenced real code and flag drift. Diagram nodes
+  and edges are claims too — check that each import, call, relation, or transition drawn exists
+  in the code.
 - earned references — every snippet has prose saying what it is and why it matters. Flag
   snippets that appear only to satisfy coverage and folded snippets never explained — but a
   trivial change earns a proportionate phrase, not a paragraph; a one-line mention of a trivial
