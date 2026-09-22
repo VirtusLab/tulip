@@ -54,8 +54,8 @@ sized to the job (Haiku, Sonnet, or Opus):
    is linked, not re-explained. A Sonnet pass reviews each explanation; every
    referenced snippet is checked to appear and every diagram validated to render.
 6. **Render.** Assemble everything into one self-contained HTML page: light/dark
-   theme, floating table of contents, syntax-highlighted side-by-side diffs, and
-   the attention badges.
+   theme, foldable sidebar table of contents, syntax-highlighted side-by-side
+   diffs, and the attention badges.
 
 The result is a temporary directory with the page; Tulip logs the `file://` path
 to open.

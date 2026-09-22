@@ -43,6 +43,10 @@ guessed at. Unrecognized/no extension likewise skips highlighting rather than gu
 Verified against the real vendored bundle in a jsdom test
 (`highlight-safety.test.ts`) and against a full generated page executed in jsdom
 (`</script>`/`<img onerror>` payloads highlighted, never becoming real elements).
+(Amended by ADR 0023: diff cells are no longer highlighted one at a time. Each side's run of
+cells between gap rows is highlighted as one text with `hljs.highlight` and split back per
+line; the escaping argument is unchanged, since only highlight.js's own output is assigned.
+Prose fenced blocks keep `highlightElement`.)
 
 Expand-up/down (client-inserted rows) calls the same `highlightSnippetContainer`, scoped
 by `:not([data-highlighted])` (highlight.js's own marker) so only the newly-inserted rows

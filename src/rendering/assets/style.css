@@ -527,7 +527,7 @@ main pre.mermaid.mermaid-wide {
    just flowing normally. `margin-top` (not a section `padding-top`) is the gap above it, so it
    adds on top of `.page-section:last-of-type`'s own border-removal instead of doubling
    whitespace against main's existing bottom padding. Muted/small/bordered like the rest of the
-   page's quiet metadata (.pr-link, .category-description), and never part of the floating TOC
+   page's quiet metadata (.pr-link, .category-description), and never part of the sidebar TOC
    (built from category data in ./toc.ts, not scraped from the DOM). */
 #page-footer {
   margin-top: var(--space-3);
