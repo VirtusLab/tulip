@@ -58,7 +58,7 @@ describe("renderPage", () => {
     // Comes before the first category section in document order.
     const sectionsInOrder = root.querySelectorAll("#pr-description, .category");
     expect(sectionsInOrder[0]?.id).toBe("pr-description");
-    // First entry in the floating TOC, ahead of the category entries.
+    // First entry in the sidebar TOC, ahead of the category entries.
     const tocLinks = root.querySelector("#toc")?.querySelectorAll("a") ?? [];
     expect(tocLinks[0]?.getAttribute("href")).toBe("#pr-description");
     expect(tocLinks[0]?.text).toBe("Original PR description");
@@ -529,7 +529,7 @@ describe("renderPage", () => {
     expect(parse(html).querySelector(".snippet")?.getAttribute("data-lang")).toBe("typescript");
   });
 
-  it("carries theme-toggle and asset hooks with no network references", () => {
+  it("carries the toggles and asset hooks with no network references", () => {
     const html = renderPage({
       prTitle: "t",
       prDescription: "d",
@@ -538,6 +538,7 @@ describe("renderPage", () => {
       explanations: [],
     });
     expect(html).toContain('id="theme-toggle"');
+    expect(html).toContain('id="toc-toggle" type="button" aria-label="Toggle table of contents"');
     expect(html).toContain('href="assets/style.css"');
     expect(html).toContain('src="assets/vendor/mermaid.min.js"');
     expect(html).toContain('src="assets/vendor/highlight.min.js"');

@@ -10,7 +10,7 @@ export const ATTENTION_LABEL: Record<Attention, string> = {
 };
 
 /** Renders the small per-category attention badge shown next to a category's name in both the
- * section heading (./template.ts) and the floating TOC entry (./toc.ts) — never on a
+ * section heading (./template.ts) and the sidebar TOC entry (./toc.ts) — never on a
  * Production/Test subsection, which has no attention of its own. The label always comes from
  * {@link ATTENTION_LABEL}, a fixed enum-keyed map, never free text, so there's no injection
  * surface to escape against — `escapeHtml` here is defense-in-depth, not a real requirement.

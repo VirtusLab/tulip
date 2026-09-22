@@ -3,7 +3,7 @@ import { renderAttentionBadge } from "./attention-badge.js";
 import { escapeHtml } from "./escape.js";
 import { categoryId, PR_DESCRIPTION_ID } from "./ids.js";
 
-/** One entry in the floating table-of-contents: a category, with a child per `## ` subsection
+/** One entry in the sidebar table-of-contents: a category, with a child per `## ` subsection
  * its markdown has, labelled by the heading text (docs/adr/0022). `attention` is set only for
  * category entries — the PR-description entry and subsection children have none of their own,
  * so they render without a badge (docs/adr/0010). */
