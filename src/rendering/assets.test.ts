@@ -146,13 +146,15 @@ describe("style.css", () => {
 describe("app.js", () => {
   const js = readAsset("app.js");
 
-  it("wires up highlight.js via its escaping APIs only", () => {
+  it("wires up highlight.js via its escaping APIs, with no new HTML sinks", () => {
     expect(js).toContain("window.hljs.highlightElement");
-    expect(js).toContain("window.hljs.highlight(text,");
-    // Never hand raw/untrusted text to innerHTML: the one write is highlight.js's own output,
-    // which escapes all text, split per diff cell.
+    expect(js).toContain("window.hljs.highlight(");
+    // Every HTML sink is accounted for: one innerHTML write of highlight.js's own (escaping)
+    // output, and expandGap's two insertAdjacentHTML calls of the mirrored, escaping row
+    // renderer. A new sink must fail here and be reviewed.
     expect(js.match(/\.innerHTML\s*=/g)).toHaveLength(1);
-    expect(js).toContain('code.innerHTML = lines[index] ?? ""');
+    expect(js.match(/\.outerHTML\s*=/g)).toBeNull();
+    expect(js.match(/\.insertAdjacentHTML\(/g)).toHaveLength(2);
   });
 
   it("re-highlights rows inserted by a gap expansion", () => {
@@ -169,7 +171,8 @@ describe("app.js", () => {
   it("skips highlighting a pathologically large prose block or diff run", () => {
     expect(js).toMatch(/MAX_HIGHLIGHT_CHARS\s*=\s*\d+/);
     expect(js).toMatch(/textContent\.length\s*>\s*MAX_HIGHLIGHT_CHARS/);
-    expect(js).toMatch(/text\.length\s*>\s*MAX_HIGHLIGHT_CHARS/);
+    expect(js).toMatch(/MAX_RUN_HIGHLIGHT_CHARS\s*=\s*\d+/);
+    expect(js).toMatch(/text\.length\s*>\s*MAX_RUN_HIGHLIGHT_CHARS/);
   });
 
   it("references no external network resources", () => {

@@ -95,6 +95,24 @@ describe("run-based snippet highlighting (real highlight.js, app.js under jsdom)
     expect(after[11]?.innerHTML).toContain("hljs-comment");
   });
 
+  it("keeps every line of a CRLF file, and highlights its comment lines", () => {
+    // The HTML parser turns a cell's trailing `\r` into a newline, which must not shift or
+    // blank any cell when the run is split back per line.
+    const crlf = COMMENT.replace(/\n/g, "\r\n");
+    const container = mount("const a = 1;\r\n", crlf, 1, 5);
+    const codes = headCodes(container);
+    expect(codes.map((code) => code.textContent?.replace(/\n/g, ""))).toEqual([
+      "/**",
+      " * Doc line.",
+      " * Another.",
+      " */",
+      "const a = 1;",
+    ]);
+    expect(codes[1]?.innerHTML).toContain("hljs-comment");
+    expect(codes[2]?.innerHTML).toContain("hljs-comment");
+    expect(codes[4]?.innerHTML).toContain("hljs-keyword");
+  });
+
   it("keeps a </script>/<img onerror> payload inside a comment as inert text", () => {
     const payload = `</script><img src=x onerror="alert(1)">`;
     const head = `/**\n * ${payload}\n */\nconst a = 1;\n`;

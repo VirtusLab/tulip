@@ -9,32 +9,41 @@ interface Mounted {
   toggle: HTMLElement;
   /** Fires app.js's IntersectionObserver callback as if `el` had scrolled into the band. */
   intersect: (el: Element) => void;
+  /** Flips what the drawer media query reports and notifies app.js's `change` listeners. */
+  setNarrow: (narrow: boolean) => void;
 }
 
 /** A page with two categories, each with subsections, mounted with the real app.js. jsdom has
  * neither `matchMedia` nor `IntersectionObserver`, so both are stubbed: `narrow` is what the
- * drawer media query reports, and the observer callback is captured for `intersect`. */
-function mount(options: { narrow?: boolean; stored?: string } = {}): Mounted {
+ * drawer media query reports (`setNarrow` changes it later), and the observer callback is
+ * captured for `intersect`. `observer: false` leaves IntersectionObserver undefined. */
+function mount(options: { narrow?: boolean; stored?: string; observer?: boolean } = {}): Mounted {
   const html = renderFixturePage({
     markdown: "Intro.\n\n## What changed\n\nMain.\n\n## Tests\n\nTest prose.\n",
     extraCategory: "Intro two.\n\n## Second change\n\nBody.\n",
   });
   let callback: ((entries: unknown[]) => void) | null = null;
+  const query = {
+    matches: options.narrow ?? false,
+    listeners: [] as (() => void)[],
+    addEventListener(_type: string, listener: () => void) {
+      this.listeners.push(listener);
+    },
+  };
   const win = mountWithAppJs(html, {
     prepare(prepWin) {
       if (options.stored !== undefined) {
         prepWin.localStorage.setItem(STORAGE_KEY, options.stored);
       }
-      prepWin.matchMedia = (() => ({
-        matches: options.narrow ?? false,
-        addEventListener() {},
-      })) as unknown as typeof prepWin.matchMedia;
-      prepWin.IntersectionObserver = class {
-        constructor(cb: (entries: unknown[]) => void) {
-          callback = cb;
-        }
-        observe() {}
-      } as unknown as typeof prepWin.IntersectionObserver;
+      prepWin.matchMedia = (() => query) as unknown as typeof prepWin.matchMedia;
+      if (options.observer !== false) {
+        prepWin.IntersectionObserver = class {
+          constructor(cb: (entries: unknown[]) => void) {
+            callback = cb;
+          }
+          observe() {}
+        } as unknown as typeof prepWin.IntersectionObserver;
+      }
     },
   });
   const toggle = win.document.getElementById("toc-toggle");
@@ -51,39 +60,65 @@ function mount(options: { narrow?: boolean; stored?: string } = {}): Mounted {
       }
       callback([{ isIntersecting: true, target: el }]);
     },
+    setNarrow(narrow) {
+      query.matches = narrow;
+      for (const listener of query.listeners) {
+        listener();
+      }
+    },
   };
+}
+
+function isFolded(html: HTMLElement): boolean {
+  return html.classList.contains("toc-folded");
 }
 
 describe("TOC fold (app.js under jsdom)", () => {
   it("starts unfolded, and the toggle folds it, updates aria-expanded and persists", () => {
     const { win, html, toggle } = mount();
-    expect(html.classList.contains("toc-folded")).toBe(false);
+    expect(isFolded(html)).toBe(false);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     toggle.click();
-    expect(html.classList.contains("toc-folded")).toBe(true);
+    expect(isFolded(html)).toBe(true);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(win.localStorage.getItem(STORAGE_KEY)).toBe("folded");
     toggle.click();
-    expect(html.classList.contains("toc-folded")).toBe(false);
+    expect(isFolded(html)).toBe(false);
     expect(win.localStorage.getItem(STORAGE_KEY)).toBe("open");
   });
 
   it("applies a stored folded state on load", () => {
     const { html, toggle } = mount({ stored: "folded" });
-    expect(html.classList.contains("toc-folded")).toBe(true);
+    expect(isFolded(html)).toBe(true);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("on a narrow screen starts folded and folds again when an entry is chosen", () => {
     const { win, html, toggle } = mount({ narrow: true });
-    expect(html.classList.contains("toc-folded")).toBe(true);
+    expect(isFolded(html)).toBe(true);
     toggle.click();
-    expect(html.classList.contains("toc-folded")).toBe(false);
+    expect(isFolded(html)).toBe(false);
     // The drawer state is transient: nothing is written while narrow.
     expect(win.localStorage.getItem(STORAGE_KEY)).toBeNull();
     const link = win.document.querySelector('#toc a[href="#category-1"]');
     (link as HTMLElement).click();
-    expect(html.classList.contains("toc-folded")).toBe(true);
+    expect(isFolded(html)).toBe(true);
+  });
+
+  it("folds when the screen turns narrow and restores the stored preference when it widens", () => {
+    const { html, setNarrow } = mount({ stored: "open" });
+    expect(isFolded(html)).toBe(false);
+    setNarrow(true);
+    expect(isFolded(html)).toBe(true);
+    setNarrow(false);
+    expect(isFolded(html)).toBe(false);
+
+    const folded = mount({ stored: "folded" });
+    folded.setNarrow(true);
+    folded.toggle.click();
+    expect(isFolded(folded.html)).toBe(false);
+    folded.setNarrow(false);
+    expect(isFolded(folded.html)).toBe(true);
   });
 });
 
@@ -104,5 +139,11 @@ describe("TOC accordion (app.js under jsdom)", () => {
       true,
       false,
     ]);
+  });
+
+  it("marks no category without an IntersectionObserver, so the CSS keeps every subsection visible", () => {
+    const { win } = mount({ observer: false });
+    expect(win.document.querySelector("#toc .toc-current")).toBeNull();
+    expect(win.document.querySelectorAll("#toc .toc-children").length).toBeGreaterThan(0);
   });
 });

@@ -154,27 +154,31 @@ describe("style.css layout — TOC (real CSS, real DOM)", () => {
   // jsdom applies no `@media` rule at all — neither breakpoint's branch, whatever the window
   // width — so the sidebar-column and drawer rules can't be asserted here; only the
   // breakpoint-independent ones are.
-  it("hides a category's subsections until it is the current one", () => {
+  it("hides a category's subsections only while another category is current", () => {
     const doc = renderIntoJsdom();
-    const category = Array.from(doc.querySelectorAll("#toc > ul > li")).find((li) =>
-      li.querySelector(".toc-children"),
-    );
+    const entries = Array.from(doc.querySelectorAll("#toc > ul > li"));
+    const category = entries.find((li) => li.querySelector(".toc-children"));
     const children = category?.querySelector(".toc-children");
-    if (!category || !children) {
-      throw new Error("expected a TOC category with subsections in the fixture");
+    const other = entries.find((li) => li !== category);
+    if (!category || !children || !other) {
+      throw new Error("expected a TOC category with subsections, and another entry");
     }
+    // Nothing current yet (no IntersectionObserver, or none fired): everything stays visible.
+    expect(getComputedStyle(children).display).not.toBe("none");
+    other.classList.add("toc-current");
     expect(getComputedStyle(children).display).toBe("none");
+    other.classList.remove("toc-current");
     category.classList.add("toc-current");
-    expect(getComputedStyle(children).display).toBe("block");
+    expect(getComputedStyle(children).display).not.toBe("none");
   });
 
-  it("pins the TOC toggle next to the theme toggle", () => {
+  it("pins the TOC toggle left of the theme toggle", () => {
     const doc = renderIntoJsdom();
     const toggle = getComputedStyle(mustQuery(doc, "#toc-toggle"));
+    const theme = getComputedStyle(mustQuery(doc, "#theme-toggle"));
     expect(toggle.position).toBe("fixed");
-    // jsdom resolves rem offsets to px at 16px/rem: 3.5rem and 0.75rem.
-    expect(toggle.right).toBe("56px");
-    expect(getComputedStyle(mustQuery(doc, "#theme-toggle")).right).toBe("12px");
+    expect(theme.position).toBe("fixed");
+    expect(parseFloat(toggle.right)).toBeGreaterThan(parseFloat(theme.right));
   });
 });
 

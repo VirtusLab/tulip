@@ -2,7 +2,7 @@
   var STORAGE_KEY = "tulip-theme";
   var TOC_FOLD_KEY = "tulip-toc-folded";
   // Below this width style.css turns the TOC into a drawer over the content.
-  var NARROW_QUERY = "(max-width: 1099.98px)";
+  var NARROW_QUERY = "(width < 1100px)";
 
   function currentTheme() {
     var stored = null;
@@ -136,12 +136,11 @@
     button.addEventListener("click", () => {
       setFolded(!document.documentElement.classList.contains("toc-folded"), !isNarrow());
     });
-    narrow?.addEventListener?.("change", () => {
+    narrow?.addEventListener("change", () => {
       setFolded(initialFolded(), false);
     });
     toc.addEventListener("click", (event) => {
-      var target = event.target;
-      if (isNarrow() && target instanceof Element && target.closest("a")) {
+      if (isNarrow() && event.target.closest("a")) {
         setFolded(true, false);
       }
     });
@@ -446,21 +445,12 @@
     });
   }
 
-  // Syntax highlighting (task: highlighting.md). Runs client-side, against text the server (or
-  // ./renderSnippetRow above) already HTML-escaped into `<code>` elements. Nothing here ever
-  // assigns raw/untrusted text to `innerHTML` — that's what keeps this safe against a malicious
-  // PR's file content, no matter what it contains. Prose blocks go through highlight.js's
-  // `highlightElement`, which reads the element's plain text (`textContent`, already unescaped
-  // by the browser) and rewrites its markup itself, re-escaping everything it emits. Diff cells
-  // get the `.value` of `hljs.highlight`, which escapes every character of text in the same
-  // way; `splitHighlightedLines` below only re-emits the tags highlight.js produced. (See
-  // snippets.test.ts / template.test.ts's XSS cases, highlight-safety.test.ts and
-  // highlight-runs.test.ts.)
-  // highlight.js's tokenizing cost grows with input size, and this all runs on the main thread,
-  // so a pathological input (a minified/generated file in a diff, or a whole file revealed by
-  // gap expansion) is left as plain, already-escaped text past this length. The limit applies to
-  // a whole run of diff lines at once, hence far above any single line's plausible length.
-  var MAX_HIGHLIGHT_CHARS = 200000;
+  // Syntax highlighting. Only highlight.js's own output — which escapes all text — ever reaches
+  // innerHTML here (docs/adr/0023, highlight-safety.test.ts, highlight-runs.test.ts).
+  // Tokenizing runs on the main thread and its cost grows with input size, so a pathological
+  // input is left as plain, already-escaped text. A run spans many lines, hence its larger cap.
+  var MAX_HIGHLIGHT_CHARS = 20000;
+  var MAX_RUN_HIGHLIGHT_CHARS = 200000;
 
   function highlightElementSafely(code, lang) {
     if (!window.hljs || !lang || !window.hljs.getLanguage(lang)) {
@@ -477,34 +467,22 @@
     }
   }
 
-  // `hljs.highlight`'s output holds only `<span class="…">`, `</span>`, newlines and escaped
-  // text, so it can be cut at each newline: spans open at the cut are closed there and re-opened
-  // on the next line, leaving every line a self-contained fragment.
+  // Cuts `hljs.highlight`'s output at each newline into self-contained fragments: spans open at
+  // the cut are closed there and re-opened on the next line. highlight.js escapes text, so the
+  // only raw `<` in its output belongs to its own span tags.
   function splitHighlightedLines(value) {
-    var lines = [];
     var open = [];
-    var current = "";
-    var tokens = /<span[^>]*>|<\/span>|\n|[^<\n]+|</g;
-    var match = tokens.exec(value);
-    while (match) {
-      const token = match[0];
-      if (token === "\n") {
-        current += "</span>".repeat(open.length);
-        lines.push(current);
-        current = open.join("");
-      } else if (token === "</span>") {
-        open.pop();
-        current += token;
-      } else if (token.charAt(0) === "<") {
-        open.push(token);
-        current += token;
-      } else {
-        current += token;
+    return value.split("\n").map((line) => {
+      var prefix = open.join("");
+      for (const [tag] of line.matchAll(/<span[^>]*>|<\/span>/g)) {
+        if (tag === "</span>") {
+          open.pop();
+        } else {
+          open.push(tag);
+        }
       }
-      match = tokens.exec(value);
-    }
-    lines.push(current);
-    return lines;
+      return prefix + line + "</span>".repeat(open.length);
+    });
   }
 
   // One side's code cells between gap rows, in document order: the side's text is contiguous
@@ -537,8 +515,10 @@
   // string) keeps its state from cell to cell. Already-highlighted cells are redone with the
   // rest: rows revealed by a gap expansion can change what the rows below them are.
   function highlightRun(codes, lang) {
-    var text = codes.map((code) => code.textContent).join("\n");
-    if (text.length > MAX_HIGHLIGHT_CHARS) {
+    // A cell is one line by construction; the HTML parser turns a CRLF file's trailing `\r`
+    // into a newline, which would otherwise double the split.
+    var text = codes.map((code) => code.textContent.replace(/\n/g, "")).join("\n");
+    if (text.length > MAX_RUN_HIGHLIGHT_CHARS) {
       return;
     }
     var lines;
@@ -549,8 +529,11 @@
       // Leave the (already-safe, escaped) plain text as-is on any highlighter failure.
       return;
     }
+    if (lines.length !== codes.length) {
+      return;
+    }
     codes.forEach((code, index) => {
-      code.innerHTML = lines[index] ?? "";
+      code.innerHTML = lines[index];
       code.classList.add("hljs", `language-${lang}`);
       code.dataset.highlighted = "yes";
     });

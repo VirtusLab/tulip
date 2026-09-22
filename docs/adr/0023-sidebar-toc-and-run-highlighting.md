@@ -57,14 +57,12 @@ Two rendering problems on real pages:
 - Content is 17rem narrower while the TOC is unfolded; folding gives the width back.
 - A construct that starts above a snippet's first visible line is still missed: the run only
   sees the lines on the page. Expanding the gap above fixes it, since the run is redone.
-- Fold state is per browser, like the theme.
 - jsdom applies no `@media` rule, so `layout.test.ts` checks only the accordion and toggle
   rules; the sidebar and drawer layout have no automated test.
 - ADR 0004's per-cell `highlightElement` description is amended for diff cells.
 
 ## References
 
-- ADR 0004 (page layout and syntax highlighting) — the per-cell highlighting this replaces for
-  diff cells, and the safety argument this keeps.
-- ADR 0021 (gap expansion) — the gap rows that bound a run, and the expansion that re-runs it.
-- ADR 0022 (recognized sections) — the subsection entries the accordion folds.
+- ADR 0004 (page layout rework and vendored syntax highlighting)
+- ADR 0021 (merged snippets and gap expansion)
+- ADR 0022 (recognized explanation sections)
