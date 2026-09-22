@@ -86,6 +86,7 @@ export function renderPage(input: PageInput): string {
 </head>
 <body>
 <button id="theme-toggle" type="button" aria-label="Toggle light/dark theme">◐</button>
+<button id="toc-toggle" type="button" aria-label="Toggle table of contents" aria-expanded="true">☰</button>
 ${renderTocHtml(toc)}
 <main>
 <header id="pr-header">

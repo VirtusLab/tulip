@@ -38,6 +38,8 @@
 
   --prose-measure: 72ch;
   --page-max-width: 1500px;
+  /* The sidebar TOC's grid column on wide screens (see the `.toc` rules). */
+  --toc-width: 17rem;
   /* Diff/code font size is deliberately smaller than prose (task: "smaller font for code") and
      kept as its own variable so every code surface (snippet cells, prose fences, summaries)
      agrees on it. */
@@ -540,7 +542,8 @@ main pre.mermaid.mermaid-wide {
   text-align: center;
 }
 
-#theme-toggle {
+#theme-toggle,
+#toc-toggle {
   position: fixed;
   top: 0.75rem;
   right: 0.75rem;
@@ -557,25 +560,29 @@ main pre.mermaid.mermaid-wide {
   transition: transform 0.15s ease;
 }
 
-#theme-toggle:hover {
+/* Left of the theme toggle; both sit in the TOC's top padding. */
+#toc-toggle {
+  right: 3.5rem;
+}
+
+#theme-toggle:hover,
+#toc-toggle:hover {
   transform: scale(1.06);
   border-color: var(--accent);
 }
 
+/* A full-height bar at the right edge (docs/adr/0023): a sidebar column on wide screens, a
+   drawer over the content on narrow ones — see the two @media blocks below. The top padding
+   leaves room for the fixed toggles above the list. */
 .toc {
-  position: fixed;
-  top: 3.5rem;
-  right: 0.75rem;
-  width: 16rem;
-  max-height: calc(100vh - 4.5rem);
+  height: 100vh;
+  margin: 0;
   overflow-y: auto;
   background: var(--toc-bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.875rem;
+  border-width: 0 0 0 1px;
+  padding: 3.25rem 0.875rem 1rem;
   font-size: 0.85rem;
-  z-index: 10;
-  box-shadow: var(--shadow);
 }
 
 .toc ul {
@@ -588,6 +595,16 @@ main pre.mermaid.mermaid-wide {
   padding-left: 1rem;
   border-left: 1px solid var(--border);
   margin-left: 0.4rem;
+}
+
+/* Accordion: only the category in view (app.js's `toc-current`) lists its subsections, so the
+   bar stays short on a PR with many categories. */
+.toc > ul > li > .toc-children {
+  display: none;
+}
+
+.toc > ul > li.toc-current > .toc-children {
+  display: block;
 }
 
 .toc a {
@@ -613,17 +630,52 @@ main pre.mermaid.mermaid-wide {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-@media (max-width: 1100px) {
-  .toc {
-    position: static;
-    width: auto;
-    max-height: none;
-    margin: 1rem 1.25rem 0;
-    box-shadow: none;
+/* Sidebar column: the TOC takes real width next to `main` (whose `margin: 0 auto` still centers
+   it inside the first track), so it can't overlap prose or run over a full-width diff. Sticky,
+   not fixed, so it stays a grid item; folding removes the column. */
+@media (min-width: 1100px) {
+  body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--toc-width);
+  }
+
+  html.toc-folded body {
+    grid-template-columns: minmax(0, 1fr) 0;
   }
 
   main {
-    padding-top: 1rem;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .toc {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 0;
+    align-self: start;
+  }
+
+  html.toc-folded .toc {
+    display: none;
+  }
+}
+
+/* Drawer: slides in over the content from the toggle; app.js starts it folded here. */
+@media (max-width: 1099.98px) {
+  .toc {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(20rem, 85vw);
+    z-index: 15;
+    box-shadow: var(--shadow);
+    transform: translateX(100%);
+    transition: transform 0.15s ease;
+  }
+
+  html:not(.toc-folded) .toc {
+    transform: none;
   }
 }
 

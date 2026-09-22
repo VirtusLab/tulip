@@ -150,6 +150,34 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
   });
 });
 
+describe("style.css layout — TOC (real CSS, real DOM)", () => {
+  // jsdom applies no `@media` rule at all — neither breakpoint's branch, whatever the window
+  // width — so the sidebar-column and drawer rules can't be asserted here; only the
+  // breakpoint-independent ones are.
+  it("hides a category's subsections until it is the current one", () => {
+    const doc = renderIntoJsdom();
+    const category = Array.from(doc.querySelectorAll("#toc > ul > li")).find((li) =>
+      li.querySelector(".toc-children"),
+    );
+    const children = category?.querySelector(".toc-children");
+    if (!category || !children) {
+      throw new Error("expected a TOC category with subsections in the fixture");
+    }
+    expect(getComputedStyle(children).display).toBe("none");
+    category.classList.add("toc-current");
+    expect(getComputedStyle(children).display).toBe("block");
+  });
+
+  it("pins the TOC toggle next to the theme toggle", () => {
+    const doc = renderIntoJsdom();
+    const toggle = getComputedStyle(mustQuery(doc, "#toc-toggle"));
+    expect(toggle.position).toBe("fixed");
+    // jsdom resolves rem offsets to px at 16px/rem: 3.5rem and 0.75rem.
+    expect(toggle.right).toBe("56px");
+    expect(getComputedStyle(mustQuery(doc, "#theme-toggle")).right).toBe("12px");
+  });
+});
+
 describe("style.css layout — spacing/alignment fixes (real CSS, real DOM)", () => {
   it("zeroes a blockquote's inline margin so it shares the same left edge as a paragraph", () => {
     const doc = renderIntoJsdom();

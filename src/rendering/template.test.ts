@@ -529,7 +529,7 @@ describe("renderPage", () => {
     expect(parse(html).querySelector(".snippet")?.getAttribute("data-lang")).toBe("typescript");
   });
 
-  it("carries theme-toggle and asset hooks with no network references", () => {
+  it("carries the toggles and asset hooks with no network references", () => {
     const html = renderPage({
       prTitle: "t",
       prDescription: "d",
@@ -538,6 +538,7 @@ describe("renderPage", () => {
       explanations: [],
     });
     expect(html).toContain('id="theme-toggle"');
+    expect(html).toContain('id="toc-toggle" type="button" aria-label="Toggle table of contents"');
     expect(html).toContain('href="assets/style.css"');
     expect(html).toContain('src="assets/vendor/mermaid.min.js"');
     expect(html).toContain('src="assets/vendor/highlight.min.js"');

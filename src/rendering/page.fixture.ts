@@ -6,22 +6,31 @@ import { renderPage } from "./template.js";
 // `import.meta.dirname`, not `new URL(..., import.meta.url)` — see highlight-safety.test.ts.
 const APP_JS = readFileSync(`${import.meta.dirname}/assets/app.js`, "utf8");
 
-/** Renders the common one-category skeleton the app.js tests mount into jsdom. */
+/** Renders the common one-category skeleton the app.js tests mount into jsdom. `extraCategory`
+ * adds a second category (`#category-1`) with that markdown. */
 export function renderFixturePage(input: {
   markdown: string;
+  extraCategory?: string;
   fileDiffs?: Map<string, FileDiffData>;
 }): string {
+  const explanations = [
+    {
+      category: { id: "c1", name: "C", description: "d", attention: "normal" as const },
+      markdown: input.markdown,
+    },
+  ];
+  if (input.extraCategory !== undefined) {
+    explanations.push({
+      category: { id: "c2", name: "D", description: "d", attention: "normal" as const },
+      markdown: input.extraCategory,
+    });
+  }
   return renderPage({
     prTitle: "t",
     prDescription: "d",
     prUrl: "https://github.com/a/b/pull/1",
     fileDiffs: input.fileDiffs ?? new Map(),
-    explanations: [
-      {
-        category: { id: "c1", name: "C", description: "d", attention: "normal" },
-        markdown: input.markdown,
-      },
-    ],
+    explanations,
   });
 }
 

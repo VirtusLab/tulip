@@ -1,5 +1,8 @@
 (() => {
   var STORAGE_KEY = "tulip-theme";
+  var TOC_FOLD_KEY = "tulip-toc-folded";
+  // Below this width style.css turns the TOC into a drawer over the content.
+  var NARROW_QUERY = "(max-width: 1099.98px)";
 
   function currentTheme() {
     var stored = null;
@@ -56,6 +59,7 @@
       return;
     }
 
+    var categories = Array.prototype.slice.call(toc.querySelectorAll(":scope > ul > li"));
     var active = null;
     function setActive(link) {
       if (active) {
@@ -65,6 +69,11 @@
       if (active) {
         active.classList.add("active");
       }
+      // Accordion (style.css): only the current category lists its subsections.
+      var current = active ? active.closest(".toc > ul > li") : null;
+      categories.forEach((li) => {
+        li.classList.toggle("toc-current", li === current);
+      });
     }
 
     var observer = new IntersectionObserver(
@@ -84,6 +93,57 @@
 
     targets.forEach((t) => {
       observer.observe(t.el);
+    });
+  }
+
+  // Fold state lives on <html> so style.css can drop the sidebar column (docs/adr/0023). On a
+  // narrow screen the TOC is a drawer: closed until opened, closed again by choosing an entry,
+  // and never stored — a "folded" saved from a phone would otherwise hide the sidebar on the
+  // next wide screen.
+  function setupTocFold() {
+    var button = document.getElementById("toc-toggle");
+    var toc = document.getElementById("toc");
+    if (!button || !toc) {
+      return;
+    }
+    var narrow = window.matchMedia ? window.matchMedia(NARROW_QUERY) : null;
+    function isNarrow() {
+      return Boolean(narrow?.matches);
+    }
+    function setFolded(folded, persist) {
+      document.documentElement.classList.toggle("toc-folded", folded);
+      button.setAttribute("aria-expanded", String(!folded));
+      if (persist) {
+        try {
+          localStorage.setItem(TOC_FOLD_KEY, folded ? "folded" : "open");
+        } catch (_e) {
+          // ignore — the fold state just won't persist across reloads
+        }
+      }
+    }
+    function initialFolded() {
+      if (isNarrow()) {
+        return true;
+      }
+      try {
+        return localStorage.getItem(TOC_FOLD_KEY) === "folded";
+      } catch (_e) {
+        return false;
+      }
+    }
+
+    setFolded(initialFolded(), false);
+    button.addEventListener("click", () => {
+      setFolded(!document.documentElement.classList.contains("toc-folded"), !isNarrow());
+    });
+    narrow?.addEventListener?.("change", () => {
+      setFolded(initialFolded(), false);
+    });
+    toc.addEventListener("click", (event) => {
+      var target = event.target;
+      if (isNarrow() && target instanceof Element && target.closest("a")) {
+        setFolded(true, false);
+      }
     });
   }
 
@@ -510,6 +570,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     setupThemeToggle();
     setupToc();
+    setupTocFold();
     setupHashReveal();
     setupMermaid();
     setupSnippetExpansion();
