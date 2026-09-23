@@ -40,22 +40,43 @@ regardless of rating; see "Trigger vs. rating" below), not whether a change is s
 tight rating you fold a snippet, not drop it.
 
 Structure it top-down. Open, before any snippet, with the big picture: in a few sentences, what
-this category does as a whole and how the changed pieces fit together. Where the flow of calls
-is worth a picture, put an orienting diagram here — a call-sequence or flow/architecture diagram,
-before/after wherever the flow changed — so the reviewer grasps the shape before the parts. Keep
-this a lead-in, not its own "## " section. ONLY THEN drill into the individual changes: for each,
-lead with its interface in prose — name, parameters, return type, what it promises, and what its
-body does at a high level (a sentence, a short numbered list, or pseudocode often carries this
-better than the code, especially for a large method) — then its code. Point back to the overview
-for how a change fits rather than re-narrating the flow, and never lead with a low-level detail
-the reviewer can't yet place. Scale both the overview and the per-change prose to the rating — a
-sentence or two for a Skim or single-file category, and no diagram when the flow is trivial. The
-first diagram orients the whole category; later ones illustrate a specific mechanism.
+this category does as a whole and how the changed pieces fit together. Where a picture shows how
+the pieces fit better than prose, put an orienting diagram here (kind per "Choosing a diagram"
+below), so the reviewer grasps the shape before the parts. Keep this a lead-in, not its own
+"## " section. ONLY THEN drill into the individual changes: for each, lead with its interface in
+prose — name, parameters, return type, what it promises, and what its body does at a high level
+(a sentence, a short numbered list, or pseudocode often carries this better than the code,
+especially for a large method) — then its code. Point back to the overview for how a change fits
+rather than re-narrating the flow, and never lead with a low-level detail the reviewer can't yet
+place. Scale both the overview and the per-change prose to the rating — a sentence or two for
+a Skim or single-file category, and no diagram when the shape is trivial. The first diagram
+orients the whole category; later ones illustrate a specific mechanism.
+
+Choosing a diagram: pick the kind by what changed.
+- new modules or packages, or new imports between them — a dependency graph: a flowchart with a
+  node per module this category touches and an edge per import it adds or removes; an unchanged
+  module appears only as the endpoint of a new import. Mark added modules with
+  `classDef added stroke-width:3px` applied as `node:::added`, and added imports with a thick
+  link `==>`, never with color. One new file imported by one caller is a sentence, not a graph.
+- data or a call passing through stages or components — a data-flow diagram: a flowchart whose
+  nodes are the steps and whose edge labels name what is passed along.
+- branching logic or a reworked algorithm — a flowchart of the control flow.
+- new or reworked types, interfaces, or hierarchies — a `classDiagram` of the types and their
+  relations, with members only where they matter.
+- a lifecycle, status field, retry loop, or other state machine — a `stateDiagram-v2`.
+- database schema or migration changes — an `erDiagram`.
+- the order or interleaving of calls between components, when that is what must be checked — a
+  `sequenceDiagram`.
+When several kinds fit, the orienting diagram is the one the reviewer must hold in mind to follow
+the rest; carry the others in prose. Draw a before diagram only when the reviewer needs the old
+shape to judge the new one; for additions, one diagram with the added parts marked. Use only
+these kinds; if none fits, draw no diagram.
 
 A diagram must fit the width of the surrounding text without scrolling. Lay flowcharts out
-top-down (`flowchart TD`); stack before/after or alternative subgraphs under each other, never
-side by side; keep at most five nodes across, and at most five participants in a sequence
-diagram. Split anything wider into two diagrams.
+top-down (`flowchart TD`); stack before/after or package subgraphs under each other, never side
+by side — link them with `~~~` so they stack; keep at most five nodes across in a flowchart or
+state diagram, at most four classes or entities in a class or ER diagram, and at most five
+participants in a sequence diagram. Split anything wider into two diagrams.
 
 Write "## ..." sections only for facets that have something to explain:
 - a section on the main change — name it for what it covers, not "production";

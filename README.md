@@ -48,11 +48,13 @@ sized to the job (Haiku, Sonnet, or Opus):
    and only linked from the others.
 5. **Explain** (Opus, one session per group; Sonnet review). Write a top-down prose
    explanation grounded in the real code: open with the overall shape and an
-   orienting diagram, then drill into each change — leading with its interface,
-   folding routine code by default, and showing in full only what the group's
-   attention rating and the must-see cases demand. A change owned by another group
-   is linked, not re-explained. A Sonnet pass reviews each explanation; every
-   referenced snippet is checked to appear and every diagram validated to render.
+   orienting diagram — a dependency graph, data flow, class, state, ER, or
+   sequence diagram, as the change calls for — then drill into each change,
+   leading with its interface, folding routine code by default, and showing in
+   full only what the group's attention rating and the must-see cases demand. A
+   change owned by another group is linked, not re-explained. A Sonnet pass
+   reviews each explanation; every referenced snippet is checked to appear and
+   every diagram validated to render.
 6. **Render.** Assemble everything into one self-contained HTML page: light/dark
    theme, foldable sidebar table of contents, syntax-highlighted side-by-side
    diffs, and the attention badges.
