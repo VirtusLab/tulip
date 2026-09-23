@@ -86,7 +86,7 @@ place. Scale both the overview and the per-change prose to the rating — a sent
 a Skim or single-file category, and no diagram when the shape is trivial. The first diagram
 orients the whole category; later ones illustrate a specific mechanism.
 
-Choosing a diagram: pick the kind by what changed; don't default to a sequence diagram.
+Choosing a diagram: pick the kind by what changed.
 - new modules or packages, or new imports between them — a dependency graph: a flowchart with a
   node per module this category touches and an edge per import it adds or removes; an unchanged
   module appears only as the endpoint of a new import. Mark added modules with
