@@ -19,7 +19,7 @@ Remaining tasks, roughly by priority.
 - [ ] Optionally feed phase-1 per-file churn (+/- counts) or diffs to sharpen attention ordering (needs CategoryInputFile + diff-stats plumbing)
 - [ ] Checkpointing & resumability of a partially-completed run (spec: "a later concern")
 - [ ] Surface per-run LLM cost (envelopes carry `total_cost_usd`; sum and log it)
-- [ ] Category-level progress for phase 3 in non-verbose mode is minimal; consider a progress line per review round
+- [ ] Category-level progress for phase 3 in non-verbose mode is minimal; consider a progress line per review/amend step
 
 ## Validation
 - [ ] Live E2E re-run (the only live run predates the final fix wave: cwd threading, timeouts, rename handling)

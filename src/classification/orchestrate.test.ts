@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Category } from "../categories/types.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import { config } from "../config.js";
 import type { Change, ParsedDiff } from "../diff/change.js";
 import { classifyChanges } from "./orchestrate.js";
 
@@ -123,9 +124,9 @@ describe("classifyChanges", () => {
   });
 
   it("threads a category accepted while resolving batch 1 into batch 2's prompt", async () => {
-    // 20 changes in batch 1 (one proposes "none" -> accepted as "B", assigned id c2), 5 more in
+    // A full batch 1 (one change proposes "none" -> accepted as "B", assigned id c2), 5 more in
     // batch 2.
-    const batch1Ids = Array.from({ length: 20 }, (_, i) => `b1-${i}`);
+    const batch1Ids = Array.from({ length: config.limits.maxBatchSize }, (_, i) => `b1-${i}`);
     const batch2Ids = Array.from({ length: 5 }, (_, i) => `b2-${i}`);
     const diff: ParsedDiff = {
       files: [...batch1Ids, ...batch2Ids].map((id) => fileWithChange(id)),

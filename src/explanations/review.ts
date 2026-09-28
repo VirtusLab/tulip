@@ -13,9 +13,6 @@ import {
   type ReviewResponse,
 } from "./wire.js";
 
-/** Review rounds before giving up and keeping the latest version (spec: "up to 3 times"). */
-const MAX_REVIEW_ROUNDS = config.limits.maxReviewRounds;
-
 /** Same PR/category/changes context the explaining session got (see ./explain.ts), plus the
  * markdown to review and the session to resume for amendments — reused so the reviewer can be
  * given the exact same changes (task 6.4's fix: correctness/groundedness needs them). */
@@ -36,11 +33,10 @@ export interface ReviewLoopResult {
 }
 
 /**
- * Task 6.4: reviews `input.markdown` with a fresh sonnet session (clarity, conciseness,
- * correctness/groundedness). If it raises issues, resumes the explaining session to amend, re-
- * verifies snippet coverage (task 6.3) on the amendment, then re-reviews with another fresh
- * session. Runs up to {@link MAX_REVIEW_ROUNDS} review rounds; if issues remain after the last
- * one, keeps that latest version and logs a warning rather than looping forever.
+ * Task 6.4: reviews `input.markdown` once with a fresh sonnet session (clarity, conciseness,
+ * correctness/groundedness). If it raises issues, resumes the explaining session to amend and
+ * re-verifies snippet coverage (task 6.3) on the amendment. The amended version is kept as-is,
+ * without a second review (docs/adr/0025).
  */
 export async function reviewAndAmend(
   input: ReviewLoopInput,
@@ -52,66 +48,50 @@ export async function reviewAndAmend(
   const primaryChanges = [...input.production, ...input.test].filter((change) =>
     isPrimary(input.changeOwners, change.id, input.category.id),
   );
-  let markdown = input.markdown;
-  let explainSessionId = input.explainSessionId;
+  const review = await runSession<ReviewResponse>(
+    {
+      model: config.models.review,
+      schema: REVIEW_SCHEMA,
+      prompt: buildReviewPrompt({
+        prTitle: input.prTitle,
+        prDescription: input.prDescription,
+        category: input.category,
+        production: input.production,
+        test: input.test,
+        changeOwners: input.changeOwners,
+        diffThreshold: input.diffThreshold,
+        baseSha: input.baseSha,
+        headSha: input.headSha,
+        markdown: input.markdown,
+      }),
+    },
+    deps,
+  );
 
-  for (let round = 1; round <= MAX_REVIEW_ROUNDS; round++) {
-    const review = await runSession<ReviewResponse>(
-      {
-        model: config.models.review,
-        schema: REVIEW_SCHEMA,
-        prompt: buildReviewPrompt({
-          prTitle: input.prTitle,
-          prDescription: input.prDescription,
-          category: input.category,
-          production: input.production,
-          test: input.test,
-          changeOwners: input.changeOwners,
-          diffThreshold: input.diffThreshold,
-          baseSha: input.baseSha,
-          headSha: input.headSha,
-          markdown,
-        }),
-      },
-      deps,
-    );
-
-    if (review.result.approved || review.result.issues.length === 0) {
-      logger.info(`category "${input.category.name}": review approved (round ${round})`);
-      return { markdown, explainSessionId };
-    }
-
-    if (round === MAX_REVIEW_ROUNDS) {
-      logger.info(
-        `warning: category "${input.category.name}" still had review issues after ` +
-          `${MAX_REVIEW_ROUNDS} rounds; keeping the latest version`,
-      );
-      return { markdown, explainSessionId };
-    }
-
-    logger.info(
-      `category "${input.category.name}": review round ${round}/${MAX_REVIEW_ROUNDS} found ` +
-        `${review.result.issues.length} issue(s), amending...`,
-    );
-    const amended = await resumeSession<ExplanationResponse>(
-      {
-        sessionId: explainSessionId,
-        schema: EXPLANATION_SCHEMA,
-        prompt: buildReviewAmendPrompt(review.result.issues),
-      },
-      deps,
-    );
-
-    const covered = await verifySnippetCoverage(
-      amended.result.markdown,
-      amended.sessionId,
-      primaryChanges,
-      input.category.name,
-      deps,
-    );
-    markdown = covered.markdown;
-    explainSessionId = covered.sessionId;
+  if (review.result.approved || review.result.issues.length === 0) {
+    logger.info(`category "${input.category.name}": review approved`);
+    return { markdown: input.markdown, explainSessionId: input.explainSessionId };
   }
 
-  return { markdown, explainSessionId };
+  logger.info(
+    `category "${input.category.name}": review found ${review.result.issues.length} issue(s), ` +
+      "amending...",
+  );
+  const amended = await resumeSession<ExplanationResponse>(
+    {
+      sessionId: input.explainSessionId,
+      schema: EXPLANATION_SCHEMA,
+      prompt: buildReviewAmendPrompt(review.result.issues),
+    },
+    deps,
+  );
+
+  const covered = await verifySnippetCoverage(
+    amended.result.markdown,
+    amended.sessionId,
+    primaryChanges,
+    input.category.name,
+    deps,
+  );
+  return { markdown: covered.markdown, explainSessionId: covered.sessionId };
 }

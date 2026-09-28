@@ -1,14 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ClaudeProcessResult } from "../claude/exec.js";
-import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { type CategoryReviewLoopInput, reviewAndAmendCategories } from "./review.js";
 import type { Category, CategoryProposal } from "./types.js";
 
-const MAX_REVIEW_ROUNDS = config.limits.maxReviewRounds;
-
 const CATEGORIES: Category[] = [
   { id: "c1", name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
+  { id: "c2", name: "Wiring", description: "Plumbs config through.", attention: "skim" },
 ];
 
 function baseInput(overrides: Partial<CategoryReviewLoopInput> = {}): CategoryReviewLoopInput {
@@ -76,7 +74,7 @@ describe("reviewAndAmendCategories", () => {
     expect(prompt).not.toMatch(/diff|excerpt/i);
   });
 
-  it("amends via the generating session, reassigns ids by attention, then re-reviews with a fresh session", async () => {
+  it("amends via the generating session and reassigns ids by attention, without re-reviewing", async () => {
     const revised: CategoryProposal[] = [
       { name: "Wiring", description: "Plumbs config through.", attention: "skim" },
       { name: "Retry logic", description: "Adds backoff retries.", attention: "close" },
@@ -85,19 +83,15 @@ describe("reviewAndAmendCategories", () => {
     const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
       call++;
       if (call === 1) {
-        // First review: raises an issue.
+        // Review: raises an issue.
         return envelope(
           { approved: false, issues: [{ description: "attention is inflated" }] },
           "review-1",
         );
       }
-      if (call === 2) {
-        // Amend, via the generating session.
-        expect(input).toContain("attention is inflated");
-        return envelope({ categories: revised }, "generate-session-2");
-      }
-      // Second review: approves.
-      return envelope({ approved: true, issues: [] }, "review-2");
+      // Amend, via the generating session.
+      expect(input).toContain("attention is inflated");
+      return envelope({ categories: revised }, "generate-session-2");
     });
 
     const result = await reviewAndAmendCategories(baseInput(), { runClaudeProcess });
@@ -109,45 +103,28 @@ describe("reviewAndAmendCategories", () => {
       { id: "c2", name: "Wiring", description: "Plumbs config through.", attention: "skim" },
     ]);
     expect(result.sessionId).toBe("generate-session-2");
-    expect(runClaudeProcess).toHaveBeenCalledTimes(3);
+    // Review + amend only: the amended list is not reviewed again (docs/adr/0025).
+    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+    expect(runClaudeProcess.mock.calls[1]?.[0]).toContain("--resume");
   });
 
-  it("keeps the latest list and logs a warning after the review-round cap", async () => {
-    let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
-      call++;
-      if (call % 2 === 1) {
-        return envelope(
-          { approved: false, issues: [{ description: `issue ${call}` }] },
-          `review-${call}`,
-        );
-      }
-      return envelope(
-        {
-          categories: [
-            { name: "Retry logic", description: `amended ${call}`, attention: "normal" },
-          ],
-        },
-        `generate-session-${call}`,
-      );
-    });
+  it("skips the review for a single category", async () => {
+    const runClaudeProcess = vi.fn();
     const write = vi.fn();
     const logger = createLogger({ write });
+    const single = CATEGORIES.slice(0, 1);
 
-    const result = await reviewAndAmendCategories(baseInput(), { runClaudeProcess, logger });
+    const result = await reviewAndAmendCategories(baseInput({ categories: single }), {
+      runClaudeProcess,
+      logger,
+    });
 
-    // MAX_REVIEW_ROUNDS reviews + (MAX_REVIEW_ROUNDS - 1) amendments.
-    expect(runClaudeProcess).toHaveBeenCalledTimes(MAX_REVIEW_ROUNDS * 2 - 1);
-    expect(result.categories).toEqual([
-      { id: "c1", name: "Retry logic", description: "amended 4", attention: "normal" },
-    ]);
-    expect(result.sessionId).toBe("generate-session-4");
-    // One "amending" line per non-final round, then the warning.
-    expect(write).toHaveBeenCalledTimes(MAX_REVIEW_ROUNDS);
-    expect(write.mock.calls.at(-1)?.[0]).toMatch(/warning.*category split.*3 rounds/i);
+    expect(result).toEqual({ categories: single, sessionId: "generate-session" });
+    expect(runClaudeProcess).not.toHaveBeenCalled();
+    expect(String(write.mock.calls[0]?.[0])).toMatch(/category review skipped/);
   });
 
-  it("logs each review round's outcome at info level", async () => {
+  it("logs the review outcome at info level", async () => {
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
@@ -157,13 +134,10 @@ describe("reviewAndAmendCategories", () => {
           "review-1",
         );
       }
-      if (call === 2) {
-        return envelope(
-          { categories: [{ name: "Retry logic", description: "amended", attention: "normal" }] },
-          "generate-session-2",
-        );
-      }
-      return envelope({ approved: true, issues: [] }, "review-2");
+      return envelope(
+        { categories: [{ name: "Retry logic", description: "amended", attention: "normal" }] },
+        "generate-session-2",
+      );
     });
     const write = vi.fn();
     const logger = createLogger({ write });
@@ -172,8 +146,7 @@ describe("reviewAndAmendCategories", () => {
 
     const lines = write.mock.calls.map((call) => String(call[0]));
     expect(lines).toEqual([
-      expect.stringContaining("[INFO] category review round 1/3: 1 issue(s), amending..."),
-      expect.stringContaining("[INFO] category review round 2/3: approved"),
+      expect.stringContaining("[INFO] category review: 1 issue(s), amending..."),
     ]);
   });
 

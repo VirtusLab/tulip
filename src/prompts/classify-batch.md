@@ -8,6 +8,6 @@ The categories to classify changes into are:
 
 {{outputInstructions}}
 
-Here is the first batch of changes to classify:
+Here are the changes to classify:
 
 {{changes}}

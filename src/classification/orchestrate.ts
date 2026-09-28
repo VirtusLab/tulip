@@ -37,7 +37,8 @@ export interface ClassifyChangesResult {
 }
 
 /**
- * Runs phase 2 end to end: classifies every change in `diff` in batches (via haiku), resolving
+ * Runs phase 2 end to end: classifies every change in `diff` in batches (via haiku, a fresh
+ * session per batch — docs/adr/0025), resolving
  * each batch's "none" replies through the phase-1 escape hatch (see ./escape-hatch.ts) *before*
  * the next batch is asked — so a category accepted while resolving batch N is already part of
  * the list batch N+1 sees (spec 5.2: "continue classifying remaining batches with the updated

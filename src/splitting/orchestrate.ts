@@ -25,9 +25,10 @@ function diffTextSize(candidate: SplitCandidate): number {
 /**
  * Splits over-threshold changes into per-concern sub-changes (docs/adr/0016), running between
  * category review and classification. Each candidate `Change` (line count above
- * `config.limits.splitThreshold`, either side) is offered to a fresh sonnet session that proposes
- * interior split points; {@link buildPartition} turns those into a gap-free tiling, so coverage is
- * guaranteed regardless of the model's output. Returns a new {@link ParsedDiff} with candidates
+ * `config.limits.splitThreshold`, either side) is offered, in batches run concurrently
+ * (docs/adr/0025), to a fresh sonnet session that proposes interior split points;
+ * {@link buildPartition} turns those into a gap-free tiling, so coverage is guaranteed regardless
+ * of the model's output. Returns a new {@link ParsedDiff} with candidates
  * replaced by their sub-changes, in place, preserving file and change order and every
  * `FileDiff` field (`status`, `previousPath`, `binary`).
  *
@@ -58,28 +59,36 @@ export async function splitLargeChanges(
   );
   logger.info(`splitting ${candidates.length} large change(s) in ${batches.length} batch(es)...`);
 
-  const boundariesByChange = new Map<string, SplitBoundary[]>();
-  for (const batch of batches) {
-    try {
-      const { result } = await runSession<SplitResponse>(
-        {
-          model: config.models.changeSplitting,
-          schema: SPLIT_SCHEMA,
-          prompt: buildSplitPrompt({ categories: input.categories, candidates: batch }),
-        },
-        deps,
-      );
-      for (const split of result.splits) {
-        // An unknown changeId (not one we asked about) is simply never looked up in the rebuild
-        // below, so storing it is harmless; buildPartition validates the boundaries.
-        boundariesByChange.set(split.changeId, split.boundaries);
+  // Batches are independent, so they run concurrently; the shared `claude` process limiter (see
+  // src/claude/concurrency.ts) caps actual parallelism. Results are merged in batch order so the
+  // outcome doesn't depend on which session finished first.
+  const batchResults = await Promise.all(
+    batches.map(async (batch): Promise<SplitResponse["splits"]> => {
+      try {
+        const { result } = await runSession<SplitResponse>(
+          {
+            model: config.models.changeSplitting,
+            schema: SPLIT_SCHEMA,
+            prompt: buildSplitPrompt({ categories: input.categories, candidates: batch }),
+          },
+          deps,
+        );
+        return result.splits;
+      } catch (error) {
+        logger.info(
+          `warning: splitting a batch of ${batch.length} large change(s) failed; leaving them ` +
+            `unsplit: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return [];
       }
-    } catch (error) {
-      logger.info(
-        `warning: splitting a batch of ${batch.length} large change(s) failed; leaving them ` +
-          `unsplit: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
+    }),
+  );
+
+  const boundariesByChange = new Map<string, SplitBoundary[]>();
+  for (const split of batchResults.flat()) {
+    // An unknown changeId (not one we asked about) is simply never looked up in the rebuild
+    // below, so storing it is harmless; buildPartition validates the boundaries.
+    boundariesByChange.set(split.changeId, split.boundaries);
   }
 
   // Counted while rebuilding: a candidate only counts as split if it actually produced > 1 piece,

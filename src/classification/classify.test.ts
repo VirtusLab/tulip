@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Category } from "../categories/types.js";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
+import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { type AfterBatchHook, classifyInBatches, resolveRawClassification } from "./classify.js";
 import type { ClassifiableChange } from "./types.js";
@@ -17,6 +18,9 @@ const passThrough: AfterBatchHook = async (resolved, classifierSessionId, catego
   classifierSessionId,
   categories,
 });
+
+/** Enough changes for two batches under the count cap. */
+const TWO_BATCHES = config.limits.maxBatchSize + 5;
 
 function change(id: string, excerpt = "+line"): ClassifiableChange {
   return {
@@ -40,7 +44,7 @@ function envelope(classifications: unknown, sessionId = "session-1"): ClaudeProc
 }
 
 describe("classifyInBatches", () => {
-  it("sends the category list and special-category explanation in the first batch", async () => {
+  it("sends the category list and special-category explanation with the batch", async () => {
     const changes = [change("c1")];
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
@@ -91,13 +95,15 @@ describe("classifyInBatches", () => {
     expect(prompt).toMatch(/use\s+"test"\s+only for actual test code/i);
   });
 
-  it("resumes the same session for later batches, restating the current category list", async () => {
-    // Force two batches by exceeding MAX_BATCH_SIZE (20).
-    const changes = Array.from({ length: 25 }, (_, i) => change(`c${i}`));
+  it("starts a fresh session for every batch, each with the full task explanation", async () => {
+    const changes = Array.from({ length: TWO_BATCHES }, (_, i) => change(`c${i}`));
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
-      const batch = call === 1 ? changes.slice(0, 20) : changes.slice(20);
+      const batch =
+        call === 1
+          ? changes.slice(0, config.limits.maxBatchSize)
+          : changes.slice(config.limits.maxBatchSize);
       return envelope(
         batch.map((c) => ({
           changeId: c.id,
@@ -107,19 +113,22 @@ describe("classifyInBatches", () => {
       );
     });
 
-    await classifyInBatches(CATEGORIES, changes, passThrough, { runClaudeProcess });
+    const result = await classifyInBatches(CATEGORIES, changes, passThrough, {
+      runClaudeProcess,
+    });
 
     expect(runClaudeProcess).toHaveBeenCalledTimes(2);
-    const [firstArgs] = runClaudeProcess.mock.calls[0] ?? [];
-    const [secondArgs, secondPrompt] = runClaudeProcess.mock.calls[1] ?? [];
-    expect(firstArgs as string[]).toContain("--model");
-    expect(secondArgs as string[]).not.toContain("--model");
-    expect(secondArgs).toContain("--resume");
-    expect(secondPrompt).toContain("Retry logic");
+    for (const [args, prompt] of runClaudeProcess.mock.calls) {
+      expect(args).toContain("--model");
+      expect(args).not.toContain("--resume");
+      expect(prompt).toContain("Retry logic");
+      expect(prompt).toMatch(/"ignore"/);
+    }
+    expect(result.sessionId).toBe("session-2");
   });
 
-  it("threads the afterBatch hook's updated categories/session into the next batch's prompt", async () => {
-    const changes = Array.from({ length: 21 }, (_, i) => change(`c${i}`));
+  it("threads the afterBatch hook's updated categories into the next batch's prompt and schema", async () => {
+    const changes = Array.from({ length: TWO_BATCHES }, (_, i) => change(`c${i}`));
     const extraCategory: Category = {
       id: "c2",
       name: "New area",
@@ -129,7 +138,10 @@ describe("classifyInBatches", () => {
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
-      const batch = call === 1 ? changes.slice(0, 20) : changes.slice(20);
+      const batch =
+        call === 1
+          ? changes.slice(0, config.limits.maxBatchSize)
+          : changes.slice(config.limits.maxBatchSize);
       return envelope(
         batch.map((c) => ({
           changeId: c.id,
@@ -145,22 +157,29 @@ describe("classifyInBatches", () => {
       categories: [...CATEGORIES, extraCategory],
     });
 
-    await classifyInBatches(CATEGORIES, changes, afterBatch, { runClaudeProcess });
+    const result = await classifyInBatches(CATEGORIES, changes, afterBatch, { runClaudeProcess });
 
     const [secondArgs, secondPrompt] = runClaudeProcess.mock.calls[1] ?? [];
-    expect((secondArgs as string[])[(secondArgs as string[]).indexOf("--resume") + 1]).toBe(
-      "hook-session",
-    );
+    const args = secondArgs as string[];
+    const schema = JSON.parse(args[args.indexOf("--json-schema") + 1] ?? "{}");
+    expect(
+      schema.properties.classifications.items.properties.assignments.items.properties.category.enum,
+    ).toContain("c2");
     expect(secondPrompt).toContain("New area");
     expect(secondPrompt).toContain("Escape-hatch addition.");
+    // The hook's session (the escape hatch's latest resume) is what coverage repair resumes.
+    expect(result.sessionId).toBe("hook-session");
   });
 
   it("logs the batch count up front, then each batch's completion when there are several", async () => {
-    const changes = Array.from({ length: 25 }, (_, i) => change(`c${i}`));
+    const changes = Array.from({ length: TWO_BATCHES }, (_, i) => change(`c${i}`));
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
-      const batch = call === 1 ? changes.slice(0, 20) : changes.slice(20);
+      const batch =
+        call === 1
+          ? changes.slice(0, config.limits.maxBatchSize)
+          : changes.slice(config.limits.maxBatchSize);
       return envelope(
         batch.map((c) => ({
           changeId: c.id,
@@ -176,7 +195,7 @@ describe("classifyInBatches", () => {
     });
 
     expect(write.mock.calls.map((c) => String(c[0]))).toEqual([
-      expect.stringContaining("[INFO] classifying 25 change(s) in 2 batch(es)..."),
+      expect.stringContaining(`[INFO] classifying ${TWO_BATCHES} change(s) in 2 batch(es)...`),
       expect.stringContaining("[INFO] classified batch 1/2"),
       expect.stringContaining("[INFO] classified batch 2/2"),
     ]);
