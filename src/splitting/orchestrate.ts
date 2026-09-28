@@ -26,8 +26,9 @@ function diffTextSize(candidate: SplitCandidate): number {
  * Splits over-threshold changes into per-concern sub-changes (docs/adr/0016), running between
  * category review and classification. Each candidate `Change` (line count above
  * `config.limits.splitThreshold`, either side) is offered, in batches run concurrently
- * (docs/adr/0025), to a fresh sonnet session that proposes interior split points; {@link buildPartition} turns those into a gap-free tiling, so coverage is
- * guaranteed regardless of the model's output. Returns a new {@link ParsedDiff} with candidates
+ * (docs/adr/0025), to a fresh sonnet session that proposes interior split points;
+ * {@link buildPartition} turns those into a gap-free tiling, so coverage is guaranteed regardless
+ * of the model's output. Returns a new {@link ParsedDiff} with candidates
  * replaced by their sub-changes, in place, preserving file and change order and every
  * `FileDiff` field (`status`, `previousPath`, `binary`).
  *

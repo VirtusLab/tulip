@@ -72,9 +72,8 @@ export const config = {
     /** Line count above which a change is offered to the splitter (docs/adr/0016) — see
      * src/splitting. */
     splitThreshold: 120,
-    /** Max changes per classification batch — see src/classification/batch.ts. Batches run one
-     * after another, so fewer, larger batches shorten the phase; the char cap below keeps a batch
-     * from growing past what the classifier handles well (docs/adr/0025). */
+    /** Max changes per batch, for classification (src/classification/batch.ts) and splitting
+     * (src/splitting). The char caps below are the tighter bound in practice (docs/adr/0025). */
     maxBatchSize: 40,
     /** Max total excerpt chars per classification batch, regardless of change count — see
      * src/classification/batch.ts. */

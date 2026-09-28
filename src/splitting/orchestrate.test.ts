@@ -260,7 +260,8 @@ describe("splitLargeChanges", () => {
   it("runs the batches concurrently", async () => {
     const changes = Array.from({ length: 25 }, (_, i) => change(`src/f${i}.ts`, "head", 1, 130));
     const diff: ParsedDiff = { files: changes.map((c) => file([c])) };
-    // Neither session resolves until both have started: a sequential loop would hang here.
+    // Neither session resolves until both have started: a sequential loop would hang here
+    // (surfacing as the test timeout). Needs a process cap of at least 2.
     let started = 0;
     let releaseAll: () => void = () => {};
     const allStarted = new Promise<void>((resolve) => {
@@ -277,6 +278,6 @@ describe("splitLargeChanges", () => {
 
     await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
 
-    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+    expect(started).toBe(2);
   });
 });

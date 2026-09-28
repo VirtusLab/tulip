@@ -281,7 +281,7 @@ describe("explainCategories", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]?.markdown).toContain("catref");
-    // Only the explain call ran — no review round.
+    // Only the explain call ran — no review.
     expect(runClaudeProcess).toHaveBeenCalledTimes(1);
     const lines = info.mock.calls.map((call) => String(call[0]));
     expect(

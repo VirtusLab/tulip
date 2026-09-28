@@ -82,6 +82,7 @@ export async function classifyInBatches(
   logger.info(`classifying ${changes.length} change(s) in ${batches.length} batch(es)...`);
 
   let resolved = new Map<string, ResolvedChange>();
+  // Always assigned: the guard above guarantees at least one batch.
   let sessionId = "";
   let currentCategories = categories;
 
