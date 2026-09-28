@@ -1,11 +1,11 @@
 import type { Category, CategoryProposal } from "../categories/types.js";
 import { ClaudeOutputError } from "../claude/errors.js";
 import type { RunnerDeps } from "../claude/runner.js";
-import { resumeSession, runSession } from "../claude/session.js";
+import { runSession } from "../claude/session.js";
 import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { batchChanges } from "./batch.js";
-import { buildBatchClassifyPrompt, buildInitialClassifyPrompt } from "./prompt.js";
+import { buildClassifyPrompt } from "./prompt.js";
 import {
   type CategoryAssignment,
   type ClassifiableChange,
@@ -36,7 +36,7 @@ export type ResolvedChange =
 /** Result of running the classifier over every batch (escape hatch already resolved per-batch;
  * see {@link AfterBatchHook}), before the final coverage-verification step. */
 export interface BatchClassifyResult {
-  /** Latest classifier session id — resume from here for coverage-repair follow-ups. */
+  /** The last batch's classifier session id — resume from here for coverage-repair follow-ups. */
   sessionId: string;
   /** changeId -> resolved classification. changeIds no reply ever mentioned are simply absent. */
   resolved: Map<string, ResolvedChange>;
@@ -61,10 +61,12 @@ export type AfterBatchHook = (
 }>;
 
 /**
- * Runs the haiku classifier over every batch of `changes`: the first batch via a fresh session
- * (given the full category list and task explanation), later batches resuming that session and
- * restating the (possibly updated) category list. Calls `afterBatch` after each batch to resolve
- * that batch's "none" replies before moving on. Returns every mentioned change's classification.
+ * Runs the haiku classifier over every batch of `changes`, each in a fresh session given the
+ * full task explanation and the current category list (docs/adr/0025: a fresh session per batch
+ * keeps each reply free of earlier batches' context). Batches still run one after another, and
+ * `afterBatch` is called after each to resolve that batch's "none" replies before moving on —
+ * so a category it accepts is in the list the next batch sees. Returns every mentioned change's
+ * classification.
  */
 export async function classifyInBatches(
   categories: Category[],
@@ -73,50 +75,34 @@ export async function classifyInBatches(
   deps: RunnerDeps = {},
 ): Promise<BatchClassifyResult> {
   const logger = deps.logger ?? createLogger();
-  const [firstBatch, ...restBatches] = batchChanges(changes);
-  if (!firstBatch) {
+  const batches = batchChanges(changes);
+  if (batches.length === 0) {
     throw new ClaudeOutputError("classifyInBatches was called with no changes to classify");
   }
-  const batchCount = restBatches.length + 1;
-  logger.info(`classifying ${changes.length} change(s) in ${batchCount} batch(es)...`);
-  // Per-batch progress is noise for the common single-batch PR.
-  const logBatchDone = (index: number) => {
-    if (batchCount > 1) {
-      logger.info(`classified batch ${index}/${batchCount}`);
-    }
-  };
+  logger.info(`classifying ${changes.length} change(s) in ${batches.length} batch(es)...`);
 
-  const firstResponse = await runSession<ClassifyBatchResponse>(
-    {
-      model: config.models.classification,
-      schema: buildClassifyBatchSchema(categories),
-      prompt: buildInitialClassifyPrompt(categories, firstBatch),
-    },
-    deps,
-  );
   let resolved = new Map<string, ResolvedChange>();
-  applyRawClassifications(firstResponse.result.classifications, resolved);
-  let after = await afterBatch(resolved, firstResponse.sessionId, categories);
-  resolved = after.resolved;
-  let sessionId = after.classifierSessionId;
-  let currentCategories = after.categories;
-  logBatchDone(1);
+  let sessionId = "";
+  let currentCategories = categories;
 
-  for (const [index, batch] of restBatches.entries()) {
-    const response = await resumeSession<ClassifyBatchResponse>(
+  for (const [index, batch] of batches.entries()) {
+    const response = await runSession<ClassifyBatchResponse>(
       {
-        sessionId,
+        model: config.models.classification,
         schema: buildClassifyBatchSchema(currentCategories),
-        prompt: buildBatchClassifyPrompt(currentCategories, batch),
+        prompt: buildClassifyPrompt(currentCategories, batch),
       },
       deps,
     );
     applyRawClassifications(response.result.classifications, resolved);
-    after = await afterBatch(resolved, response.sessionId, currentCategories);
+    const after = await afterBatch(resolved, response.sessionId, currentCategories);
     resolved = after.resolved;
     sessionId = after.classifierSessionId;
     currentCategories = after.categories;
-    logBatchDone(index + 2);
+    // Per-batch progress is noise for the common single-batch PR.
+    if (batches.length > 1) {
+      logger.info(`classified batch ${index + 1}/${batches.length}`);
+    }
   }
 
   return { sessionId, resolved, categories: currentCategories };

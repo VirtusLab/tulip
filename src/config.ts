@@ -57,9 +57,6 @@ export const config = {
     /** Default `--diff-threshold`: max diff lines fed verbatim to the explaining LLM before
      * falling back to a file+line-range reference — see src/cli/args.ts. */
     defaultDiffThreshold: 400,
-    /** Explanation review rounds before keeping the latest version as-is (spec: "up to 3 times")
-     * — see src/explanations/review.ts. */
-    maxReviewRounds: 3,
     /** New categories the escape hatch will accept per run before auto-rejecting further
      * proposals — see src/classification/escape-hatch.ts. */
     maxAcceptedNewCategories: 5,
@@ -75,8 +72,10 @@ export const config = {
     /** Line count above which a change is offered to the splitter (docs/adr/0016) — see
      * src/splitting. */
     splitThreshold: 120,
-    /** Max changes per classification batch — see src/classification/batch.ts. */
-    maxBatchSize: 20,
+    /** Max changes per classification batch — see src/classification/batch.ts. Batches run one
+     * after another, so fewer, larger batches shorten the phase; the char cap below keeps a batch
+     * from growing past what the classifier handles well (docs/adr/0025). */
+    maxBatchSize: 40,
     /** Max total excerpt chars per classification batch, regardless of change count — see
      * src/classification/batch.ts. */
     maxBatchExcerptChars: 20_000,

@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Category } from "../categories/types.js";
 import {
-  buildBatchClassifyPrompt,
+  buildClassifyPrompt,
   buildCoverageRepairPrompt,
   buildEscapeHatchResumePrompt,
-  buildInitialClassifyPrompt,
   type EscapeHatchOutcome,
 } from "./prompt.js";
 import type { ClassifiableChange } from "./types.js";
@@ -30,18 +29,10 @@ const BATCH = [change("ch1"), change("ch2", "+onlyline")];
 // the OLD template-literal builder's output for the same inputs. Each case is checked against a
 // committed file snapshot (src/classification/__snapshots__/*.txt) — run `vitest -u` to
 // regenerate after a deliberate .md wording change.
-describe("buildInitialClassifyPrompt", () => {
+describe("buildClassifyPrompt", () => {
   it("renders byte-identical prompt output", async () => {
-    await expect(buildInitialClassifyPrompt(CATEGORIES, BATCH)).toMatchFileSnapshot(
-      "__snapshots__/classify-initial.txt",
-    );
-  });
-});
-
-describe("buildBatchClassifyPrompt", () => {
-  it("renders byte-identical prompt output", async () => {
-    await expect(buildBatchClassifyPrompt(CATEGORIES, BATCH)).toMatchFileSnapshot(
-      "__snapshots__/classify-next-batch.txt",
+    await expect(buildClassifyPrompt(CATEGORIES, BATCH)).toMatchFileSnapshot(
+      "__snapshots__/classify-batch.txt",
     );
   });
 });

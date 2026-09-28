@@ -26,30 +26,13 @@ const SPECIAL_CATEGORIES_EXPLANATION = renderPrompt("classify-special-categories
 /** Text lives in src/prompts/classify-output-instructions.md (docs/adr/0006). */
 const OUTPUT_INSTRUCTIONS = renderPrompt("classify-output-instructions", {});
 
-/** First classification call: explains the categories and the task, then lists the first batch. */
-export function buildInitialClassifyPrompt(
-  categories: Category[],
-  batch: ClassifiableChange[],
-): string {
-  return renderPrompt("classify-initial", {
+/** One classification batch: explains the categories and the task, then lists the batch. Every
+ * batch starts a fresh session (docs/adr/0025), so each gets the full explanation. */
+export function buildClassifyPrompt(categories: Category[], batch: ClassifiableChange[]): string {
+  return renderPrompt("classify-batch", {
     categoryList: formatCategoryList(categories),
     specialCategories: SPECIAL_CATEGORIES_EXPLANATION,
     outputInstructions: OUTPUT_INSTRUCTIONS,
-    changes: formatChanges(batch),
-  });
-}
-
-/**
- * A later batch, within the same classification session. Restates the current category list
- * (rather than relying on the model to recall it) so that a category accepted via the escape
- * hatch after an earlier batch (see ./escape-hatch.ts) is explicitly available for this one.
- */
-export function buildBatchClassifyPrompt(
-  categories: Category[],
-  batch: ClassifiableChange[],
-): string {
-  return renderPrompt("classify-next-batch", {
-    categoryList: formatCategoryList(categories),
     changes: formatChanges(batch),
   });
 }

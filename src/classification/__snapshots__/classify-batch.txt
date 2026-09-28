@@ -21,7 +21,7 @@ only for actual test code. A change usually needs just one assignment, but list 
 if it genuinely belongs to multiple categories. Give every change at least one assignment,
 unless you're marking it "ignore".
 
-Here is the first batch of changes to classify:
+Here are the changes to classify:
 
 - id: ch1
   file: src/fetch.ts (modified)

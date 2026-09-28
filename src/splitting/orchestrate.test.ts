@@ -106,8 +106,9 @@ describe("splitLargeChanges", () => {
   });
 
   it("is fail-soft per batch: a failing batch is left whole and logged, other batches still split", async () => {
-    // 21 candidates -> batch A (20) then batch B (1). A succeeds and splits its first change; B
-    // throws. A's split must survive B's failure (the load-bearing half of fail-soft).
+    // 21 candidates of ~1.2k chars each exceed the 20k char cap -> two batches, A then B. A
+    // succeeds and splits its first change; B throws. A's split must survive B's failure (the
+    // load-bearing half of fail-soft).
     const changes = Array.from({ length: 21 }, (_, i) => change(`src/f${i}.ts`, "head", 1, 130));
     const diff: ParsedDiff = { files: changes.map((c) => file([c])) };
     let call = 0;
@@ -245,11 +246,34 @@ describe("splitLargeChanges", () => {
     ]);
   });
 
-  it("runs one session per batch when candidates exceed the count cap", async () => {
-    // 25 candidates > maxBatchSize (20) -> two batches -> two fresh sessions.
+  it("runs one session per batch when candidates exceed the char cap", async () => {
+    // 25 candidates of ~1.2k chars each exceed the 20k char cap -> two batches -> two sessions.
     const changes = Array.from({ length: 25 }, (_, i) => change(`src/f${i}.ts`, "head", 1, 130));
     const diff: ParsedDiff = { files: changes.map((c) => file([c])) };
     const runClaudeProcess = mockProcess({ splits: [] });
+
+    await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
+
+    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+  });
+
+  it("runs the batches concurrently", async () => {
+    const changes = Array.from({ length: 25 }, (_, i) => change(`src/f${i}.ts`, "head", 1, 130));
+    const diff: ParsedDiff = { files: changes.map((c) => file([c])) };
+    // Neither session resolves until both have started: a sequential loop would hang here.
+    let started = 0;
+    let releaseAll: () => void = () => {};
+    const allStarted = new Promise<void>((resolve) => {
+      releaseAll = resolve;
+    });
+    const runClaudeProcess = vi.fn(async () => {
+      started++;
+      if (started === 2) {
+        releaseAll();
+      }
+      await allStarted;
+      return envelope({ splits: [] });
+    });
 
     await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
 

@@ -2,12 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { Category } from "../categories/types.js";
 import type { ClassifiableChange } from "../classification/types.js";
 import type { ClaudeProcessResult } from "../claude/exec.js";
-import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { serializeSnippetRef } from "./markup.js";
 import { type ReviewLoopInput, reviewAndAmend } from "./review.js";
-
-const MAX_REVIEW_ROUNDS = config.limits.maxReviewRounds;
 
 const CATEGORY: Category = {
   id: "c1",
@@ -130,29 +127,26 @@ describe("reviewAndAmend", () => {
     expect(prompt).not.toMatch(/Coverage — /);
   });
 
-  it("amends via the explaining session, re-checks coverage, then re-reviews with a fresh session", async () => {
+  it("amends via the explaining session and re-checks coverage, without re-reviewing", async () => {
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
       call++;
       if (call === 1) {
-        // First review: raises an issue.
+        // Review: raises an issue.
         return envelope({ approved: false, issues: [{ description: "too verbose" }] }, "review-1");
       }
-      if (call === 2) {
-        // Amend, via the explaining session.
-        expect(input).toContain("too verbose");
-        return envelope({ markdown: `amended\n\n${REF}` }, "explain-session-2");
-      }
-      // Second review: approves.
-      expect(input).toContain("amended");
-      return envelope({ approved: true, issues: [] }, "review-2");
+      // Amend, via the explaining session.
+      expect(input).toContain("too verbose");
+      return envelope({ markdown: `amended\n\n${REF}` }, "explain-session-2");
     });
 
     const result = await reviewAndAmend(baseInput(), { runClaudeProcess });
 
     expect(result.markdown).toBe(`amended\n\n${REF}`);
     expect(result.explainSessionId).toBe("explain-session-2");
-    expect(runClaudeProcess).toHaveBeenCalledTimes(3);
+    // Review + amend only: the amended version is not reviewed again (docs/adr/0025).
+    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+    expect(runClaudeProcess.mock.calls[1]?.[0]).toContain("--resume");
   });
 
   it("does not re-impose snippet coverage on a secondary change after an amend", async () => {
@@ -160,17 +154,13 @@ describe("reviewAndAmend", () => {
     // must not force a snippet for it — even though the amended markdown drops every ref
     // (docs/adr/0015: relaxing only the initial explain would let an amend round re-force it).
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       if (call === 1) {
         return envelope({ approved: false, issues: [{ description: "reword it" }] }, "review-1");
       }
-      if (call === 2) {
-        // Amend drops the snippet entirely; coverage must still accept it.
-        return envelope({ markdown: "amended, no snippet" }, "explain-session-2");
-      }
-      expect(input).toContain("amended, no snippet");
-      return envelope({ approved: true, issues: [] }, "review-2");
+      // Amend drops the snippet entirely; coverage must still accept it.
+      return envelope({ markdown: "amended, no snippet" }, "explain-session-2");
     });
 
     const result = await reviewAndAmend(
@@ -180,48 +170,19 @@ describe("reviewAndAmend", () => {
       { runClaudeProcess },
     );
 
-    // Exactly review, amend, review — no coverage-repair resume in between.
-    expect(runClaudeProcess).toHaveBeenCalledTimes(3);
+    // Exactly review, amend — no coverage-repair resume after.
+    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
     expect(result.markdown).toBe("amended, no snippet");
   });
 
-  it("keeps the latest version and logs a warning after the review-round cap", async () => {
-    let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
-      call++;
-      if (call % 2 === 1) {
-        return envelope(
-          { approved: false, issues: [{ description: `issue ${call}` }] },
-          `review-${call}`,
-        );
-      }
-      return envelope({ markdown: `amended ${call}\n\n${REF}` }, `explain-session-${call}`);
-    });
-    const write = vi.fn();
-    const logger = createLogger({ write });
-
-    const result = await reviewAndAmend(baseInput(), { runClaudeProcess, logger });
-
-    // MAX_REVIEW_ROUNDS reviews + (MAX_REVIEW_ROUNDS - 1) amendments.
-    expect(runClaudeProcess).toHaveBeenCalledTimes(MAX_REVIEW_ROUNDS * 2 - 1);
-    expect(result.markdown).toBe(`amended 4\n\n${REF}`);
-    expect(result.explainSessionId).toBe("explain-session-4");
-    // One "amending" line per non-final round, then the warning.
-    expect(write).toHaveBeenCalledTimes(MAX_REVIEW_ROUNDS);
-    expect(write.mock.calls.at(-1)?.[0]).toMatch(/warning.*Retry logic.*3 rounds/i);
-  });
-
-  it("logs each review round's outcome at info level", async () => {
+  it("logs the review outcome at info level", async () => {
     let call = 0;
     const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       if (call === 1) {
         return envelope({ approved: false, issues: [{ description: "too verbose" }] }, "review-1");
       }
-      if (call === 2) {
-        return envelope({ markdown: `amended\n\n${REF}` }, "explain-session-2");
-      }
-      return envelope({ approved: true, issues: [] }, "review-2");
+      return envelope({ markdown: `amended\n\n${REF}` }, "explain-session-2");
     });
     const write = vi.fn();
     const logger = createLogger({ write });
@@ -230,9 +191,8 @@ describe("reviewAndAmend", () => {
 
     expect(write.mock.calls.map((call) => String(call[0]))).toEqual([
       expect.stringContaining(
-        '[INFO] category "Retry logic": review round 1/3 found 1 issue(s), amending...',
+        '[INFO] category "Retry logic": review found 1 issue(s), amending...',
       ),
-      expect.stringContaining('[INFO] category "Retry logic": review approved (round 2)'),
     ]);
   });
 });
