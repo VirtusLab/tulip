@@ -23,6 +23,10 @@ a logged-in Claude Code.
 
 <sub>Click a screenshot to view it full size.</sub>
 
+> [!NOTE]
+> Tulip is part of [Visdom](https://virtuslab.com/services/visdom),
+> VirtusLab's AI-native SDLC platform.
+
 ## How it works
 
 Tulip fetches the PR and runs it through a few LLM passes, each using a model
