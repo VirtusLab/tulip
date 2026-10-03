@@ -1,5 +1,7 @@
 # Tulip
 
+[![npm](https://img.shields.io/npm/v/@virtuslab/tulip)](https://www.npmjs.com/package/@virtuslab/tulip)
+
 Tulip explains GitHub PRs - categorizing and prioritizing the changes - and
 presenting them on a web page as prose, diagrams, and code.
 
@@ -143,6 +145,16 @@ pnpm dev <PR URL> # run the CLI from source, no build step (tsx)
 ```
 
 To put your local build on `PATH` as `tulip`, run `pnpm add -g .` after `pnpm build`.
+
+### Releasing
+
+```sh
+npm version 0.9.0
+```
+
+This bumps `package.json`, commits, tags `v0.9.0` and pushes. The tag triggers
+the `Release` workflow, which publishes to npm and creates a GitHub release with
+generated notes. Run it on `master` with a clean working tree.
 
 Design decisions are recorded as ADRs in `docs/adr/`; the LLM prompts live as
 plain text in `src/prompts/`.
