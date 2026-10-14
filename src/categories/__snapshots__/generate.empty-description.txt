@@ -1,6 +1,6 @@
 Be short and to the point. Avoid jargon and use simple words. Explain facts in simple terms — don't try to sound smart.
 
-You are preparing to explain a GitHub pull request to a human reviewer.
+You are preparing to explain a pull request to a human reviewer.
 
 PR title: Trivial fix
 

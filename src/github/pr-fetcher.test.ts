@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import type { PrRef } from "../forge/types.js";
 import { fetchPrMetadata } from "./pr-fetcher.js";
-import type { PrRef } from "./pr-url.js";
 
-const PR: PrRef = { host: "github.com", owner: "owner", repo: "repo", number: 42 };
+const PR: PrRef = { forge: "github", host: "github.com", repoPath: "owner/repo", number: 42 };
 
 const GH_VIEW_JSON = JSON.stringify({
   title: "Add feature",
@@ -265,5 +265,22 @@ describe("fetchPrMetadata", () => {
     await expect(
       fetchPrMetadata(PR, { runGh, fetchUrl: fetchUrl as unknown as typeof fetch }),
     ).rejects.toThrow(/gh CLI failed.*HTTP fallback failed/s);
+  });
+
+  it("rejects a malformed GITHUB_TOKEN without echoing it or sending a request", async () => {
+    const runGh = vi.fn(async () => {
+      throw new Error("gh failed");
+    });
+    const fetchUrl = vi.fn();
+
+    const error: Error = await fetchPrMetadata(PR, {
+      runGh,
+      fetchUrl: fetchUrl as unknown as typeof fetch,
+      githubToken: "ghp_ab\ncd",
+    }).catch((e) => e);
+
+    expect(error.message).toContain("GITHUB_TOKEN contains characters");
+    expect(error.message).not.toContain("ghp_ab");
+    expect(fetchUrl).not.toHaveBeenCalled();
   });
 });

@@ -1,15 +1,16 @@
 import { parseArgs } from "node:util";
 import { config } from "../config.js";
-import { type PrRef, parsePrUrl } from "../github/pr-url.js";
+import { parsePrUrl } from "../forge/pr-ref.js";
+import type { PrRef } from "../forge/types.js";
 
 /** Default `--diff-threshold`: max diff lines fed verbatim to the explaining LLM. */
 const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;
 
 /** Options collected from the command line, needed to run the pipeline. */
 export interface RunOptions {
-  /** GitHub PR URL, e.g. https://github.com/owner/repo/pull/123. */
+  /** GitHub PR or GitLab MR URL, e.g. https://github.com/owner/repo/pull/123. */
   prUrl: string;
-  /** The PR URL, parsed into owner/repo/number. */
+  /** The PR URL, parsed into forge/host/repoPath/number. */
   pr: PrRef;
   /** Max diff size (in lines) fed verbatim to the explaining LLM; larger changes are passed as file+line-range references. */
   diffThreshold: number;
@@ -18,7 +19,7 @@ export interface RunOptions {
   /** Auto-open the rendered page in the default browser when done. Defaults to true. */
   open: boolean;
   /** Run a local review server that posts a per-category PR comment via `gh` (docs/adr/0019).
-   * Defaults to false (render a static page and exit). */
+   * GitHub PRs only. Defaults to false (render a static page and exit). */
   serve: boolean;
 }
 
@@ -37,10 +38,12 @@ export function usage(): string {
   return [
     "Usage: tulip <PR URL> [options]",
     "",
-    "Explains a GitHub PR to reviewers using LLMs.",
+    "Explains a GitHub pull request or GitLab merge request to reviewers using LLMs.",
     "",
     "Arguments:",
-    "  <PR URL>              GitHub PR URL, e.g. https://github.com/owner/repo/pull/123",
+    "  <PR URL>              GitHub PR or GitLab MR URL, e.g.",
+    "                        https://github.com/owner/repo/pull/123",
+    "                        https://gitlab.com/group/project/-/merge_requests/45",
     "",
     "Options:",
     `  --diff-threshold <n>  Max diff size (lines) fed verbatim to the LLM; larger changes are`,
@@ -48,6 +51,7 @@ export function usage(): string {
     "  --verbose             Show debug-level progress logging",
     "  --no-open             Don't automatically open the rendered page in your browser",
     "  --serve               Run a local review server; post a PR comment per category via gh",
+    "                        (GitHub PRs only)",
     "  -h, --help            Show this help and exit",
     "  -v, --version         Show version information and exit",
   ].join("\n");
@@ -102,8 +106,14 @@ export function parseCliArgs(argv: string[]): RunOptions {
   const pr = prUrl === undefined ? undefined : parsePrUrl(prUrl);
   if (prUrl === undefined || pr === undefined) {
     throw new CliUsageError(
-      `Invalid PR URL: "${prUrl}". Expected format: https://github.com/<owner>/<repo>/pull/<number>`,
+      `Invalid PR URL: "${prUrl}". Expected https://<host>/<owner>/<repo>/pull/<number> (GitHub) ` +
+        "or https://<host>/<group>/<project>/-/merge_requests/<number> (GitLab)",
     );
+  }
+
+  const serve = values.serve ?? false;
+  if (serve && pr.forge !== "github") {
+    throw new CliUsageError("--serve currently supports GitHub PRs only");
   }
 
   const diffThreshold = parseDiffThreshold(values["diff-threshold"]);
@@ -114,7 +124,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
     diffThreshold,
     verbose: values.verbose ?? false,
     open: !values["no-open"],
-    serve: values.serve ?? false,
+    serve,
   };
 }
 

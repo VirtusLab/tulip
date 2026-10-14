@@ -10,11 +10,11 @@ import { createUsageLedger, formatUsageSummary } from "../claude/usage.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
-import { createCheckout, type PrCheckout } from "../github/checkout.js";
+import { createCheckout, type PrCheckout } from "../forge/checkout.js";
+import { fetchPrMetadata, forgeFor } from "../forge/forge.js";
+import { materializeChangeArtifacts } from "../forge/materialize.js";
+import type { PrMetadata, PrRef } from "../forge/types.js";
 import { checkGhAuth } from "../github/gh-auth.js";
-import { materializeChangeArtifacts } from "../github/materialize.js";
-import { fetchPrMetadata, type PrMetadata } from "../github/pr-fetcher.js";
-import type { PrRef } from "../github/pr-url.js";
 import { startTimer } from "../logging/duration.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
@@ -32,7 +32,8 @@ export interface PipelineOptions {
   /** Auto-open the rendered page in the default browser when done. */
   open: boolean;
   /** Run a local review server that posts per-category PR comments via `gh` (docs/adr/0019),
-   * instead of rendering a static page and exiting. */
+   * instead of rendering a static page and exiting. GitHub PRs only — the CLI rejects `--serve`
+   * for a GitLab URL. */
   serve: boolean;
 }
 
@@ -94,8 +95,8 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doServeForReview = deps.serveForReview ?? serveForReview;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
-  const { host, owner, repo, number } = options.pr;
-  const prUrl = `https://${host}/${owner}/${repo}/pull/${number}`;
+  const forge = forgeFor(options.pr);
+  const prUrl = forge.webUrl(options.pr);
 
   logger.info(formatVersion());
   logger.info(`Processing PR ${prUrl}`);
@@ -110,10 +111,10 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     // before any fetch/checkout/LLM work. Not wrapped in runPhase — checkGhAuth's message is
     // already actionable and must reach the user verbatim via describeFailure.
     if (options.serve) {
-      await doCheckGhAuth(host);
+      await doCheckGhAuth(options.pr.host);
     }
 
-    logger.info(`fetching ${owner}/${repo}#${number}...`);
+    logger.info(`fetching ${forge.label(options.pr)}...`);
     const metadata = await runPhase("fetching PR", () => doFetchPrMetadata(options.pr));
 
     const diff = parseDiff(metadata.diff);
@@ -373,8 +374,8 @@ function buildRenamedFromMap(diff: ParsedDiff): Map<string, string> {
 }
 
 /**
- * Sanity check carried from Epic 2's review: cross-checks `PrMetadata.files` (what GitHub says
- * changed) against the parsed diff's file paths (what we actually analyze). A mismatch would
+ * Sanity check carried from Epic 2's review: cross-checks `PrMetadata.files` (what the forge
+ * says changed) against the parsed diff's file paths (what we actually analyze). A mismatch would
  * mean some files silently aren't reviewed (or a parsing bug) — worth a warning, but not fatal.
  */
 function warnOnFileListMismatch(metadata: PrMetadata, diff: ParsedDiff, logger: Logger): void {

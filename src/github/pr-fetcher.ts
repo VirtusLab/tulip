@@ -1,20 +1,9 @@
 import { config } from "../config.js";
+import { bearerAuthHeaders, getJson, getText } from "../forge/http.js";
+import type { PrMetadata, PrRef } from "../forge/types.js";
 import { type CommandRunner, defaultRunGh } from "./gh.js";
-import type { PrRef } from "./pr-url.js";
 
 export type { CommandRunner };
-
-/** Metadata needed to analyze a PR: what it's about, which files it touches, and its diff. */
-export interface PrMetadata {
-  title: string;
-  body: string;
-  /** Paths of all files touched by the PR (head-side path for renames). */
-  files: string[];
-  /** The full unified diff, as produced by `git diff` / `gh pr diff`. */
-  diff: string;
-  base: { ref: string; sha: string };
-  head: { ref: string; sha: string };
-}
 
 export interface PrFetcherDeps {
   /** Defaults to invoking the `gh` binary on PATH. */
@@ -48,7 +37,7 @@ export async function fetchPrMetadata(pr: PrRef, deps: PrFetcherDeps = {}): Prom
       return await fetchViaHttp(pr, fetchUrl, token);
     } catch (httpError) {
       throw new Error(
-        `Failed to fetch PR ${pr.owner}/${pr.repo}#${pr.number}: ` +
+        `Failed to fetch PR ${pr.repoPath}#${pr.number}: ` +
           `gh CLI failed (${errorMessage(ghError)}); HTTP fallback failed (${errorMessage(httpError)})`,
       );
     }
@@ -59,7 +48,7 @@ async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> 
   // `gh` accepts the `HOST/OWNER/REPO` form, routing to the credentials for that host — so a
   // self-hosted GitHub Enterprise PR resolves once the user has run `gh auth login --hostname
   // <host>`. Redundant but valid for github.com.
-  const repo = `${pr.host}/${pr.owner}/${pr.repo}`;
+  const repo = `${pr.host}/${pr.repoPath}`;
   const [viewJson, diff, baseSha] = await Promise.all([
     runGh(["pr", "view", String(pr.number), "--repo", repo, "--json", GH_VIEW_FIELDS]),
     runGh(["pr", "diff", String(pr.number), "--repo", repo]),
@@ -93,7 +82,7 @@ async function fetchBaseSha(pr: PrRef, runGh: CommandRunner): Promise<string> {
     "api",
     "--hostname",
     pr.host,
-    `repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`,
+    `repos/${pr.repoPath}/pulls/${pr.number}`,
     "--jq",
     ".base.sha",
   ]);
@@ -108,13 +97,16 @@ function apiBaseUrl(host: string): string {
 
 const FILES_PER_PAGE = 100;
 
+/** Names the GitHub API in HTTP errors — see src/forge/http.ts. */
+const API = "GitHub";
+
 async function fetchViaHttp(
   pr: PrRef,
   fetchUrl: typeof fetch,
   token: string | undefined,
 ): Promise<PrMetadata> {
-  const prApiUrl = `${apiBaseUrl(pr.host)}/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}`;
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  const prApiUrl = `${apiBaseUrl(pr.host)}/repos/${pr.repoPath}/pulls/${pr.number}`;
+  const authHeaders = bearerAuthHeaders(token, "GITHUB_TOKEN");
 
   const [prJson, diff, files] = await Promise.all([
     getJson<{
@@ -122,8 +114,8 @@ async function fetchViaHttp(
       body: string | null;
       base: { ref: string; sha: string };
       head: { ref: string; sha: string };
-    }>(fetchUrl, prApiUrl, { Accept: "application/vnd.github+json", ...authHeaders }),
-    getText(fetchUrl, prApiUrl, { Accept: "application/vnd.github.v3.diff", ...authHeaders }),
+    }>(fetchUrl, prApiUrl, { Accept: "application/vnd.github+json", ...authHeaders }, API),
+    getText(fetchUrl, prApiUrl, { Accept: "application/vnd.github.v3.diff", ...authHeaders }, API),
     fetchAllFiles(fetchUrl, prApiUrl, authHeaders),
   ]);
 
@@ -149,6 +141,7 @@ async function fetchAllFiles(
       fetchUrl,
       `${prApiUrl}/files?per_page=${FILES_PER_PAGE}&page=${page}`,
       headers,
+      API,
     );
     files.push(...batch.map((file) => file.filename));
     if (batch.length < FILES_PER_PAGE) {
@@ -163,39 +156,6 @@ async function fetchAllFiles(
     }
   }
   return files;
-}
-
-async function getText(
-  fetchUrl: typeof fetch,
-  url: string,
-  headers: Record<string, string>,
-): Promise<string> {
-  let response: Response;
-  try {
-    response = await fetchUrl(url, {
-      headers,
-      signal: AbortSignal.timeout(config.timeouts.githubFetchMs),
-    });
-  } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") {
-      throw new Error(
-        `GitHub API request timed out after ${config.timeouts.githubFetchMs}ms: ${url}`,
-      );
-    }
-    throw error;
-  }
-  if (!response.ok) {
-    throw new Error(`GitHub API returned ${response.status} for ${url}`);
-  }
-  return response.text();
-}
-
-async function getJson<T>(
-  fetchUrl: typeof fetch,
-  url: string,
-  headers: Record<string, string>,
-): Promise<T> {
-  return JSON.parse(await getText(fetchUrl, url, headers)) as T;
 }
 
 function errorMessage(error: unknown): string {

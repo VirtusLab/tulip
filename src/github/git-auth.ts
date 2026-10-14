@@ -1,11 +1,6 @@
-/** How Tulip's own `git fetch` authenticates to a PR's host, on top of whatever the operator's git
- * config already provides: two extra credential helpers, no terminal prompt, and a hint on failure. */
-
-/** Makes an https fetch with no usable credentials fail at once instead of asking for a username
- * and password on the terminal — a prompt GitHub rejects anyway, and one that stalls a
- * non-interactive run. Only git's own prompts are affected: a configured askpass program may be
- * what supplies the credentials, and ssh (after an `insteadOf` rewrite) prompts as it always does. */
-export const GIT_NO_PROMPT_ENV = { GIT_TERMINAL_PROMPT: "0" };
+/** How Tulip's own `git fetch` authenticates to a GitHub host, on top of whatever the operator's
+ * git config already provides: two extra credential helpers. The forge-neutral part (no terminal
+ * prompt, the failure message) is src/forge/git-auth.ts. */
 
 const GH_CREDENTIAL_HELPER = "!gh auth git-credential";
 
@@ -23,29 +18,6 @@ export function gitCredentialArgs(host: string): string[] {
   return ["-c", `${key}=${GH_CREDENTIAL_HELPER}`, "-c", `${key}=${GITHUB_TOKEN_CREDENTIAL_HELPER}`];
 }
 
-/** git's messages for missing or rejected https credentials, a rejected SSH key, and "not found".
- * The last counts because the PR's metadata was fetched already, so the repo exists: GitHub answers
- * 404 for a private repo the presented credentials can't see. */
-const AUTH_FAILURE_PATTERN =
-  /could not read (Username|Password)|Authentication failed|returned error: 40[13]|repository[^\n]*not found|Permission denied \(publickey\)/i;
-
-/** Returns `error` unchanged unless it is a git failure caused by authentication; then an Error
- * whose message says how to make credentials available, followed by git's own output. */
-export function wrapAuthFailure(error: unknown, remoteUrl: string): unknown {
-  if (!(error instanceof Error) || !AUTH_FAILURE_PATTERN.test(error.message)) {
-    return error;
-  }
-  return new Error(
-    `git could not authenticate to ${remoteUrl}: set up git credentials for that host, run ` +
-      "`gh auth login`, or set GITHUB_TOKEN. If git already stores a credential for the host, " +
-      `that one was rejected and needs updating.\n${gitOutput(error)}`,
-    { cause: error },
-  );
-}
-
-/** execFile's message opens with `Command failed: <argv>`; with the helper snippets in argv that
- * line buries the useful part, so only git's own output is kept. */
-function gitOutput(error: Error): string {
-  const lines = error.message.split("\n");
-  return (lines[0]?.startsWith("Command failed:") ? lines.slice(1) : lines).join("\n").trim();
-}
+/** Where a GitHub `git fetch` can get credentials, for the auth-failure message. */
+export const GITHUB_GIT_AUTH_HINT =
+  "set up git credentials for that host, run `gh auth login`, or set GITHUB_TOKEN.";

@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import type { PrCheckout } from "../github/checkout.js";
+import type { PrCheckout } from "../forge/checkout.js";
 import { type AlignedRow, buildAlignedDiff } from "./line-diff.js";
 
 /** Files whose base or head content exceeds this size (per side) aren't embedded for

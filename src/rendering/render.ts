@@ -1,6 +1,6 @@
 import { parseSnippetRefs } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
-import type { PrCheckout } from "../github/checkout.js";
+import type { PrCheckout } from "../forge/checkout.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { type BuildInfo, formatVersion, getBuildInfo } from "../version.js";
 import { type AssembleDeps, type AssembleResult, assembleOutput } from "./assemble.js";
@@ -23,7 +23,7 @@ export interface RenderInput {
 }
 
 export interface RenderDeps extends AssembleDeps {
-  /** Only file-content access is needed — see src/github/checkout.ts. */
+  /** Only file-content access is needed — see src/forge/checkout.ts. */
   checkout: Pick<PrCheckout, "getFileAtBase" | "getFileAtHead">;
   logger?: Logger;
   /** Supplies the build info shown in the page footer (see src/version.ts). Defaults to the

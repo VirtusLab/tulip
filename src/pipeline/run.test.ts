@@ -9,9 +9,8 @@ import type { UsageLedger } from "../claude/usage.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { SnippetCoverageError } from "../explanations/coverage.js";
 import type { CategoryExplanation } from "../explanations/types.js";
-import type { PrCheckout } from "../github/checkout.js";
-import type { PrMetadata } from "../github/pr-fetcher.js";
-import type { PrRef } from "../github/pr-url.js";
+import type { PrCheckout } from "../forge/checkout.js";
+import type { PrMetadata, PrRef } from "../forge/types.js";
 import type { AssembleResult } from "../rendering/assemble.js";
 import { type PipelineDeps, type PipelineOptions, run } from "./run.js";
 
@@ -21,7 +20,7 @@ vi.mock("../version.js", () => ({
   formatVersion: vi.fn(() => "Tulip 9.9.9 (test123, built now)"),
 }));
 
-const PR: PrRef = { host: "github.com", owner: "octo", repo: "widgets", number: 42 };
+const PR: PrRef = { forge: "github", host: "github.com", repoPath: "octo/widgets", number: 42 };
 
 const ADDED_FILE_DIFF = [
   "diff --git a/src/new.ts b/src/new.ts",
@@ -859,7 +858,12 @@ describe("run", () => {
 
   it("uses the PR's host in the serve-mode URL, not a hardcoded github.com", async () => {
     const deps = baseDeps();
-    const pr: PrRef = { host: "git.xyz.com", owner: "octo", repo: "widgets", number: 42 };
+    const pr: PrRef = {
+      forge: "github",
+      host: "git.xyz.com",
+      repoPath: "octo/widgets",
+      number: 42,
+    };
 
     await run(options({ pr, serve: true }), deps);
 
@@ -869,6 +873,28 @@ describe("run", () => {
     );
     expect(deps.serveForReview).toHaveBeenCalledWith(
       expect.objectContaining({ prUrl: "https://git.xyz.com/octo/widgets/pull/42" }),
+    );
+  });
+
+  it("names a GitLab merge request by its MR URL and label", async () => {
+    const deps = baseDeps();
+    const pr: PrRef = {
+      forge: "gitlab",
+      host: "git.example.com",
+      repoPath: "group/project",
+      number: 7,
+    };
+
+    await run(options({ pr }), deps);
+
+    const lines = infoLines(deps);
+    expect(lines[1]).toBe("Processing PR https://git.example.com/group/project/-/merge_requests/7");
+    expect(lines[2]).toBe("fetching group/project!7...");
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prUrl: "https://git.example.com/group/project/-/merge_requests/7",
+      }),
+      expect.anything(),
     );
   });
 });

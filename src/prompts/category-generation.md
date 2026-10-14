@@ -1,4 +1,4 @@
-You are preparing to explain a GitHub pull request to a human reviewer.
+You are preparing to explain a pull request to a human reviewer.
 
 PR title: {{title}}
 

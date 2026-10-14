@@ -1,7 +1,7 @@
 {
   "name": "@virtuslab/tulip",
   "version": "0.8.0",
-  "description": "Explains GitHub PRs in a human-friendly way, using LLMs.",
+  "description": "Explains GitHub and GitLab pull requests in a human-friendly way, using LLMs.",
   "license": "Apache-2.0",
   "author": "Adam Warski",
   "type": "module",
@@ -13,10 +13,12 @@
   "bugs": "https://github.com/VirtusLab/tulip/issues",
   "keywords": [
     "pull-request",
+    "merge-request",
     "code-review",
     "llm",
     "claude",
     "github",
+    "gitlab",
     "cli"
   ],
   "engines": {

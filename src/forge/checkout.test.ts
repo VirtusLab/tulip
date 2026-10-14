@@ -5,11 +5,12 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { config } from "../config.js";
+import { gitCredentialArgs } from "../github/git-auth.js";
+import { gitCredentialArgs as gitlabCredentialArgs } from "../gitlab/git-auth.js";
 import { createCheckout } from "./checkout.js";
-import { gitCredentialArgs } from "./git-auth.js";
-import type { PrRef } from "./pr-url.js";
+import type { PrRef } from "./types.js";
 
-const PR: PrRef = { host: "github.com", owner: "owner", repo: "repo", number: 1 };
+const PR: PrRef = { forge: "github", host: "github.com", repoPath: "owner/repo", number: 1 };
 const BASE_SHA = "1".repeat(40);
 const HEAD_SHA = "2".repeat(40);
 const REVISIONS = { base: { sha: BASE_SHA }, head: { sha: HEAD_SHA } };
@@ -18,7 +19,7 @@ const DEPTH = String(config.limits.checkoutFetchDepth);
 const ISOLATION_ENV = { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
 const NO_PROMPT_ENV = { GIT_TERMINAL_PROMPT: "0" };
 // Placement and ordering are asserted here; what the helpers do is tested against real git in
-// git-auth.test.ts.
+// src/github/git-auth.test.ts and src/gitlab/git-auth.test.ts.
 const CREDENTIAL_ARGS = gitCredentialArgs("github.com");
 
 describe("createCheckout", () => {
@@ -169,6 +170,58 @@ describe("createCheckout", () => {
     expect(rm).toHaveBeenCalledTimes(1);
     expect(rm).toHaveBeenCalledWith(dir);
   });
+
+  it("clones a GitLab project by its nested path, with GitLab's credential helper", async () => {
+    const runGit = vi.fn(async () => "");
+    const mr: PrRef = {
+      forge: "gitlab",
+      host: "git.example.com",
+      repoPath: "group/sub/project",
+      number: 7,
+    };
+
+    await createCheckout(mr, REVISIONS, { runGit, mkdtemp: async () => "/tmp/t" });
+
+    expect(runGit).toHaveBeenNthCalledWith(
+      2,
+      ["remote", "add", "origin", "https://git.example.com/group/sub/project.git"],
+      "/tmp/t",
+      ISOLATION_ENV,
+    );
+    expect(runGit).toHaveBeenNthCalledWith(
+      3,
+      [...gitlabCredentialArgs("git.example.com"), "fetch", "--depth", DEPTH, "origin", BASE_SHA],
+      "/tmp/t",
+      NO_PROMPT_ENV,
+    );
+  });
+
+  it("names GITLAB_TOKEN when a GitLab fetch is denied", async () => {
+    const mr: PrRef = {
+      forge: "gitlab",
+      host: "git.example.com",
+      repoPath: "group/project",
+      number: 7,
+    };
+    const runGit = vi.fn(async (args: string[]) => {
+      if (args.includes("fetch")) {
+        throw new Error(
+          "Command failed: git fetch\nremote: HTTP Basic: Access denied.\nfatal: Authentication failed for 'https://git.example.com/group/project.git/'",
+        );
+      }
+      return "";
+    });
+
+    const error: Error = await createCheckout(mr, REVISIONS, {
+      runGit,
+      mkdtemp: async () => "/tmp/t",
+      rm: async () => {},
+    }).catch((e) => e);
+
+    expect(error.message).toMatch(
+      /git could not authenticate to https:\/\/git\.example\.com\/group\/project\.git: .*GITLAB_TOKEN/s,
+    );
+  });
 });
 
 const execFileAsync = promisify(execFile);
@@ -225,7 +278,7 @@ describe("createCheckout (hermetic: real git against a local fixture repo, no ne
       env: Record<string, string>,
     ): Promise<string> => {
       const rewritten = args.map((arg) =>
-        arg === `https://github.com/${PR.owner}/${PR.repo}.git` ? fixture.dir : arg,
+        arg === `https://github.com/${PR.repoPath}.git` ? fixture.dir : arg,
       );
       return git(rewritten, cwd, env);
     };

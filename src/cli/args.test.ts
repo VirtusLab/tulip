@@ -9,7 +9,7 @@ import {
 } from "./args.js";
 
 const VALID_URL = "https://github.com/owner/repo/pull/123";
-const VALID_PR = { host: "github.com", owner: "owner", repo: "repo", number: 123 };
+const VALID_PR = { forge: "github", host: "github.com", repoPath: "owner/repo", number: 123 };
 const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;
 
 describe("parseCliArgs", () => {
@@ -101,5 +101,29 @@ describe("parseCliArgs", () => {
     const verboseLine = lines.find((line) => line.includes("--verbose"));
     const thresholdLine = lines.find((line) => line.includes("--diff-threshold"));
     expect(verboseLine?.indexOf("Show")).toBe(thresholdLine?.indexOf("Max"));
+  });
+
+  it("parses a GitLab MR URL", () => {
+    expect(parseCliArgs(["https://gitlab.com/group/project/-/merge_requests/45"]).pr).toEqual({
+      forge: "gitlab",
+      host: "gitlab.com",
+      repoPath: "group/project",
+      number: 45,
+    });
+  });
+
+  it("rejects --serve for a GitLab MR", () => {
+    const argv = ["https://gitlab.com/group/project/-/merge_requests/45", "--serve"];
+    expect(() => parseCliArgs(argv)).toThrow(CliUsageError);
+    expect(() => parseCliArgs(argv)).toThrow("--serve currently supports GitHub PRs only");
+  });
+
+  it("names both URL formats when the URL is invalid", () => {
+    expect(() => parseCliArgs(["not-a-url"])).toThrow(/pull\/<number>.*merge_requests\/<number>/);
+  });
+
+  it("shows a GitHub and a GitLab URL example in the usage text", () => {
+    expect(usage()).toContain("https://github.com/owner/repo/pull/123");
+    expect(usage()).toContain("https://gitlab.com/group/project/-/merge_requests/45");
   });
 });

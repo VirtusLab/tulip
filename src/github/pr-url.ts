@@ -1,12 +1,4 @@
-/** A GitHub PR, identified by its host, repository and PR number. `host` is the URL's hostname
- * (`github.com`, or a self-hosted GitHub Enterprise host like `git.xyz.com`), used to fetch and
- * clone against the right server. */
-export interface PrRef {
-  host: string;
-  owner: string;
-  repo: string;
-  number: number;
-}
+import type { PrRef } from "../forge/types.js";
 
 // The host is a bare hostname with an optional port. Userinfo (`user@host`) is refused: it would
 // let `https://github.com@evil.example.com/...` read as a github.com link while every request,
@@ -20,15 +12,15 @@ const GITHUB_PR_URL_PATTERN =
  * `https://git.xyz.com/owner/repo/pull/7`. The host isn't verified to be GitHub (nothing in the
  * URL distinguishes a self-hosted GitHub from another forge with the same path shape).
  */
-export function parsePrUrl(url: string): PrRef | undefined {
+export function parseGitHubPrUrl(url: string): PrRef | undefined {
   const groups = GITHUB_PR_URL_PATTERN.exec(url)?.groups;
   if (!groups) {
     return undefined;
   }
   return {
+    forge: "github",
     host: groups.host ?? "",
-    owner: groups.owner ?? "",
-    repo: groups.repo ?? "",
+    repoPath: `${groups.owner ?? ""}/${groups.repo ?? ""}`,
     number: Number(groups.number),
   };
 }

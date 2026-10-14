@@ -13,7 +13,7 @@ const BASE_SUBDIR = "base";
 
 /**
  * Writes deterministic exploration aids into the checkout, alongside the already-checked-out
- * head working tree (see src/github/checkout.ts): the complete unified diff at
+ * head working tree (see src/forge/checkout.ts): the complete unified diff at
  * `.tulip/pr.diff`, and the pre-change (base) content of every changed file under
  * `.tulip/base/<path>` (the base-side path, for a rename). A claude session can then Read/Grep
  * both freely, with no git access of its own — see docs/adr/0002.
