@@ -3,9 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { config } from "../config.js";
 import { runCommand } from "./exec.js";
-import { forgeFor } from "./forge.js";
 import { GIT_NO_PROMPT_ENV, wrapAuthFailure } from "./git-auth.js";
-import type { PrRef } from "./types.js";
+import type { ForgeAdapter, PrRef } from "./types.js";
 
 /** Runs a `git` subcommand in `cwd` and returns its stdout. `env` is merged over the process's
  * own environment. Mockable in tests. */
@@ -48,12 +47,13 @@ const COMMIT_SHA_PATTERN = /^([0-9a-f]{40}|[0-9a-f]{64})$/;
  * head revision, with the head revision's working tree checked out (so a claude session's
  * Read/Grep/Glob tools see real files). Fetches both commits shallowly (depth {@link config}.limits
  * .checkoutFetchDepth) by SHA, so it works even when the base/head branches have since moved or
- * been deleted. The fetch authenticates with the operator's git credentials, then the PR forge's own
- * helpers (`ForgeAdapter.gitCredentialArgs`), and throws with the forge's setup hint when none works.
+ * been deleted. The fetch authenticates with the operator's git credentials, then `forge`'s own
+ * helpers, and throws with `forge`'s setup hint when none works. `forge` must be `pr`'s forge.
  */
 export async function createCheckout(
   pr: PrRef,
   revisions: { base: { sha: string }; head: { sha: string } },
+  forge: Pick<ForgeAdapter, "gitCredentialArgs" | "gitAuthHint">,
   options: CreateCheckoutOptions = {},
 ): Promise<PrCheckout> {
   for (const sha of [revisions.base.sha, revisions.head.sha]) {
@@ -61,7 +61,6 @@ export async function createCheckout(
       throw new Error(`Not a commit SHA: ${JSON.stringify(sha)}`);
     }
   }
-  const forge = forgeFor(pr);
   const runGit = options.runGit ?? defaultRunGit;
   const removeDir = options.rm ?? defaultRm;
   const dir = await (options.mkdtemp ?? defaultMkdtemp)();

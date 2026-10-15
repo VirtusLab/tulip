@@ -29,7 +29,7 @@ export interface PrMetadata {
 }
 
 /** What each forge supplies. Everything else in the pipeline is forge-neutral; `forgeFor` (see
- * src/forge/forge.ts) picks the adapter for a PR. */
+ * src/forges/registry.ts) picks the adapter for a PR. */
 export interface ForgeAdapter {
   /** The PR's web page, e.g. `https://github.com/owner/repo/pull/7`. */
   webUrl(pr: PrRef): string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePrUrl } from "./pr-ref.js";
+import { parsePrUrl } from "./pr-url.js";
 
 describe("parsePrUrl", () => {
   it("recognizes a GitHub PR URL", () => {

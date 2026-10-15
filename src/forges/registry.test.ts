@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { PrRef } from "../forge/types.js";
 import { gitCredentialArgs as githubCredentialArgs } from "../github/git-auth.js";
 import { gitCredentialArgs as gitlabCredentialArgs } from "../gitlab/git-auth.js";
-import { forgeFor } from "./forge.js";
-import type { PrRef } from "./types.js";
+import { forgeFor } from "./registry.js";
 
 const GITHUB_PR: PrRef = {
   forge: "github",

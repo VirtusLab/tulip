@@ -1,6 +1,6 @@
+import type { Forge, ForgeAdapter, PrCommenter, PrMetadata, PrRef } from "../forge/types.js";
 import { githubForge } from "../github/adapter.js";
 import { gitlabForge } from "../gitlab/adapter.js";
-import type { Forge, ForgeAdapter, PrCommenter, PrMetadata, PrRef } from "./types.js";
 
 const ADAPTERS: Record<Forge, ForgeAdapter> = { github: githubForge, gitlab: gitlabForge };
 

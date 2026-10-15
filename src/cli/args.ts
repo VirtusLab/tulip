@@ -1,8 +1,8 @@
 import { parseArgs } from "node:util";
 import { config } from "../config.js";
-import { commenterFor } from "../forge/forge.js";
-import { parsePrUrl } from "../forge/pr-ref.js";
 import type { PrRef } from "../forge/types.js";
+import { parsePrUrl } from "../forges/pr-url.js";
+import { commenterFor } from "../forges/registry.js";
 
 /** Default `--diff-threshold`: max diff lines fed verbatim to the explaining LLM. */
 const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;

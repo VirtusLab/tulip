@@ -5,10 +5,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { config } from "../config.js";
-import { gitCredentialArgs } from "../github/git-auth.js";
-import { gitCredentialArgs as gitlabCredentialArgs } from "../gitlab/git-auth.js";
 import { createCheckout } from "./checkout.js";
-import type { PrRef } from "./types.js";
+import type { ForgeAdapter, PrRef } from "./types.js";
 
 const PR: PrRef = { forge: "github", host: "github.com", repoPath: "owner/repo", number: 1 };
 const BASE_SHA = "1".repeat(40);
@@ -18,16 +16,19 @@ const DEPTH = String(config.limits.checkoutFetchDepth);
 
 const ISOLATION_ENV = { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
 const NO_PROMPT_ENV = { GIT_TERMINAL_PROMPT: "0" };
-// Placement and ordering are asserted here; what the helpers do is tested against real git in
-// src/forge/git-auth.test.ts.
-const CREDENTIAL_ARGS = gitCredentialArgs("github.com");
+// Placement and ordering are asserted here; what each forge's helpers do is tested in its package.
+const FORGE: Pick<ForgeAdapter, "gitCredentialArgs" | "gitAuthHint"> = {
+  gitCredentialArgs: (host) => ["-c", `credential.https://${host}.helper=fake`],
+  gitAuthHint: "run fake-login.",
+};
+const CREDENTIAL_ARGS = FORGE.gitCredentialArgs("github.com");
 
 describe("createCheckout", () => {
   it("inits a repo, adds the origin remote, shallow-fetches both revisions, and checks out head", async () => {
     const runGit = vi.fn(async () => "");
     const mkdtemp = vi.fn(async () => "/tmp/tulip-abc123");
 
-    await createCheckout(PR, REVISIONS, { runGit, mkdtemp });
+    await createCheckout(PR, REVISIONS, FORGE, { runGit, mkdtemp });
 
     // init/remote/checkout run isolated from the operator's git config; fetch runs with it (that's
     // where credential helpers live), with Tulip's helpers appended, and never prompts on the tty.
@@ -59,11 +60,10 @@ describe("createCheckout", () => {
     const mkdtemp = vi.fn(async () => "/tmp/t");
 
     await expect(
-      createCheckout(
-        PR,
-        { base: { sha: "--upload-pack=evil" }, head: { sha: HEAD_SHA } },
-        { runGit, mkdtemp },
-      ),
+      createCheckout(PR, { base: { sha: "--upload-pack=evil" }, head: { sha: HEAD_SHA } }, FORGE, {
+        runGit,
+        mkdtemp,
+      }),
     ).rejects.toThrow(/not a commit SHA/i);
 
     expect(runGit).not.toHaveBeenCalled();
@@ -82,14 +82,14 @@ describe("createCheckout", () => {
     });
     const rm = vi.fn(async () => {});
 
-    const error: Error = await createCheckout(PR, REVISIONS, {
+    const error: Error = await createCheckout(PR, REVISIONS, FORGE, {
       runGit,
       mkdtemp: async () => dir,
       rm,
     }).catch((e) => e);
 
     expect(error.message).toMatch(
-      /git could not authenticate to https:\/\/github\.com\/owner\/repo\.git.*gh auth login.*GITHUB_TOKEN.*could not read Username/s,
+      /git could not authenticate to https:\/\/github\.com\/owner\/repo\.git.*run fake-login\..*could not read Username/s,
     );
     // execFile's "Command failed: <argv>" line would bury the hint under the helper snippets.
     expect(error.message).not.toContain("Command failed");
@@ -100,7 +100,7 @@ describe("createCheckout", () => {
     const runGit = vi.fn(async () => "");
     const enterprise: PrRef = { ...PR, host: "git.xyz.com" };
 
-    await createCheckout(enterprise, REVISIONS, { runGit, mkdtemp: async () => "/tmp/t" });
+    await createCheckout(enterprise, REVISIONS, FORGE, { runGit, mkdtemp: async () => "/tmp/t" });
 
     expect(runGit).toHaveBeenNthCalledWith(
       2,
@@ -116,7 +116,7 @@ describe("createCheckout", () => {
       if (args[0] === "show" && args[1] === `${HEAD_SHA}:src/a.ts`) return "head content";
       return "";
     });
-    const checkout = await createCheckout(PR, REVISIONS, {
+    const checkout = await createCheckout(PR, REVISIONS, FORGE, {
       runGit,
       mkdtemp: async () => "/tmp/tulip-abc123",
     });
@@ -130,7 +130,7 @@ describe("createCheckout", () => {
       if (args[0] === "show") throw new Error("fatal: path does not exist");
       return "";
     });
-    const checkout = await createCheckout(PR, REVISIONS, {
+    const checkout = await createCheckout(PR, REVISIONS, FORGE, {
       runGit,
       mkdtemp: async () => "/tmp/tulip-abc123",
     });
@@ -148,7 +148,7 @@ describe("createCheckout", () => {
     const rm = vi.fn(async () => {});
 
     await expect(
-      createCheckout(PR, REVISIONS, { runGit, mkdtemp: async () => dir, rm }),
+      createCheckout(PR, REVISIONS, FORGE, { runGit, mkdtemp: async () => dir, rm }),
     ).rejects.toBe(failure);
 
     expect(rm).toHaveBeenCalledTimes(1);
@@ -159,7 +159,7 @@ describe("createCheckout", () => {
     const runGit = vi.fn(async () => "");
     const rm = vi.fn(async () => {});
     const dir = "/tmp/tulip-abc123";
-    const checkout = await createCheckout(PR, REVISIONS, {
+    const checkout = await createCheckout(PR, REVISIONS, FORGE, {
       runGit,
       mkdtemp: async () => dir,
       rm,
@@ -171,7 +171,7 @@ describe("createCheckout", () => {
     expect(rm).toHaveBeenCalledWith(dir);
   });
 
-  it("clones a GitLab project by its nested path, with GitLab's credential helper", async () => {
+  it("clones a GitLab project by its nested path", async () => {
     const runGit = vi.fn(async () => "");
     const mr: PrRef = {
       forge: "gitlab",
@@ -180,7 +180,7 @@ describe("createCheckout", () => {
       number: 7,
     };
 
-    await createCheckout(mr, REVISIONS, { runGit, mkdtemp: async () => "/tmp/t" });
+    await createCheckout(mr, REVISIONS, FORGE, { runGit, mkdtemp: async () => "/tmp/t" });
 
     expect(runGit).toHaveBeenNthCalledWith(
       2,
@@ -190,36 +190,16 @@ describe("createCheckout", () => {
     );
     expect(runGit).toHaveBeenNthCalledWith(
       3,
-      [...gitlabCredentialArgs("git.example.com"), "fetch", "--depth", DEPTH, "origin", BASE_SHA],
+      [
+        ...FORGE.gitCredentialArgs("git.example.com"),
+        "fetch",
+        "--depth",
+        DEPTH,
+        "origin",
+        BASE_SHA,
+      ],
       "/tmp/t",
       NO_PROMPT_ENV,
-    );
-  });
-
-  it("names GITLAB_TOKEN when a GitLab fetch is denied", async () => {
-    const mr: PrRef = {
-      forge: "gitlab",
-      host: "git.example.com",
-      repoPath: "group/project",
-      number: 7,
-    };
-    const runGit = vi.fn(async (args: string[]) => {
-      if (args.includes("fetch")) {
-        throw new Error(
-          "Command failed: git fetch\nremote: HTTP Basic: Access denied.\nfatal: Authentication failed for 'https://git.example.com/group/project.git/'",
-        );
-      }
-      return "";
-    });
-
-    const error: Error = await createCheckout(mr, REVISIONS, {
-      runGit,
-      mkdtemp: async () => "/tmp/t",
-      rm: async () => {},
-    }).catch((e) => e);
-
-    expect(error.message).toMatch(
-      /git could not authenticate to https:\/\/git\.example\.com\/group\/project\.git: .*GITLAB_TOKEN/s,
     );
   });
 });
@@ -286,6 +266,7 @@ describe("createCheckout (hermetic: real git against a local fixture repo, no ne
     const checkout = await createCheckout(
       PR,
       { base: { sha: fixture.baseSha }, head: { sha: fixture.headSha } },
+      FORGE,
       { runGit },
     );
     checkoutDir = checkout.dir;

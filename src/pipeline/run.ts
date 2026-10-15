@@ -11,9 +11,9 @@ import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
 import { createCheckout, type PrCheckout } from "../forge/checkout.js";
-import { commenterFor, fetchPrMetadata, forgeFor } from "../forge/forge.js";
 import { materializeChangeArtifacts } from "../forge/materialize.js";
 import type { PrMetadata, PrRef } from "../forge/types.js";
+import { commenterFor, fetchPrMetadata, forgeFor } from "../forges/registry.js";
 import { startTimer } from "../logging/duration.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
@@ -127,7 +127,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.debug("creating checkout...");
     checkout = await runPhase("creating checkout", () =>
-      doCreateCheckout(options.pr, { base: metadata.base, head: metadata.head }),
+      doCreateCheckout(options.pr, { base: metadata.base, head: metadata.head }, forge),
     );
     // Every claude session below runs with the checkout dir as its cwd (RULING), so it reads
     // the actual repo files instead of inheriting this process's cwd. Captured into its own
