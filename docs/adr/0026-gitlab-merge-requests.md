@@ -12,7 +12,8 @@ requests.
 
 - **Forge adapter.** `PrRef` carries `forge: "github" | "gitlab"` and a single `repoPath`
   (`owner/repo`, or `group/subgroup/project`). Each forge supplies a `ForgeAdapter`: metadata
-  fetch, extra git credential helpers, the auth-failure hint, the web URL and a log label.
+  fetch, extra git credential helpers, the auth-failure hint, the web URL, a log label and,
+  optionally, a `commenter` for serve mode.
   `parsePrUrl` and `forgeFor` (`src/forge-registry`) are where the forge is chosen; the only other
   check is the pipeline's `--serve` gate. The forge contract and shared HTTP and fetch helpers live
   in `src/forge`; the checkout (with its git auth) in `src/checkout`, which knows no forge.
@@ -39,8 +40,8 @@ requests.
   verified over HTTPS and SSH on a self-hosted instance. GitLab adds one credential helper answering
   `oauth2`/`GITLAB_TOKEN`, after the operator's own helpers. The auth-failure pattern recognizes
   GitLab's `HTTP Basic: Access denied`.
-- **`--serve` stays GitHub-only**: the pipeline rejects it for a GitLab URL before fetching
-  anything.
+- **`--serve` stays GitHub-only**: the GitLab adapter has no `commenter`, and the pipeline
+  rejects `--serve` for a forge without one before fetching anything.
 - **Prompts are forge-neutral** ("a pull request").
 
 ## Consequences
