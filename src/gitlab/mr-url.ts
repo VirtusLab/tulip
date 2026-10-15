@@ -1,9 +1,9 @@
 import type { PrRef } from "../forge/types.js";
-import { HOST_PATTERN, isValidRepoPath } from "../forge/url-parts.js";
+import { HOST_PATTERN, isValidRepoPath, NUMBER_PATTERN } from "../forge/url-parts.js";
 
 // The project path is everything before GitLab's `/-/` route separator.
 const GITLAB_MR_URL_PATTERN = new RegExp(
-  `^https://(?<host>${HOST_PATTERN})/(?<path>[^?#\\s]+?)/-/merge_requests/(?<iid>[1-9]\\d{0,9})/?$`,
+  `^https://(?<host>${HOST_PATTERN})/(?<repoPath>[^?#\\s]+?)/-/merge_requests/(?<number>${NUMBER_PATTERN})/?$`,
 );
 
 /**
@@ -15,13 +15,23 @@ const GITLAB_MR_URL_PATTERN = new RegExp(
  */
 export function parseGitLabMrUrl(url: string): PrRef | undefined {
   const groups = GITLAB_MR_URL_PATTERN.exec(url)?.groups;
-  if (
-    !groups?.host ||
-    !groups.path?.includes("/") ||
-    !isValidRepoPath(groups.path) ||
-    !groups.iid
-  ) {
+  if (!groups?.host || !groups.repoPath?.includes("/") || !isValidRepoPath(groups.repoPath)) {
     return undefined;
   }
-  return { forge: "gitlab", host: groups.host, repoPath: groups.path, number: Number(groups.iid) };
+  return {
+    forge: "gitlab",
+    host: groups.host,
+    repoPath: groups.repoPath,
+    number: Number(groups.number),
+  };
+}
+
+/** The MR's web page, e.g. `https://gitlab.com/group/project/-/merge_requests/7`. */
+export function gitlabMrUrl(pr: PrRef): string {
+  return `https://${pr.host}/${pr.repoPath}/-/merge_requests/${pr.number}`;
+}
+
+/** A short reference to the MR, e.g. `group/project!7`. */
+export function gitlabMrLabel(pr: PrRef): string {
+  return `${pr.repoPath}!${pr.number}`;
 }

@@ -1,4 +1,4 @@
-import { runCommand } from "../forge/exec.js";
+import { runCommand } from "../process/exec.js";
 
 /** Runs a `gh` subcommand (e.g. `["pr", "view", ...]`) and returns its stdout. Mockable in tests. */
 export type CommandRunner = (args: string[]) => Promise<string>;

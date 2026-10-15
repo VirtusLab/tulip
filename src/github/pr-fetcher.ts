@@ -2,8 +2,7 @@ import { bearerAuthHeaders, getAllPages, getJson, getText } from "../forge/http.
 import { fetchConsistentMetadata, type PrRevisions, type PrSource } from "../forge/pr-source.js";
 import type { PrMetadata, PrRef } from "../forge/types.js";
 import { type CommandRunner, defaultRunGh } from "./gh.js";
-
-export type { CommandRunner };
+import { githubPrLabel } from "./pr-url.js";
 
 export interface PrFetcherDeps {
   /** Defaults to invoking the `gh` binary on PATH. */
@@ -30,7 +29,7 @@ export async function fetchPrMetadata(pr: PrRef, deps: PrFetcherDeps = {}): Prom
       return await fetchConsistentMetadata(restSource(deps.fetchUrl ?? fetch, token), pr);
     } catch (httpError) {
       throw new Error(
-        `Failed to fetch PR ${pr.repoPath}#${pr.number}: ` +
+        `Failed to fetch PR ${githubPrLabel(pr)}: ` +
           `gh CLI failed (${errorMessage(ghError)}); HTTP fallback failed (${errorMessage(httpError)})`,
       );
     }
@@ -46,17 +45,17 @@ function ghSource(runGh: CommandRunner): PrSource {
     // Via `gh api`, not `pr view`: older `gh` versions lack the `baseRefOid` view field (they fail
     // the whole call with "Unknown JSON field"). `gh api` reuses gh's auth and, with `--hostname`,
     // targets the PR's host, so this stays correct for GitHub Enterprise.
-    fetchRevisions: async (pr) =>
-      JSON.parse(
-        await runGh([
-          "api",
-          "--hostname",
-          pr.host,
-          `repos/${pr.repoPath}/pulls/${pr.number}`,
-          "--jq",
-          REVISIONS_JQ,
-        ]),
-      ) as PrRevisions,
+    fetchRevisions: async (pr) => {
+      const revisionsJson = await runGh([
+        "api",
+        "--hostname",
+        pr.host,
+        `repos/${pr.repoPath}/pulls/${pr.number}`,
+        "--jq",
+        REVISIONS_JQ,
+      ]);
+      return JSON.parse(revisionsJson) as PrRevisions;
+    },
     fetchContent: async (pr) => {
       // `gh` accepts the `HOST/OWNER/REPO` form, routing to the credentials for that host — so a
       // self-hosted GitHub Enterprise PR resolves once the user has run `gh auth login --hostname
@@ -87,8 +86,7 @@ function apiBaseUrl(host: string): string {
   return host === "github.com" ? "https://api.github.com" : `https://${host}/api/v3`;
 }
 
-/** Names the GitHub API in HTTP errors — see src/forge/http.ts. */
-const API = "GitHub";
+const API_NAME = "GitHub";
 
 /** The fields Tulip reads from GitHub's single-PR response. */
 interface GitHubPull {
@@ -105,15 +103,15 @@ function restSource(fetchUrl: typeof fetch, token: string | undefined): PrSource
   const pullUrl = (pr: PrRef) => `${apiBaseUrl(pr.host)}/repos/${pr.repoPath}/pulls/${pr.number}`;
   return {
     fetchRevisions: async (pr) => {
-      const pull = await getJson<GitHubPull>(fetchUrl, pullUrl(pr), jsonHeaders, API);
+      const pull = await getJson<GitHubPull>(fetchUrl, pullUrl(pr), jsonHeaders, API_NAME);
       return { base: pull.base, head: pull.head };
     },
     fetchContent: async (pr) => {
       const url = pullUrl(pr);
       const [pull, diff, files] = await Promise.all([
-        getJson<GitHubPull>(fetchUrl, url, jsonHeaders, API),
-        getText(fetchUrl, url, diffHeaders, API),
-        getAllPages<{ filename: string }>(fetchUrl, `${url}/files`, jsonHeaders, API),
+        getJson<GitHubPull>(fetchUrl, url, jsonHeaders, API_NAME),
+        getText(fetchUrl, url, diffHeaders, API_NAME),
+        getAllPages<{ filename: string }>(fetchUrl, `${url}/files`, jsonHeaders, API_NAME),
       ]);
       return {
         title: pull.title,

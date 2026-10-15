@@ -16,9 +16,8 @@ export interface PrSource {
 
 /**
  * Fetches a PR's metadata from `source` such that the diff and file list belong to the returned
- * base/head SHAs: the revisions are read before and after the content, and the whole fetch is
- * repeated (up to {@link config}.limits.maxPrFetchAttempts times) if a push or retarget changed
- * them in between.
+ * head SHA: the whole fetch is repeated (up to {@link config}.limits.maxPrFetchAttempts times) if
+ * a push or retarget happened while it ran. A move of the base branch alone doesn't count.
  */
 export async function fetchConsistentMetadata(source: PrSource, pr: PrRef): Promise<PrMetadata> {
   for (let attempt = 0; attempt < config.limits.maxPrFetchAttempts; attempt++) {
@@ -34,11 +33,7 @@ export async function fetchConsistentMetadata(source: PrSource, pr: PrRef): Prom
   );
 }
 
+// Not base.sha: on GitHub it is the base branch's tip, which moves with unrelated pushes.
 function sameRevisions(a: PrRevisions, b: PrRevisions): boolean {
-  return (
-    a.base.ref === b.base.ref &&
-    a.base.sha === b.base.sha &&
-    a.head.ref === b.head.ref &&
-    a.head.sha === b.head.sha
-  );
+  return a.base.ref === b.base.ref && a.head.ref === b.head.ref && a.head.sha === b.head.sha;
 }

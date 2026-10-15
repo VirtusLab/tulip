@@ -28,8 +28,7 @@ export interface PrMetadata {
   head: { ref: string; sha: string };
 }
 
-/** What each forge supplies. Everything else in the pipeline is forge-neutral; `forgeFor` (see
- * src/forges/registry.ts) picks the adapter for a PR. */
+/** What each forge supplies. */
 export interface ForgeAdapter {
   /** The PR's web page, e.g. `https://github.com/owner/repo/pull/7`. */
   webUrl(pr: PrRef): string;
@@ -38,11 +37,10 @@ export interface ForgeAdapter {
   /** Fetches the PR's title, description, changed files, diff and base/head revisions; rejects
    * with a message naming the forge's API. */
   fetchPrMetadata(pr: PrRef): Promise<PrMetadata>;
-  /** `-c credential.https://<host>.helper=...` args added to the checkout's `git fetch`, after the
-   * operator's own helpers. */
-  gitCredentialArgs(host: string): string[];
+  /** Git credential helpers for the checkout's `git fetch`, consulted after the operator's own. */
+  readonly gitCredentialHelpers: string[];
   /** Where a `git fetch` that failed to authenticate can get credentials, for the error message: a
-   * lowercase clause ending with a period (see `wrapAuthFailure` in src/forge/git-auth.ts). */
+   * lowercase clause ending with a period. */
   readonly gitAuthHint: string;
   /** Posts PR comments for serve mode (docs/adr/0019); absent when the forge doesn't support it. */
   readonly commenter?: PrCommenter;

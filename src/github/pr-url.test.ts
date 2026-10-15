@@ -40,6 +40,7 @@ describe("parseGitHubPrUrl", () => {
     // Looks like github.com but `github.com` is userinfo; the real host is evil.example.com.
     "https://github.com@evil.example.com/owner/repo/pull/1",
     "https://github.com/owner/repo",
+    "https://github.com/owner/repo/pull/0",
     "https://github.com/a/b?x=1/pull/1",
     "https://host/../repo/pull/1",
     "https://github.com/a/%2e%2e/pull/1",

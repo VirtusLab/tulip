@@ -1,8 +1,8 @@
 import type { PrRef } from "../forge/types.js";
-import { HOST_PATTERN, isValidRepoPath } from "../forge/url-parts.js";
+import { HOST_PATTERN, isValidRepoPath, NUMBER_PATTERN } from "../forge/url-parts.js";
 
 const GITHUB_PR_URL_PATTERN = new RegExp(
-  `^https://(?<host>${HOST_PATTERN})/(?<repoPath>[^/]+/[^/]+)/pull/(?<number>\\d+)/?$`,
+  `^https://(?<host>${HOST_PATTERN})/(?<repoPath>[^/]+/[^/]+)/pull/(?<number>${NUMBER_PATTERN})/?$`,
 );
 
 /**
@@ -22,4 +22,14 @@ export function parseGitHubPrUrl(url: string): PrRef | undefined {
     repoPath: groups.repoPath,
     number: Number(groups.number),
   };
+}
+
+/** The PR's web page, e.g. `https://github.com/owner/repo/pull/7`. */
+export function githubPrUrl(pr: PrRef): string {
+  return `https://${pr.host}/${pr.repoPath}/pull/${pr.number}`;
+}
+
+/** A short reference to the PR, e.g. `owner/repo#7`. */
+export function githubPrLabel(pr: PrRef): string {
+  return `${pr.repoPath}#${pr.number}`;
 }

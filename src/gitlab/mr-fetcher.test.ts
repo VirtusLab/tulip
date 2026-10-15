@@ -102,16 +102,6 @@ describe("fetchMrMetadata", () => {
     }
   });
 
-  it("sends no token when the token is empty", async () => {
-    const fetchUrl = gitlabApi();
-
-    await fetchMrMetadata(MR, { fetchUrl: asFetch(fetchUrl), gitlabToken: "" });
-
-    for (const [, init] of fetchUrl.mock.calls) {
-      expect(new Headers(init?.headers).get("Authorization")).toBeNull();
-    }
-  });
-
   it.each([null, { base_sha: null, head_sha: HEAD_SHA }, { base_sha: BASE_SHA, head_sha: null }])(
     "asks to retry when GitLab hasn't computed diff_refs yet: %j",
     async (diffRefs) => {

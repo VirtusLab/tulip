@@ -5,10 +5,9 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { config } from "../config.js";
-import { createCheckout } from "./checkout.js";
-import type { ForgeAdapter, PrRef } from "./types.js";
+import { type CheckoutAuth, createCheckout } from "./checkout.js";
 
-const PR: PrRef = { forge: "github", host: "github.com", repoPath: "owner/repo", number: 1 };
+const REPO = { host: "github.com", repoPath: "owner/repo" };
 const BASE_SHA = "1".repeat(40);
 const HEAD_SHA = "2".repeat(40);
 const REVISIONS = { base: { sha: BASE_SHA }, head: { sha: HEAD_SHA } };
@@ -16,19 +15,15 @@ const DEPTH = String(config.limits.checkoutFetchDepth);
 
 const ISOLATION_ENV = { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
 const NO_PROMPT_ENV = { GIT_TERMINAL_PROMPT: "0" };
-// Placement and ordering are asserted here; what each forge's helpers do is tested in its package.
-const FORGE: Pick<ForgeAdapter, "gitCredentialArgs" | "gitAuthHint"> = {
-  gitCredentialArgs: (host) => ["-c", `credential.https://${host}.helper=fake`],
-  gitAuthHint: "run fake-login.",
-};
-const CREDENTIAL_ARGS = FORGE.gitCredentialArgs("github.com");
+const AUTH: CheckoutAuth = { credentialHelpers: ["fake"], authHint: "run fake-login." };
+const CREDENTIAL_ARGS = ["-c", "credential.https://github.com.helper=fake"];
 
 describe("createCheckout", () => {
   it("inits a repo, adds the origin remote, shallow-fetches both revisions, and checks out head", async () => {
     const runGit = vi.fn(async () => "");
     const mkdtemp = vi.fn(async () => "/tmp/tulip-abc123");
 
-    await createCheckout(PR, REVISIONS, FORGE, { runGit, mkdtemp });
+    await createCheckout(REPO, REVISIONS, AUTH, { runGit, mkdtemp });
 
     // init/remote/checkout run isolated from the operator's git config; fetch runs with it (that's
     // where credential helpers live), with Tulip's helpers appended, and never prompts on the tty.
@@ -60,7 +55,7 @@ describe("createCheckout", () => {
     const mkdtemp = vi.fn(async () => "/tmp/t");
 
     await expect(
-      createCheckout(PR, { base: { sha: "--upload-pack=evil" }, head: { sha: HEAD_SHA } }, FORGE, {
+      createCheckout(REPO, { base: { sha: "--upload-pack=evil" }, head: { sha: HEAD_SHA } }, AUTH, {
         runGit,
         mkdtemp,
       }),
@@ -82,7 +77,7 @@ describe("createCheckout", () => {
     });
     const rm = vi.fn(async () => {});
 
-    const error: Error = await createCheckout(PR, REVISIONS, FORGE, {
+    const error: Error = await createCheckout(REPO, REVISIONS, AUTH, {
       runGit,
       mkdtemp: async () => dir,
       rm,
@@ -96,27 +91,13 @@ describe("createCheckout", () => {
     expect(rm).toHaveBeenCalledWith(dir);
   });
 
-  it("clones from a self-hosted GitHub Enterprise host", async () => {
-    const runGit = vi.fn(async () => "");
-    const enterprise: PrRef = { ...PR, host: "git.xyz.com" };
-
-    await createCheckout(enterprise, REVISIONS, FORGE, { runGit, mkdtemp: async () => "/tmp/t" });
-
-    expect(runGit).toHaveBeenNthCalledWith(
-      2,
-      ["remote", "add", "origin", "https://git.xyz.com/owner/repo.git"],
-      "/tmp/t",
-      ISOLATION_ENV,
-    );
-  });
-
   it("reads file content at base and head via git show", async () => {
     const runGit = vi.fn(async (args: string[]) => {
       if (args[0] === "show" && args[1] === `${BASE_SHA}:src/a.ts`) return "base content";
       if (args[0] === "show" && args[1] === `${HEAD_SHA}:src/a.ts`) return "head content";
       return "";
     });
-    const checkout = await createCheckout(PR, REVISIONS, FORGE, {
+    const checkout = await createCheckout(REPO, REVISIONS, AUTH, {
       runGit,
       mkdtemp: async () => "/tmp/tulip-abc123",
     });
@@ -130,7 +111,7 @@ describe("createCheckout", () => {
       if (args[0] === "show") throw new Error("fatal: path does not exist");
       return "";
     });
-    const checkout = await createCheckout(PR, REVISIONS, FORGE, {
+    const checkout = await createCheckout(REPO, REVISIONS, AUTH, {
       runGit,
       mkdtemp: async () => "/tmp/tulip-abc123",
     });
@@ -148,7 +129,7 @@ describe("createCheckout", () => {
     const rm = vi.fn(async () => {});
 
     await expect(
-      createCheckout(PR, REVISIONS, FORGE, { runGit, mkdtemp: async () => dir, rm }),
+      createCheckout(REPO, REVISIONS, AUTH, { runGit, mkdtemp: async () => dir, rm }),
     ).rejects.toBe(failure);
 
     expect(rm).toHaveBeenCalledTimes(1);
@@ -159,7 +140,7 @@ describe("createCheckout", () => {
     const runGit = vi.fn(async () => "");
     const rm = vi.fn(async () => {});
     const dir = "/tmp/tulip-abc123";
-    const checkout = await createCheckout(PR, REVISIONS, FORGE, {
+    const checkout = await createCheckout(REPO, REVISIONS, AUTH, {
       runGit,
       mkdtemp: async () => dir,
       rm,
@@ -173,33 +154,15 @@ describe("createCheckout", () => {
 
   it("clones a GitLab project by its nested path", async () => {
     const runGit = vi.fn(async () => "");
-    const mr: PrRef = {
-      forge: "gitlab",
-      host: "git.example.com",
-      repoPath: "group/sub/project",
-      number: 7,
-    };
+    const repo = { host: "git.example.com", repoPath: "group/sub/project" };
 
-    await createCheckout(mr, REVISIONS, FORGE, { runGit, mkdtemp: async () => "/tmp/t" });
+    await createCheckout(repo, REVISIONS, AUTH, { runGit, mkdtemp: async () => "/tmp/t" });
 
     expect(runGit).toHaveBeenNthCalledWith(
       2,
       ["remote", "add", "origin", "https://git.example.com/group/sub/project.git"],
       "/tmp/t",
       ISOLATION_ENV,
-    );
-    expect(runGit).toHaveBeenNthCalledWith(
-      3,
-      [
-        ...FORGE.gitCredentialArgs("git.example.com"),
-        "fetch",
-        "--depth",
-        DEPTH,
-        "origin",
-        BASE_SHA,
-      ],
-      "/tmp/t",
-      NO_PROMPT_ENV,
     );
   });
 });
@@ -258,15 +221,15 @@ describe("createCheckout (hermetic: real git against a local fixture repo, no ne
       env: Record<string, string>,
     ): Promise<string> => {
       const rewritten = args.map((arg) =>
-        arg === `https://github.com/${PR.repoPath}.git` ? fixture.dir : arg,
+        arg === `https://github.com/${REPO.repoPath}.git` ? fixture.dir : arg,
       );
       return git(rewritten, cwd, env);
     };
 
     const checkout = await createCheckout(
-      PR,
+      REPO,
       { base: { sha: fixture.baseSha }, head: { sha: fixture.headSha } },
-      FORGE,
+      AUTH,
       { runGit },
     );
     checkoutDir = checkout.dir;

@@ -58,7 +58,7 @@ function formatChange(
  * readable directly with its Read/Grep/Glob tools (no Bash/git access is granted — see
  * src/config.ts's `claude.allowedTools` doc comment for why), plus the full diff and every
  * changed file's pre-change content, both materialized as plain files (see
- * src/forge/materialize.ts) so they're freely readable regardless of prompt size. Text lives
+ * src/checkout/materialize.ts) so they're freely readable regardless of prompt size. Text lives
  * in src/prompts/explain-checkout-access.md (docs/adr/0006). */
 function describeCheckoutAccess(input: { baseSha: string; headSha: string }): string {
   return renderPrompt("explain-checkout-access", {

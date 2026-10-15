@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import { generateCategories } from "../categories/generate.js";
 import { reviewAndAmendCategories } from "../categories/review.js";
 import type { Category } from "../categories/types.js";
+import { createCheckout, type PrCheckout } from "../checkout/checkout.js";
+import { materializeChangeArtifacts } from "../checkout/materialize.js";
 import { type CategoryChangeSet, groupChangesByCategory } from "../classification/group.js";
 import { type ClassifyChangesResult, classifyChanges } from "../classification/orchestrate.js";
 import { prepareClassifiableChanges } from "../classification/prepare.js";
@@ -10,10 +12,8 @@ import { createUsageLedger, formatUsageSummary } from "../claude/usage.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
-import { createCheckout, type PrCheckout } from "../forge/checkout.js";
-import { materializeChangeArtifacts } from "../forge/materialize.js";
 import type { PrMetadata, PrRef } from "../forge/types.js";
-import { commenterFor, fetchPrMetadata, forgeFor } from "../forges/registry.js";
+import { forgeFor } from "../forge-registry/registry.js";
 import { startTimer } from "../logging/duration.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
@@ -42,7 +42,7 @@ export type BrowserOpener = (path: string) => Promise<void>;
 /** Test/advanced-use seams: every phase function, injectable for orchestration tests. All
  * default to the real epic 2-7 implementations. */
 export interface PipelineDeps {
-  fetchPrMetadata?: typeof fetchPrMetadata;
+  forgeFor?: typeof forgeFor;
   createCheckout?: typeof createCheckout;
   materializeChangeArtifacts?: typeof materializeChangeArtifacts;
   generateCategories?: typeof generateCategories;
@@ -51,7 +51,6 @@ export interface PipelineDeps {
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
   renderExplanations?: typeof renderExplanations;
-  commenterFor?: typeof commenterFor;
   serveForReview?: typeof serveForReview;
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
    * never actually spawns a browser. */
@@ -79,7 +78,6 @@ class PhaseError extends Error {
  */
 export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Promise<void> {
   const logger = deps.logger ?? createLogger({ verbose: options.verbose });
-  const doFetchPrMetadata = deps.fetchPrMetadata ?? fetchPrMetadata;
   const doCreateCheckout = deps.createCheckout ?? createCheckout;
   const doMaterializeChangeArtifacts =
     deps.materializeChangeArtifacts ?? materializeChangeArtifacts;
@@ -89,12 +87,11 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
-  const doCommenterFor = deps.commenterFor ?? commenterFor;
   const doServeForReview = deps.serveForReview ?? serveForReview;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
-  const forge = forgeFor(options.pr);
-  const prUrl = forge.webUrl(options.pr);
+  const adapter = (deps.forgeFor ?? forgeFor)(options.pr);
+  const prUrl = adapter.webUrl(options.pr);
 
   logger.info(formatVersion());
   logger.info(`Processing PR ${prUrl}`);
@@ -108,11 +105,14 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     // Serve mode has no posting fallback, so an unsupported forge or broken auth makes it
     // pointless: fail fast here, before any fetch/checkout/LLM work. Not wrapped in runPhase —
     // these messages are already actionable and must reach the user verbatim via describeFailure.
-    const commenter = options.serve ? doCommenterFor(options.pr) : undefined;
+    const commenter = options.serve ? adapter.commenter : undefined;
+    if (options.serve && !commenter) {
+      throw new Error(`--serve isn't supported for ${options.pr.forge} URLs`);
+    }
     await commenter?.checkAuth(options.pr.host);
 
-    logger.info(`fetching ${forge.label(options.pr)}...`);
-    const metadata = await runPhase("fetching PR", () => doFetchPrMetadata(options.pr));
+    logger.info(`fetching ${adapter.label(options.pr)}...`);
+    const metadata = await runPhase("fetching PR", () => adapter.fetchPrMetadata(options.pr));
 
     const diff = parseDiff(metadata.diff);
     warnOnFileListMismatch(metadata, diff, logger);
@@ -127,7 +127,11 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.debug("creating checkout...");
     checkout = await runPhase("creating checkout", () =>
-      doCreateCheckout(options.pr, { base: metadata.base, head: metadata.head }, forge),
+      doCreateCheckout(
+        options.pr,
+        { base: metadata.base, head: metadata.head },
+        { credentialHelpers: adapter.gitCredentialHelpers, authHint: adapter.gitAuthHint },
+      ),
     );
     // Every claude session below runs with the checkout dir as its cwd (RULING), so it reads
     // the actual repo files instead of inheriting this process's cwd. Captured into its own

@@ -1,8 +1,8 @@
 import { parseArgs } from "node:util";
 import { config } from "../config.js";
 import type { PrRef } from "../forge/types.js";
-import { parsePrUrl } from "../forges/pr-url.js";
-import { commenterFor } from "../forges/registry.js";
+import { parsePrUrl } from "../forge-registry/pr-url.js";
+import { forgeFor } from "../forge-registry/registry.js";
 
 /** Default `--diff-threshold`: max diff lines fed verbatim to the explaining LLM. */
 const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;
@@ -113,12 +113,8 @@ export function parseCliArgs(argv: string[]): RunOptions {
   }
 
   const serve = values.serve ?? false;
-  if (serve) {
-    try {
-      commenterFor(pr);
-    } catch (error) {
-      throw new CliUsageError((error as Error).message);
-    }
+  if (serve && !forgeFor(pr).commenter) {
+    throw new CliUsageError(`--serve isn't supported for ${pr.forge} URLs`);
   }
 
   const diffThreshold = parseDiffThreshold(values["diff-threshold"]);

@@ -27,8 +27,7 @@ interface GitLabMergeRequest {
   diff_refs: { base_sha: string | null; head_sha: string | null } | null;
 }
 
-/** Names the GitLab API in HTTP errors — see src/forge/http.ts. */
-const API = "GitLab";
+const API_NAME = "GitLab";
 
 const SCOPES = "scopes: read_api, read_repository";
 const NO_TOKEN_HINT = `for a private project, set GITLAB_TOKEN (${SCOPES})`;
@@ -52,9 +51,11 @@ function restSource(fetchUrl: typeof fetch, token: string | undefined): PrSource
   const mrApiUrl = (pr: PrRef) =>
     `https://${pr.host}/api/v4/projects/${encodeURIComponent(pr.repoPath)}/merge_requests/${pr.number}`;
   const getMr = (pr: PrRef) =>
-    getJson<GitLabMergeRequest>(fetchUrl, mrApiUrl(pr), headers, API).catch((error: unknown) => {
-      throw withTokenHint(error, Boolean(token));
-    });
+    getJson<GitLabMergeRequest>(fetchUrl, mrApiUrl(pr), headers, API_NAME).catch(
+      (error: unknown) => {
+        throw withTokenHint(error, Boolean(token));
+      },
+    );
   return {
     fetchRevisions: async (pr) => {
       const mr = await getMr(pr);
@@ -70,13 +71,12 @@ function restSource(fetchUrl: typeof fetch, token: string | undefined): PrSource
     },
     fetchContent: async (pr) => {
       const url = mrApiUrl(pr);
-      // The paginated `/diffs` gives every changed file's head-side path. A single oversized file
-      // can still appear there without content, which the pipeline's file-list mismatch warning
-      // reports; whole-MR truncation is caught by `assertNotTruncated`.
       const [mr, diff, files] = await Promise.all([
         getMr(pr),
-        getText(fetchUrl, `${url}/raw_diffs`, headers, API).catch(withOldGitLabHint("raw_diffs")),
-        getAllPages<{ new_path: string }>(fetchUrl, `${url}/diffs`, headers, API).catch(
+        getText(fetchUrl, `${url}/raw_diffs`, headers, API_NAME).catch(
+          withOldGitLabHint("raw_diffs"),
+        ),
+        getAllPages<{ new_path: string }>(fetchUrl, `${url}/diffs`, headers, API_NAME).catch(
           withOldGitLabHint("diffs"),
         ),
       ]);
@@ -91,8 +91,8 @@ function restSource(fetchUrl: typeof fetch, token: string | undefined): PrSource
   };
 }
 
-/** GitLab cuts both `/diffs` and `raw_diffs` when an MR exceeds the instance's diff limits, so the
- * file-list mismatch warning can't notice. `changes_count` is the full count ("1000+" past the cap). */
+/** Throws when `changesCount` (GitLab's `changes_count`, e.g. "12" or "1000+") shows more files
+ * than the `listed` ones; an unknown count passes. */
 function assertNotTruncated(changesCount: string | null | undefined, listed: number): void {
   if (changesCount === null || changesCount === undefined) {
     return;

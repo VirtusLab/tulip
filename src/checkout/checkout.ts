@@ -2,9 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { config } from "../config.js";
-import { runCommand } from "./exec.js";
-import { GIT_NO_PROMPT_ENV, wrapAuthFailure } from "./git-auth.js";
-import type { ForgeAdapter, PrRef } from "./types.js";
+import { runCommand } from "../process/exec.js";
+import { credentialHelperArgs, GIT_NO_PROMPT_ENV, wrapAuthFailure } from "./git-auth.js";
 
 /** Runs a `git` subcommand in `cwd` and returns its stdout. `env` is merged over the process's
  * own environment. Mockable in tests. */
@@ -29,6 +28,14 @@ export interface PrCheckout {
   cleanup(): Promise<void>;
 }
 
+/** How the checkout's `git fetch` authenticates, beyond the operator's own git config. */
+export interface CheckoutAuth {
+  /** Credential helpers for the repo's host, consulted after the operator's own. */
+  credentialHelpers: string[];
+  /** Where to get credentials; shown when the fetch fails to authenticate. */
+  authHint: string;
+}
+
 export interface CreateCheckoutOptions {
   /** Defaults to invoking the `git` binary on PATH. */
   runGit?: GitRunner;
@@ -47,13 +54,14 @@ const COMMIT_SHA_PATTERN = /^([0-9a-f]{40}|[0-9a-f]{64})$/;
  * head revision, with the head revision's working tree checked out (so a claude session's
  * Read/Grep/Glob tools see real files). Fetches both commits shallowly (depth {@link config}.limits
  * .checkoutFetchDepth) by SHA, so it works even when the base/head branches have since moved or
- * been deleted. The fetch authenticates with the operator's git credentials, then `forge`'s own
- * helpers, and throws with `forge`'s setup hint when none works. `forge` must be `pr`'s forge.
+ * been deleted. The repo is cloned from `https://<host>/<repoPath>.git`. The fetch authenticates
+ * with the operator's git credentials, then `auth`'s helpers, and throws with `auth`'s hint when
+ * none works.
  */
 export async function createCheckout(
-  pr: PrRef,
+  repo: { host: string; repoPath: string },
   revisions: { base: { sha: string }; head: { sha: string } },
-  forge: Pick<ForgeAdapter, "gitCredentialArgs" | "gitAuthHint">,
+  auth: CheckoutAuth,
   options: CreateCheckoutOptions = {},
 ): Promise<PrCheckout> {
   for (const sha of [revisions.base.sha, revisions.head.sha]) {
@@ -66,14 +74,11 @@ export async function createCheckout(
   const dir = await (options.mkdtemp ?? defaultMkdtemp)();
   const depth = String(config.limits.checkoutFetchDepth);
 
-  const remoteUrl = `https://${pr.host}/${pr.repoPath}.git`;
+  const remoteUrl = `https://${repo.host}/${repo.repoPath}.git`;
+  const credentialArgs = credentialHelperArgs(repo.host, auth.credentialHelpers);
   const runIsolated = (args: string[]) => runGit(args, dir, GIT_ISOLATION_ENV);
   const runFetch = (sha: string) =>
-    runGit(
-      [...forge.gitCredentialArgs(pr.host), "fetch", "--depth", depth, "origin", sha],
-      dir,
-      GIT_NO_PROMPT_ENV,
-    );
+    runGit([...credentialArgs, "fetch", "--depth", depth, "origin", sha], dir, GIT_NO_PROMPT_ENV);
   try {
     await runIsolated(["init"]);
     await runIsolated(["remote", "add", "origin", remoteUrl]);
@@ -87,7 +92,7 @@ export async function createCheckout(
     // None of the above succeeded enough to hand back a usable PrCheckout — the caller never
     // gets a `checkout` to call `.cleanup()` on, so this is the only chance to remove `dir`.
     await removeDir(dir);
-    throw wrapAuthFailure(error, remoteUrl, forge.gitAuthHint);
+    throw wrapAuthFailure(error, remoteUrl, auth.authHint);
   }
 
   async function getFileAt(sha: string, path: string): Promise<string | undefined> {

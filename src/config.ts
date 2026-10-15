@@ -17,7 +17,7 @@ export const config = {
      * malicious PR's own commit message) to an arbitrary path — `claude`'s prefix-based
      * `--allowedTools`/`--disallowedTools` matching can't block a flag that may appear at any
      * argv position (see docs/adr/0002). Sessions instead rely on their default Read/Grep/Glob
-     * access to the checked-out working tree (see src/forge/checkout.ts) — no Bash grant, no
+     * access to the checked-out working tree (see src/checkout/checkout.ts) — no Bash grant, no
      * vector. Kept as a list (not removed) so it stays the one place to configure this, and
      * `buildArgs` (src/claude/runner.ts) omits `--allowedTools` entirely when it's empty. */
     allowedTools: [],
@@ -43,10 +43,9 @@ export const config = {
   timeouts: {
     /** Single `claude -p` invocation — see src/claude/exec.ts. */
     claudeProcessMs: 10 * 60 * 1000,
-    /** Single `gh`/`git` subcommand — see src/forge/exec.ts. */
+    /** Single `gh`/`git` subcommand — see src/process/exec.ts. */
     forgeCommandMs: 2 * 60 * 1000,
-    /** Single forge REST API request (GitHub's `gh`-unavailable fallback, and every GitLab
-     * request) — see src/forge/http.ts. */
+    /** Single forge REST API request — see src/forge/http.ts. */
     forgeApiFetchMs: 60 * 1000,
   },
 
@@ -97,7 +96,7 @@ export const config = {
     maxPrFetchAttempts: 3,
     /** Commit depth fetched for each of the checkout's base/head revisions — enough for `git
      * log`/`git blame` in a claude session to see real history, not just the tip commit — see
-     * src/forge/checkout.ts. */
+     * src/checkout/checkout.ts. */
     checkoutFetchDepth: 50,
   },
 

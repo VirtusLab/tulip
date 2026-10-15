@@ -13,9 +13,9 @@ requests.
 - **Forge adapter.** `PrRef` carries `forge: "github" | "gitlab"` and a single `repoPath`
   (`owner/repo`, or `group/subgroup/project`). Each forge supplies a `ForgeAdapter`: metadata
   fetch, extra git credential helpers, the auth-failure hint, the web URL and a log label.
-  `parsePrUrl` and `forgeFor` (`src/forges`) are where the forge is chosen; the only other check
-  is the CLI's `--serve` gate. Forge-neutral code (checkout, materialize, exec, HTTP helpers, the
-  generic half of git-auth) lives in `src/forge`.
+  `parsePrUrl` and `forgeFor` (`src/forge-registry`) are where the forge is chosen; the only other
+  check is the CLI's `--serve` gate. The forge contract and shared HTTP and fetch helpers live in
+  `src/forge`; the checkout (with its git auth) in `src/checkout`, which knows no forge.
 - **Detection by URL shape, not host.** `/<path>/-/merge_requests/<iid>` is GitLab on any host;
   `/<owner>/<repo>/pull/<n>` is GitHub. Path segments are allowlisted (`[A-Za-z0-9._-]+`, not
   `-`, `.` or `..`), since `repoPath` goes into the clone and API URLs. Tab suffixes such as

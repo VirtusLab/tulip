@@ -93,6 +93,9 @@ export async function getAllPages<T>(
   }
 }
 
+/** Visible ASCII only. */
+const HEADER_SAFE_TOKEN = /^[\x21-\x7E]+$/;
+
 /** `Authorization: Bearer` header for `token`, or none when it is unset or empty. Bearer survives
  * a cross-origin redirect safely (fetch strips Authorization there). Throws on a token that can't
  * be a header value, because fetch's own rejection message would contain the token; the message
@@ -104,7 +107,7 @@ export function bearerAuthHeaders(
   if (!token) {
     return {};
   }
-  if (!/^[\x21-\x7E]+$/.test(token)) {
+  if (!HEADER_SAFE_TOKEN.test(token)) {
     throw new Error(
       `${envName} contains characters that can't be sent in an HTTP header (such as whitespace or a line break); check its value`,
     );

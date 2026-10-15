@@ -6,15 +6,18 @@ import type { PrRef } from "./types.js";
 const PR: PrRef = { forge: "github", host: "github.com", repoPath: "owner/repo", number: 1 };
 const CONTENT: PrContent = { title: "t", body: "b", files: ["a.ts"], diff: "d" };
 
-function revisions(headSha: string): PrRevisions {
-  return { base: { ref: "main", sha: "base" }, head: { ref: "feature", sha: headSha } };
+function revisions(headSha: string, base = { ref: "main", sha: "base" }): PrRevisions {
+  return { base, head: { ref: "feature", sha: headSha } };
 }
 
-/** A source whose revisions are read from `heads` in order, one per `fetchRevisions` call. */
-function source(heads: string[]) {
+/** A source whose revisions are read from `reads` in order, one per `fetchRevisions` call. */
+function source(reads: (string | PrRevisions)[]) {
   let call = 0;
   return {
-    fetchRevisions: vi.fn(async () => revisions(heads[call++] ?? "unexpected")),
+    fetchRevisions: vi.fn(async () => {
+      const read = reads[call++] ?? "unexpected";
+      return typeof read === "string" ? revisions(read) : read;
+    }),
     fetchContent: vi.fn(async () => CONTENT),
   };
 }
@@ -33,6 +36,26 @@ describe("fetchConsistentMetadata", () => {
 
     expect(result.head.sha).toBe("h2");
     expect(src.fetchContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries when the PR was retargeted to another base branch", async () => {
+    const retargeted = revisions("h1", { ref: "release", sha: "base" });
+    const src = source(["h1", retargeted, retargeted, retargeted]);
+
+    const result = await fetchConsistentMetadata(src, PR);
+
+    expect(result.base.ref).toBe("release");
+    expect(src.fetchContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("doesn't retry when only the base branch's SHA moved, and returns the second read's", async () => {
+    const moved = revisions("h1", { ref: "main", sha: "base2" });
+    const src = source(["h1", moved]);
+
+    const result = await fetchConsistentMetadata(src, PR);
+
+    expect(result.base.sha).toBe("base2");
+    expect(src.fetchContent).toHaveBeenCalledTimes(1);
   });
 
   it("gives up when the revisions keep changing", async () => {

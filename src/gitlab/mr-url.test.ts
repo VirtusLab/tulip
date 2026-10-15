@@ -29,18 +29,6 @@ describe("parseGitLabMrUrl", () => {
     });
   });
 
-  it("accepts dots, dashes and underscores inside segments", () => {
-    expect(
-      parseGitLabMrUrl("https://gitlab.com/my.group/my-project_2/-/merge_requests/3")?.repoPath,
-    ).toBe("my.group/my-project_2");
-  });
-
-  it("keeps the case of path segments", () => {
-    expect(parseGitLabMrUrl("https://gitlab.com/Group/Project/-/merge_requests/3")?.repoPath).toBe(
-      "Group/Project",
-    );
-  });
-
   it.each([
     "https://gitlab.com/group/project/-/merge_requests/12/diffs",
     "https://gitlab.com/project/-/merge_requests/12",

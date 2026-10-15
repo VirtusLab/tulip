@@ -1,13 +1,10 @@
-/** The forge-neutral half of how Tulip's own `git fetch` authenticates: building credential
- * helpers, no terminal prompt, and a hint on failure. Which helpers to use is per forge (see
- * ForgeAdapter). */
+/** How Tulip's own `git fetch` authenticates: credential helpers, no terminal prompt, and a hint
+ * on failure. */
 
 /** A git credential helper answering `get` with `username` and the token in env var `envName`, read
- * from the environment when git runs the helper — the token itself is never on a command line.
- * Silent when the variable is unset or empty. `envName` and `username` are inlined into a shell
- * snippet, so they must be constants. A newline inside the token would add lines to git's
- * credential protocol; `bearerAuthHeaders` (src/forge/http.ts) rejects such a token, so this can't
- * happen when the forge's REST fetch used the token before the checkout (always so for GitLab). */
+ * when git runs the helper, so the token is never on a command line. Silent when the variable is
+ * unset or empty. `envName` and `username` must be constants (they are inlined into a shell
+ * snippet); the token must not contain a newline. */
 export function tokenCredentialHelper(envName: string, username: string): string {
   return `!f() { test "$1" = get && test -n "$${envName}" && printf "username=${username}\\npassword=%s\\n" "$${envName}"; }; f`;
 }
@@ -33,9 +30,7 @@ const AUTH_FAILURE_PATTERN =
   /could not read (Username|Password)|Authentication failed|HTTP Basic: Access denied|returned error: 40[13]|repository[^\n]*not found|Permission denied \(publickey\)/i;
 
 /** Returns `error` unchanged unless it is a git failure caused by authentication; then an Error
- * whose message names where credentials can come from (`hint`, from the PR's forge), followed by
- * git's own output. `hint` completes `…to <remote>: <hint>` and is followed by another sentence, so
- * it is a lowercase clause ending with a period. */
+ * whose message names where credentials can come from (`hint`), followed by git's own output. */
 export function wrapAuthFailure(error: unknown, remoteUrl: string, hint: string): unknown {
   if (!(error instanceof Error) || !AUTH_FAILURE_PATTERN.test(error.message)) {
     return error;
