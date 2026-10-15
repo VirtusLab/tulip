@@ -11,10 +11,9 @@ import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
 import { createCheckout, type PrCheckout } from "../forge/checkout.js";
-import { fetchPrMetadata, forgeFor } from "../forge/forge.js";
+import { commenterFor, fetchPrMetadata, forgeFor } from "../forge/forge.js";
 import { materializeChangeArtifacts } from "../forge/materialize.js";
 import type { PrMetadata, PrRef } from "../forge/types.js";
-import { checkGhAuth } from "../github/gh-auth.js";
 import { startTimer } from "../logging/duration.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
@@ -31,9 +30,8 @@ export interface PipelineOptions {
   verbose: boolean;
   /** Auto-open the rendered page in the default browser when done. */
   open: boolean;
-  /** Run a local review server that posts per-category PR comments via `gh` (docs/adr/0019),
-   * instead of rendering a static page and exiting. GitHub PRs only — the CLI rejects `--serve`
-   * for a GitLab URL. */
+  /** Run a local review server that posts per-category PR comments (docs/adr/0019), instead of
+   * rendering a static page and exiting. Fails when the PR's forge has no `commenter`. */
   serve: boolean;
 }
 
@@ -53,7 +51,7 @@ export interface PipelineDeps {
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
   renderExplanations?: typeof renderExplanations;
-  checkGhAuth?: typeof checkGhAuth;
+  commenterFor?: typeof commenterFor;
   serveForReview?: typeof serveForReview;
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
    * never actually spawns a browser. */
@@ -91,7 +89,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
-  const doCheckGhAuth = deps.checkGhAuth ?? checkGhAuth;
+  const doCommenterFor = deps.commenterFor ?? commenterFor;
   const doServeForReview = deps.serveForReview ?? serveForReview;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
@@ -107,12 +105,11 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
   let checkout: PrCheckout | undefined;
   try {
-    // Serve mode has no posting fallback, so a broken `gh` makes it pointless: fail fast here,
-    // before any fetch/checkout/LLM work. Not wrapped in runPhase — checkGhAuth's message is
-    // already actionable and must reach the user verbatim via describeFailure.
-    if (options.serve) {
-      await doCheckGhAuth(options.pr.host);
-    }
+    // Serve mode has no posting fallback, so an unsupported forge or broken auth makes it
+    // pointless: fail fast here, before any fetch/checkout/LLM work. Not wrapped in runPhase —
+    // these messages are already actionable and must reach the user verbatim via describeFailure.
+    const commenter = options.serve ? doCommenterFor(options.pr) : undefined;
+    await commenter?.checkAuth(options.pr.host);
 
     logger.info(`fetching ${forge.label(options.pr)}...`);
     const metadata = await runPhase("fetching PR", () => doFetchPrMetadata(options.pr));
@@ -247,13 +244,14 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     const categoryNames = explanations.map((explanation) => explanation.category.name);
 
-    if (options.serve) {
+    if (commenter) {
       // Serves the rendered dir over http://, opens it (honoring --no-open), and blocks until
       // Ctrl+C; on resolve the finally below cleans up the checkout, as in the static path.
       await doServeForReview({
         dir,
         prUrl,
         categoryNames,
+        postComment: commenter.postComment,
         open: options.open,
         logger,
         openInBrowser: doOpenInBrowser,

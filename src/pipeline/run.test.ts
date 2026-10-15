@@ -156,9 +156,12 @@ function baseDeps(order: string[] = []) {
       order.push("render");
       return { dir: "/tmp/tulip-render", indexPath: "/tmp/tulip-render/index.html" };
     }),
-    checkGhAuth: vi.fn(async (): Promise<void> => {
-      order.push("gh-auth");
-    }),
+    commenterFor: vi.fn(() => ({
+      checkAuth: vi.fn(async (): Promise<void> => {
+        order.push("auth");
+      }),
+      postComment: vi.fn(async () => "comment-url"),
+    })),
     serveForReview: vi.fn(async (): Promise<void> => {
       order.push("serve");
     }),
@@ -804,14 +807,16 @@ describe("run", () => {
     ).toBe(true);
   });
 
-  it("in serve mode, preflights gh auth before fetching, renders with serve, and serves the dir", async () => {
+  it("in serve mode, preflights auth before fetching, renders with serve, and serves the dir", async () => {
     const order: string[] = [];
     const deps = baseDeps(order);
 
     await run(options({ serve: true }), deps);
 
-    expect(deps.checkGhAuth).toHaveBeenCalledWith(PR.host);
-    expect(order.indexOf("gh-auth")).toBeLessThan(order.indexOf("fetch"));
+    const commenter = deps.commenterFor.mock.results[0]?.value;
+    expect(deps.commenterFor).toHaveBeenCalledWith(PR);
+    expect(commenter.checkAuth).toHaveBeenCalledWith(PR.host);
+    expect(order.indexOf("auth")).toBeLessThan(order.indexOf("fetch"));
     expect(deps.renderExplanations).toHaveBeenCalledWith(
       expect.objectContaining({ serve: true }),
       expect.anything(),
@@ -822,6 +827,7 @@ describe("run", () => {
         dir: "/tmp/tulip-render",
         prUrl: "https://github.com/octo/widgets/pull/42",
         categoryNames: ["Greeting"],
+        postComment: commenter.postComment,
         open: true,
         logger: deps.logger,
         openInBrowser: deps.openInBrowser,
@@ -831,11 +837,14 @@ describe("run", () => {
     expect(deps.openInBrowser).not.toHaveBeenCalledWith("/tmp/tulip-render/index.html");
   });
 
-  it("in serve mode, a failed gh-auth preflight aborts before fetching and never serves", async () => {
+  it("in serve mode, a failed auth preflight aborts before fetching and never serves", async () => {
     const deps = baseDeps();
-    deps.checkGhAuth = vi.fn(async () => {
-      throw new Error("gh is not authenticated for github.com; run `gh auth login`");
-    });
+    deps.commenterFor = vi.fn(() => ({
+      checkAuth: vi.fn(async () => {
+        throw new Error("gh is not authenticated for github.com; run `gh auth login`");
+      }),
+      postComment: vi.fn(async () => "comment-url"),
+    }));
 
     await run(options({ serve: true }), deps);
 
@@ -846,14 +855,26 @@ describe("run", () => {
     expect(lines.some((line) => line.includes("gh is not authenticated"))).toBe(true);
   });
 
-  it("without serve, opens the index file and never checks gh auth or serves", async () => {
+  it("without serve, opens the index file and never checks auth or serves", async () => {
     const deps = baseDeps();
 
     await run(options({ serve: false }), deps);
 
     expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
     expect(deps.serveForReview).not.toHaveBeenCalled();
-    expect(deps.checkGhAuth).not.toHaveBeenCalled();
+    expect(deps.commenterFor).not.toHaveBeenCalled();
+  });
+
+  it("in serve mode, fails before fetching when the forge can't post comments", async () => {
+    const { commenterFor: _, ...deps } = baseDeps();
+    const pr: PrRef = { forge: "gitlab", host: "gitlab.com", repoPath: "group/project", number: 7 };
+
+    await run(options({ pr, serve: true }), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.fetchPrMetadata).not.toHaveBeenCalled();
+    expect(deps.serveForReview).not.toHaveBeenCalled();
+    expect(infoLines(deps)).toContain("--serve is not supported for gitlab (gitlab.com)");
   });
 
   it("uses the PR's host in the serve-mode URL, not a hardcoded github.com", async () => {

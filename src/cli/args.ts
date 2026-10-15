@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { config } from "../config.js";
+import { commenterFor } from "../forge/forge.js";
 import { parsePrUrl } from "../forge/pr-ref.js";
 import type { PrRef } from "../forge/types.js";
 
@@ -18,8 +19,8 @@ export interface RunOptions {
   verbose: boolean;
   /** Auto-open the rendered page in the default browser when done. Defaults to true. */
   open: boolean;
-  /** Run a local review server that posts a per-category PR comment via `gh` (docs/adr/0019).
-   * GitHub PRs only. Defaults to false (render a static page and exit). */
+  /** Run a local review server that posts a per-category PR comment (docs/adr/0019). Only for
+   * forges with a `commenter`. Defaults to false (render a static page and exit). */
   serve: boolean;
 }
 
@@ -112,8 +113,12 @@ export function parseCliArgs(argv: string[]): RunOptions {
   }
 
   const serve = values.serve ?? false;
-  if (serve && pr.forge !== "github") {
-    throw new CliUsageError("--serve currently supports GitHub PRs only");
+  if (serve) {
+    try {
+      commenterFor(pr);
+    } catch (error) {
+      throw new CliUsageError((error as Error).message);
+    }
   }
 
   const diffThreshold = parseDiffThreshold(values["diff-threshold"]);

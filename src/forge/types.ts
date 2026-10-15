@@ -44,4 +44,15 @@ export interface ForgeAdapter {
   /** Where a `git fetch` that failed to authenticate can get credentials, for the error message: a
    * lowercase clause ending with a period (see `wrapAuthFailure` in src/forge/git-auth.ts). */
   readonly gitAuthHint: string;
+  /** Posts PR comments for serve mode (docs/adr/0019); absent when the forge doesn't support it. */
+  readonly commenter?: PrCommenter;
+}
+
+/** Posts comments on a forge's PRs. */
+export interface PrCommenter {
+  /** Resolves when comments can be posted to `host`; otherwise rejects with a user-actionable
+   * message. */
+  checkAuth(host: string): Promise<void>;
+  /** Posts `body` as a comment on the PR at `prUrl`; resolves with the comment's URL. */
+  postComment(prUrl: string, body: string): Promise<string>;
 }
