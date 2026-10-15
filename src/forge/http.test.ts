@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { config } from "../config.js";
-import { bearerAuthHeaders, getJson, getText, HttpStatusError } from "./http.js";
+import { bearerAuthHeaders, getAllPages, getJson, getText, HttpStatusError } from "./http.js";
 
 const TEST_URL = "https://api.example.test/x";
 
@@ -94,6 +94,39 @@ describe("getJson", () => {
 
     expect((error as Error).message).toBe(`GitLab API returned invalid JSON for ${TEST_URL}`);
     expect((error as Error).cause).toBeInstanceOf(SyntaxError);
+  });
+});
+
+describe("getAllPages", () => {
+  const FULL_PAGE = Array.from({ length: 100 }, (_, i) => i);
+
+  /** Serves `pages` in order for `?page=N`. */
+  function pagedFetch(pages: number[][]) {
+    return vi.fn(async (url: string | URL) => {
+      const page = Number(new URL(url.toString()).searchParams.get("page"));
+      return new Response(JSON.stringify(pages[page - 1] ?? []));
+    });
+  }
+
+  it("concatenates pages until one is not full", async () => {
+    const fetchUrl = pagedFetch([FULL_PAGE, [100]]);
+
+    const items = await getAllPages(fetchUrl as unknown as typeof fetch, TEST_URL, {}, "GitHub");
+
+    expect(items).toEqual([...FULL_PAGE, 100]);
+    expect(fetchUrl.mock.calls.map(([url]) => url.toString())).toEqual([
+      `${TEST_URL}?per_page=100&page=1`,
+      `${TEST_URL}?per_page=100&page=2`,
+    ]);
+  });
+
+  it("aborts instead of paginating past the safety net", async () => {
+    const pageCount = Math.ceil(config.limits.maxPrFilesSafetyNet / 100) + 2;
+    const fetchUrl = pagedFetch(Array.from({ length: pageCount }, () => FULL_PAGE));
+
+    await expect(
+      getAllPages(fetchUrl as unknown as typeof fetch, TEST_URL, {}, "GitLab"),
+    ).rejects.toThrow(/exceeded \d+ entries/);
   });
 });
 

@@ -1,5 +1,11 @@
-import { config } from "../config.js";
-import { bearerAuthHeaders, getJson, getText, HttpStatusError } from "../forge/http.js";
+import {
+  bearerAuthHeaders,
+  getAllPages,
+  getJson,
+  getText,
+  HttpStatusError,
+} from "../forge/http.js";
+import { fetchConsistentMetadata, type PrSource } from "../forge/pr-source.js";
 import type { PrMetadata, PrRef } from "../forge/types.js";
 
 export interface MrFetcherDeps {
@@ -24,8 +30,6 @@ interface GitLabMergeRequest {
 /** Names the GitLab API in HTTP errors — see src/forge/http.ts. */
 const API = "GitLab";
 
-const FILES_PER_PAGE = 100;
-
 const SCOPES = "scopes: read_api, read_repository";
 const NO_TOKEN_HINT = `for a private project, set GITLAB_TOKEN (${SCOPES})`;
 const WITH_TOKEN_HINT = `check that GITLAB_TOKEN can read this project (${SCOPES})`;
@@ -37,74 +41,54 @@ const WITH_TOKEN_HINT = `check that GITLAB_TOKEN can read this project (${SCOPES
  * pre-image of the MR diff, so the checkout's base files match the diff.
  */
 export async function fetchMrMetadata(pr: PrRef, deps: MrFetcherDeps = {}): Promise<PrMetadata> {
-  const fetchUrl = deps.fetchUrl ?? fetch;
   const token = deps.gitlabToken ?? process.env.GITLAB_TOKEN;
+  return fetchConsistentMetadata(restSource(deps.fetchUrl ?? fetch, token), pr);
+}
+
+function restSource(fetchUrl: typeof fetch, token: string | undefined): PrSource {
   // Bearer, not GitLab's PRIVATE-TOKEN header: fetch strips Authorization on a cross-origin redirect
   // but forwards custom headers, so only this keeps the token on the MR's host.
   const headers = bearerAuthHeaders(token, "GITLAB_TOKEN");
-  const mrApiUrl = `https://${pr.host}/api/v4/projects/${encodeURIComponent(pr.repoPath)}/merge_requests/${pr.number}`;
-
-  const mr = await getJson<GitLabMergeRequest>(fetchUrl, mrApiUrl, headers, API).catch(
-    (error: unknown) => {
+  const mrApiUrl = (pr: PrRef) =>
+    `https://${pr.host}/api/v4/projects/${encodeURIComponent(pr.repoPath)}/merge_requests/${pr.number}`;
+  const getMr = (pr: PrRef) =>
+    getJson<GitLabMergeRequest>(fetchUrl, mrApiUrl(pr), headers, API).catch((error: unknown) => {
       throw withTokenHint(error, Boolean(token));
-    },
-  );
-  const baseSha = mr.diff_refs?.base_sha;
-  const headSha = mr.diff_refs?.head_sha;
-  if (!baseSha || !headSha) {
-    throw new Error("GitLab hasn't computed this merge request's diff yet; retry in a moment");
-  }
-  const [diff, files] = await Promise.all([
-    getText(fetchUrl, `${mrApiUrl}/raw_diffs`, headers, API).catch((error: unknown) => {
-      if (error instanceof HttpStatusError && error.status === 404) {
-        throw new Error(
-          `${error.message} — this GitLab may be too old to have the merge request raw_diffs API`,
-          { cause: error },
-        );
-      }
-      throw error;
-    }),
-    fetchAllFiles(fetchUrl, mrApiUrl, headers),
-  ]);
-  assertNotTruncated(mr.changes_count, files.length);
+    });
   return {
-    title: mr.title,
-    body: mr.description ?? "",
-    files,
-    diff,
-    base: { ref: mr.target_branch, sha: baseSha },
-    head: { ref: mr.source_branch, sha: headSha },
+    fetchRevisions: async (pr) => {
+      const mr = await getMr(pr);
+      const baseSha = mr.diff_refs?.base_sha;
+      const headSha = mr.diff_refs?.head_sha;
+      if (!baseSha || !headSha) {
+        throw new Error("GitLab hasn't computed this merge request's diff yet; retry in a moment");
+      }
+      return {
+        base: { ref: mr.target_branch, sha: baseSha },
+        head: { ref: mr.source_branch, sha: headSha },
+      };
+    },
+    fetchContent: async (pr) => {
+      const url = mrApiUrl(pr);
+      // The paginated `/diffs` gives every changed file's head-side path. A single oversized file
+      // can still appear there without content, which the pipeline's file-list mismatch warning
+      // reports; whole-MR truncation is caught by `assertNotTruncated`.
+      const [mr, diff, files] = await Promise.all([
+        getMr(pr),
+        getText(fetchUrl, `${url}/raw_diffs`, headers, API).catch(withOldGitLabHint("raw_diffs")),
+        getAllPages<{ new_path: string }>(fetchUrl, `${url}/diffs`, headers, API).catch(
+          withOldGitLabHint("diffs"),
+        ),
+      ]);
+      assertNotTruncated(mr.changes_count, files.length);
+      return {
+        title: mr.title,
+        body: mr.description ?? "",
+        files: files.map((file) => file.new_path),
+        diff,
+      };
+    },
   };
-}
-
-/** Every changed file's head-side path, from the paginated `/diffs` endpoint. A single oversized
- * file can still appear here without content, which the pipeline's file-list mismatch warning
- * reports; whole-MR truncation is caught by `assertNotTruncated` via `changes_count`. */
-async function fetchAllFiles(
-  fetchUrl: typeof fetch,
-  mrApiUrl: string,
-  headers: Record<string, string>,
-): Promise<string[]> {
-  const files: string[] = [];
-  for (let page = 1; ; page++) {
-    const batch = await getJson<{ new_path: string }[]>(
-      fetchUrl,
-      `${mrApiUrl}/diffs?per_page=${FILES_PER_PAGE}&page=${page}`,
-      headers,
-      API,
-    );
-    files.push(...batch.map((file) => file.new_path));
-    if (batch.length < FILES_PER_PAGE) {
-      break;
-    }
-    // Guards against a pagination bug causing an unbounded loop, not an expected limit.
-    if (files.length > config.limits.maxPrFilesSafetyNet) {
-      throw new Error(
-        `MR file list exceeded ${config.limits.maxPrFilesSafetyNet} files while paginating ${mrApiUrl}/diffs — aborting instead of truncating silently.`,
-      );
-    }
-  }
-  return files;
 }
 
 /** GitLab cuts both `/diffs` and `raw_diffs` when an MR exceeds the instance's diff limits, so the
@@ -118,6 +102,20 @@ function assertNotTruncated(changesCount: string | null | undefined, listed: num
       `GitLab truncated this merge request's diff at the instance's diff limits (${changesCount} changed files, ${listed} returned); Tulip would explain only part of it`,
     );
   }
+}
+
+/** A `.catch` handler for an MR sub-endpoint: a 404 there, once the MR itself was found, means the
+ * instance predates the endpoint. */
+function withOldGitLabHint(endpoint: string): (error: unknown) => never {
+  return (error) => {
+    if (error instanceof HttpStatusError && error.status === 404) {
+      throw new Error(
+        `${error.message} — this GitLab may be too old to have the merge request ${endpoint} API`,
+        { cause: error },
+      );
+    }
+    throw error;
+  };
 }
 
 /** GitLab answers 401 for a rejected token, 403 for a token lacking scope and 404 for a private

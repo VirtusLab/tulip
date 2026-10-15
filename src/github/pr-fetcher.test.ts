@@ -8,17 +8,18 @@ const GH_VIEW_JSON = JSON.stringify({
   title: "Add feature",
   body: "Does a thing",
   files: [{ path: "src/a.ts" }, { path: "src/b.ts" }],
-  baseRefName: "main",
-  headRefName: "feature",
-  headRefOid: "head-sha",
+});
+const GH_REVISIONS_JSON = JSON.stringify({
+  base: { ref: "main", sha: "base-sha" },
+  head: { ref: "feature", sha: "head-sha" },
 });
 const GH_DIFF = "diff --git a/src/a.ts b/src/a.ts\n";
 
-/** Handles the three `gh` subcommands `fetchViaGh` runs: `pr view`, `pr diff`, and the `gh api`
- * call for the base SHA (older gh lacks the `baseRefOid` view field). */
-function ghRunner(baseSha = "base-sha") {
+/** Handles the `gh` subcommands the gh route runs: `gh api` for the revisions, `pr view` and
+ * `pr diff`. */
+function ghRunner() {
   return vi.fn(async (args: string[]) => {
-    if (args[0] === "api") return baseSha;
+    if (args[0] === "api") return GH_REVISIONS_JSON;
     if (args[1] === "view") return GH_VIEW_JSON;
     if (args[1] === "diff") return GH_DIFF;
     throw new Error(`unexpected gh args: ${args.join(" ")}`);
@@ -43,8 +44,7 @@ describe("fetchPrMetadata", () => {
       base: { ref: "main", sha: "base-sha" },
       head: { ref: "feature", sha: "head-sha" },
     });
-    // The view no longer requests baseRefOid (unsupported on older gh); the base SHA comes from
-    // `gh api .base.sha`.
+    // The view never requests baseRefOid (unsupported on older gh); revisions come from `gh api`.
     expect(runGh).toHaveBeenCalledWith([
       "pr",
       "view",
@@ -52,15 +52,7 @@ describe("fetchPrMetadata", () => {
       "--repo",
       "github.com/owner/repo",
       "--json",
-      "title,body,files,baseRefName,headRefName,headRefOid",
-    ]);
-    expect(runGh).toHaveBeenCalledWith([
-      "api",
-      "--hostname",
-      "github.com",
-      "repos/owner/repo/pulls/42",
-      "--jq",
-      ".base.sha",
+      "title,body,files",
     ]);
   });
 
@@ -153,42 +145,6 @@ describe("fetchPrMetadata", () => {
       base: { ref: "main", sha: "base-sha" },
       head: { ref: "feature", sha: "head-sha" },
     });
-  });
-
-  it("paginates the file list when a page is exactly full", async () => {
-    const runGh = vi.fn(async () => {
-      throw new Error("gh: command not found");
-    });
-    const page1 = Array.from({ length: 100 }, (_, i) => ({ filename: `file-${i}.ts` }));
-    const page2 = [{ filename: "file-100.ts" }];
-    const fetchUrl = vi.fn(async (url: string | URL, init?: RequestInit) => {
-      const href = url.toString();
-      const headers = new Headers(init?.headers);
-      if (headers.get("Accept") === "application/vnd.github.v3.diff") {
-        return new Response(GH_DIFF);
-      }
-      const page = new URL(href).searchParams.get("page");
-      if (page === "1") return jsonResponse(page1);
-      if (page === "2") return jsonResponse(page2);
-      if (href.endsWith("/pulls/42")) {
-        return jsonResponse({
-          title: "t",
-          body: null,
-          base: { ref: "main", sha: "base-sha" },
-          head: { ref: "feature", sha: "head-sha" },
-        });
-      }
-      throw new Error(`unexpected url: ${href}`);
-    });
-
-    const result = await fetchPrMetadata(PR, {
-      runGh,
-      fetchUrl: fetchUrl as unknown as typeof fetch,
-    });
-
-    expect(result.files).toHaveLength(101);
-    expect(result.files[0]).toBe("file-0.ts");
-    expect(result.files[100]).toBe("file-100.ts");
   });
 
   it("sends an Authorization header when a token is provided", async () => {

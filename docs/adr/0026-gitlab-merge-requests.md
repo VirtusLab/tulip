@@ -20,10 +20,14 @@ requests.
   `/<owner>/<repo>/pull/<n>` is GitHub. Path segments are allowlisted (`[A-Za-z0-9._-]+`, not
   `-`, `.` or `..`), since `repoPath` goes into the clone and API URLs. Tab suffixes such as
   `/diffs` are rejected, as `/pull/N/files` is.
-- **REST only, no `glab`.** GitLab is read through API v4. The MR itself (`title`,
-  `description`, branches, `diff_refs`, `changes_count`) is fetched first; then `raw_diffs` for
-  the unified diff and the paginated `/diffs` for the file list. Missing `diff_refs` (GitLab
-  computes them asynchronously) is a "retry in a moment" error, raised before the other requests.
+- **REST only, no `glab`.** GitLab is read through API v4: the MR itself (`title`,
+  `description`, branches, `diff_refs`, `changes_count`), `raw_diffs` for the unified diff and
+  the paginated `/diffs` for the file list. Missing `diff_refs` (GitLab computes them
+  asynchronously) is a "retry in a moment" error, raised before the other requests.
+- **Revisions read around the content.** Both forges read the base/head SHAs, then the title,
+  description, diff and files, then the SHAs again, and repeat the whole fetch a few times if a
+  push changed them in between. The diff then always matches the head SHA the checkout uses.
+  The orchestration is shared (`src/forge/pr-source.ts`); each forge supplies the two reads.
 - **Token as a Bearer header.** `GITLAB_TOKEN`, when set, goes in `Authorization: Bearer` to the
   MR's host only — not GitLab's `PRIVATE-TOKEN` header, which fetch would forward across a
   cross-origin redirect while it strips `Authorization`. A token with characters that can't go in

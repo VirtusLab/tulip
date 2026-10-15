@@ -61,6 +61,38 @@ export async function getJson<T>(
   }
 }
 
+const PER_PAGE = 100;
+
+/** GETs every page of a JSON list endpoint that takes `per_page`/`page` query parameters (GitHub's
+ * and GitLab's convention) and returns the items in order. `url` must have no query string. Throws
+ * past {@link config}.limits.maxPrFilesSafetyNet items rather than return a truncated list. */
+export async function getAllPages<T>(
+  fetchUrl: typeof fetch,
+  url: string,
+  headers: Record<string, string>,
+  apiName: string,
+): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; ; page++) {
+    const batch = await getJson<T[]>(
+      fetchUrl,
+      `${url}?per_page=${PER_PAGE}&page=${page}`,
+      headers,
+      apiName,
+    );
+    items.push(...batch);
+    if (batch.length < PER_PAGE) {
+      return items;
+    }
+    // Guards against a pagination bug causing an unbounded loop, not an expected limit.
+    if (items.length > config.limits.maxPrFilesSafetyNet) {
+      throw new Error(
+        `${apiName} API list exceeded ${config.limits.maxPrFilesSafetyNet} entries while paginating ${url} — aborting instead of truncating silently.`,
+      );
+    }
+  }
+}
+
 /** `Authorization: Bearer` header for `token`, or none when it is unset or empty. Bearer survives
  * a cross-origin redirect safely (fetch strips Authorization there). Throws on a token that can't
  * be a header value, because fetch's own rejection message would contain the token; the message

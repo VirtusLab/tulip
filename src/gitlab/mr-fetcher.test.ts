@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { config } from "../config.js";
 import type { PrRef } from "../forge/types.js";
 import { fetchMrMetadata } from "./mr-fetcher.js";
 
@@ -28,17 +27,15 @@ function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 });
 }
 
-/** Answers the three endpoints fetchMrMetadata calls. `pages` are the `/diffs` pages in order. */
+/** Answers the three endpoints fetchMrMetadata calls. */
 function gitlabApi(
   options: {
     mr?: unknown;
-    pages?: { new_path: string }[][];
     status?: number;
     /** Fails only the endpoint whose URL ends with this suffix (e.g. "/raw_diffs"). */
     failSuffix?: { suffix: string; status: number };
   } = {},
 ) {
-  const pages = options.pages ?? [[{ new_path: "src/a.ts" }]];
   return vi.fn(async (url: string | URL, _init?: RequestInit) => {
     const href = url.toString();
     if (options.status !== undefined) {
@@ -54,8 +51,7 @@ function gitlabApi(
       return new Response(RAW_DIFF);
     }
     if (href.startsWith(`${API_ROOT}/diffs?`)) {
-      const page = Number(new URL(href).searchParams.get("page"));
-      return jsonResponse(pages[page - 1] ?? []);
+      return jsonResponse([{ new_path: "src/a.ts" }]);
     }
     throw new Error(`unexpected url: ${href}`);
   });
@@ -79,11 +75,10 @@ describe("fetchMrMetadata", () => {
       base: { ref: "main", sha: BASE_SHA },
       head: { ref: "feature", sha: HEAD_SHA },
     });
-    expect(fetchUrl).toHaveBeenCalledTimes(3);
     const urls = fetchUrl.mock.calls.map(([url]) => url.toString());
-    expect(urls).toContain(API_ROOT);
-    expect(urls).toContain(`${API_ROOT}/raw_diffs`);
-    expect(urls).toContain(`${API_ROOT}/diffs?per_page=100&page=1`);
+    expect(new Set(urls)).toEqual(
+      new Set([API_ROOT, `${API_ROOT}/raw_diffs`, `${API_ROOT}/diffs?per_page=100&page=1`]),
+    );
   });
 
   it("turns a null description into an empty body", async () => {
@@ -115,29 +110,6 @@ describe("fetchMrMetadata", () => {
     for (const [, init] of fetchUrl.mock.calls) {
       expect(new Headers(init?.headers).get("Authorization")).toBeNull();
     }
-  });
-
-  it("paginates the file list when a page is exactly full", async () => {
-    const page1 = Array.from({ length: 100 }, (_, i) => ({ new_path: `file-${i}.ts` }));
-    const fetchUrl = gitlabApi({ pages: [page1, [{ new_path: "file-100.ts" }]] });
-
-    const result = await fetchMrMetadata(MR, { fetchUrl: asFetch(fetchUrl), gitlabToken: "" });
-
-    expect(result.files).toHaveLength(101);
-    expect(result.files[100]).toBe("file-100.ts");
-  });
-
-  it("aborts instead of paginating past the safety net", async () => {
-    const fullPage = Array.from({ length: 100 }, (_, i) => ({ new_path: `file-${i}.ts` }));
-    const pages = Array.from(
-      { length: Math.ceil(config.limits.maxPrFilesSafetyNet / 100) + 2 },
-      () => fullPage,
-    );
-    const fetchUrl = gitlabApi({ pages });
-
-    await expect(
-      fetchMrMetadata(MR, { fetchUrl: asFetch(fetchUrl), gitlabToken: "" }),
-    ).rejects.toThrow(/exceeded \d+ files/);
   });
 
   it.each([null, { base_sha: null, head_sha: HEAD_SHA }, { base_sha: BASE_SHA, head_sha: null }])(
@@ -179,35 +151,24 @@ describe("fetchMrMetadata", () => {
     expect(error.message).toContain(NO_TOKEN_HINT);
   });
 
-  it("adds no token hint when only raw_diffs fails", async () => {
-    const fetchUrl = gitlabApi({ failSuffix: { suffix: "/raw_diffs", status: 404 } });
+  it.each(["raw_diffs", "diffs"])(
+    "hints at an old GitLab, not the token, when only %s 404s",
+    async (endpoint) => {
+      const fetchUrl = gitlabApi({ failSuffix: { suffix: `/${endpoint}`, status: 404 } });
 
-    const error: Error = await fetchMrMetadata(MR, {
-      fetchUrl: asFetch(fetchUrl),
-      gitlabToken: "",
-    }).catch((e) => e);
+      const error: Error = await fetchMrMetadata(MR, {
+        fetchUrl: asFetch(fetchUrl),
+        gitlabToken: "",
+      }).catch((e) => e);
 
-    expect(error.message).toMatch(/GitLab API returned 404/);
-    expect(error.message).not.toContain("GITLAB_TOKEN");
-  });
+      expect(error.message).toMatch(/GitLab API returned 404/);
+      expect(error.message).toContain(`too old to have the merge request ${endpoint} API`);
+      expect(error.message).not.toContain("GITLAB_TOKEN");
+    },
+  );
 
-  it("hints at an old GitLab when raw_diffs 404s after the MR itself was fetched", async () => {
-    const fetchUrl = gitlabApi({ failSuffix: { suffix: "/raw_diffs", status: 404 } });
-
-    const error: Error = await fetchMrMetadata(MR, {
-      fetchUrl: asFetch(fetchUrl),
-      gitlabToken: "",
-    }).catch((e) => e);
-
-    expect(error.message).toContain("too old to have the merge request raw_diffs API");
-    expect(error.message).not.toContain("GITLAB_TOKEN");
-  });
-
-  it.each([
-    ["1000+", [{ new_path: "a.ts" }]],
-    ["5", [{ new_path: "a.ts" }]],
-  ])("rejects a truncated MR (changes_count %s)", async (changesCount, page) => {
-    const fetchUrl = gitlabApi({ mr: { ...MR_JSON, changes_count: changesCount }, pages: [page] });
+  it.each(["1000+", "5"])("rejects a truncated MR (changes_count %s)", async (changesCount) => {
+    const fetchUrl = gitlabApi({ mr: { ...MR_JSON, changes_count: changesCount } });
 
     await expect(
       fetchMrMetadata(MR, { fetchUrl: asFetch(fetchUrl), gitlabToken: "" }),

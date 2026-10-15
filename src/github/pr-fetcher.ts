@@ -1,5 +1,5 @@
-import { config } from "../config.js";
-import { bearerAuthHeaders, getJson, getText } from "../forge/http.js";
+import { bearerAuthHeaders, getAllPages, getJson, getText } from "../forge/http.js";
+import { fetchConsistentMetadata, type PrRevisions, type PrSource } from "../forge/pr-source.js";
 import type { PrMetadata, PrRef } from "../forge/types.js";
 import { type CommandRunner, defaultRunGh } from "./gh.js";
 
@@ -14,11 +14,6 @@ export interface PrFetcherDeps {
   githubToken?: string;
 }
 
-// `baseRefOid` is deliberately absent: older `gh` versions don't expose it as a `pr view` field
-// (they fail the whole call with "Unknown JSON field"), while `headRefOid` is available. The base
-// SHA is fetched separately via `gh api` — see `fetchBaseSha`.
-const GH_VIEW_FIELDS = "title,body,files,baseRefName,headRefName,headRefOid";
-
 /**
  * Fetches a PR's title, description, changed files and unified diff.
  *
@@ -27,14 +22,12 @@ const GH_VIEW_FIELDS = "title,body,files,baseRefName,headRefName,headRefOid";
  * or fails. Throws if both routes fail.
  */
 export async function fetchPrMetadata(pr: PrRef, deps: PrFetcherDeps = {}): Promise<PrMetadata> {
-  const runGh = deps.runGh ?? defaultRunGh;
   try {
-    return await fetchViaGh(pr, runGh);
+    return await fetchConsistentMetadata(ghSource(deps.runGh ?? defaultRunGh), pr);
   } catch (ghError) {
     try {
-      const fetchUrl = deps.fetchUrl ?? fetch;
       const token = deps.githubToken ?? process.env.GITHUB_TOKEN;
-      return await fetchViaHttp(pr, fetchUrl, token);
+      return await fetchConsistentMetadata(restSource(deps.fetchUrl ?? fetch, token), pr);
     } catch (httpError) {
       throw new Error(
         `Failed to fetch PR ${pr.repoPath}#${pr.number}: ` +
@@ -44,49 +37,48 @@ export async function fetchPrMetadata(pr: PrRef, deps: PrFetcherDeps = {}): Prom
   }
 }
 
-async function fetchViaGh(pr: PrRef, runGh: CommandRunner): Promise<PrMetadata> {
-  // `gh` accepts the `HOST/OWNER/REPO` form, routing to the credentials for that host — so a
-  // self-hosted GitHub Enterprise PR resolves once the user has run `gh auth login --hostname
-  // <host>`. Redundant but valid for github.com.
-  const repo = `${pr.host}/${pr.repoPath}`;
-  const [viewJson, diff, baseSha] = await Promise.all([
-    runGh(["pr", "view", String(pr.number), "--repo", repo, "--json", GH_VIEW_FIELDS]),
-    runGh(["pr", "diff", String(pr.number), "--repo", repo]),
-    fetchBaseSha(pr, runGh),
-  ]);
+/** Picks the REST response's base/head `{ ref, sha }` pairs. */
+const REVISIONS_JQ =
+  "{base: {ref: .base.ref, sha: .base.sha}, head: {ref: .head.ref, sha: .head.sha}}";
 
-  const parsed = JSON.parse(viewJson) as {
-    title: string;
-    body: string;
-    files: { path: string }[];
-    baseRefName: string;
-    headRefName: string;
-    headRefOid: string;
-  };
-
+function ghSource(runGh: CommandRunner): PrSource {
   return {
-    title: parsed.title,
-    body: parsed.body,
-    files: parsed.files.map((file) => file.path),
-    diff,
-    base: { ref: parsed.baseRefName, sha: baseSha },
-    head: { ref: parsed.headRefName, sha: parsed.headRefOid },
+    // Via `gh api`, not `pr view`: older `gh` versions lack the `baseRefOid` view field (they fail
+    // the whole call with "Unknown JSON field"). `gh api` reuses gh's auth and, with `--hostname`,
+    // targets the PR's host, so this stays correct for GitHub Enterprise.
+    fetchRevisions: async (pr) =>
+      JSON.parse(
+        await runGh([
+          "api",
+          "--hostname",
+          pr.host,
+          `repos/${pr.repoPath}/pulls/${pr.number}`,
+          "--jq",
+          REVISIONS_JQ,
+        ]),
+      ) as PrRevisions,
+    fetchContent: async (pr) => {
+      // `gh` accepts the `HOST/OWNER/REPO` form, routing to the credentials for that host — so a
+      // self-hosted GitHub Enterprise PR resolves once the user has run `gh auth login --hostname
+      // <host>`. Redundant but valid for github.com.
+      const repo = `${pr.host}/${pr.repoPath}`;
+      const [viewJson, diff] = await Promise.all([
+        runGh(["pr", "view", String(pr.number), "--repo", repo, "--json", "title,body,files"]),
+        runGh(["pr", "diff", String(pr.number), "--repo", repo]),
+      ]);
+      const view = JSON.parse(viewJson) as {
+        title: string;
+        body: string;
+        files: { path: string }[];
+      };
+      return {
+        title: view.title,
+        body: view.body,
+        files: view.files.map((file) => file.path),
+        diff,
+      };
+    },
   };
-}
-
-/** The PR base's commit SHA, via the REST endpoint's `.base.sha` — the base branch tip, the same
- * value the (version-gated) `baseRefOid` field would give. `gh api` reuses gh's auth and, with
- * `--hostname`, targets the PR's host, so this stays correct for GitHub Enterprise. */
-async function fetchBaseSha(pr: PrRef, runGh: CommandRunner): Promise<string> {
-  const out = await runGh([
-    "api",
-    "--hostname",
-    pr.host,
-    `repos/${pr.repoPath}/pulls/${pr.number}`,
-    "--jq",
-    ".base.sha",
-  ]);
-  return out.trim();
 }
 
 /** REST API base for a host: github.com's dedicated `api.github.com`, or GitHub Enterprise
@@ -95,67 +87,42 @@ function apiBaseUrl(host: string): string {
   return host === "github.com" ? "https://api.github.com" : `https://${host}/api/v3`;
 }
 
-const FILES_PER_PAGE = 100;
-
 /** Names the GitHub API in HTTP errors — see src/forge/http.ts. */
 const API = "GitHub";
 
-async function fetchViaHttp(
-  pr: PrRef,
-  fetchUrl: typeof fetch,
-  token: string | undefined,
-): Promise<PrMetadata> {
-  const prApiUrl = `${apiBaseUrl(pr.host)}/repos/${pr.repoPath}/pulls/${pr.number}`;
-  const authHeaders = bearerAuthHeaders(token, "GITHUB_TOKEN");
-
-  const [prJson, diff, files] = await Promise.all([
-    getJson<{
-      title: string;
-      body: string | null;
-      base: { ref: string; sha: string };
-      head: { ref: string; sha: string };
-    }>(fetchUrl, prApiUrl, { Accept: "application/vnd.github+json", ...authHeaders }, API),
-    getText(fetchUrl, prApiUrl, { Accept: "application/vnd.github.v3.diff", ...authHeaders }, API),
-    fetchAllFiles(fetchUrl, prApiUrl, authHeaders),
-  ]);
-
-  return {
-    title: prJson.title,
-    body: prJson.body ?? "",
-    files,
-    diff,
-    base: prJson.base,
-    head: prJson.head,
-  };
+/** The fields Tulip reads from GitHub's single-PR response. */
+interface GitHubPull {
+  title: string;
+  body: string | null;
+  base: { ref: string; sha: string };
+  head: { ref: string; sha: string };
 }
 
-async function fetchAllFiles(
-  fetchUrl: typeof fetch,
-  prApiUrl: string,
-  authHeaders: Record<string, string>,
-): Promise<string[]> {
-  const headers = { Accept: "application/vnd.github+json", ...authHeaders };
-  const files: string[] = [];
-  for (let page = 1; ; page++) {
-    const batch = await getJson<{ filename: string }[]>(
-      fetchUrl,
-      `${prApiUrl}/files?per_page=${FILES_PER_PAGE}&page=${page}`,
-      headers,
-      API,
-    );
-    files.push(...batch.map((file) => file.filename));
-    if (batch.length < FILES_PER_PAGE) {
-      break;
-    }
-    // GitHub's documented cap on the number of files a PR can report; this guards against a
-    // pagination bug causing an unbounded loop, not an expected limit.
-    if (files.length > config.limits.maxPrFilesSafetyNet) {
-      throw new Error(
-        `PR file list exceeded ${config.limits.maxPrFilesSafetyNet} files while paginating ${prApiUrl}/files — aborting instead of truncating silently.`,
-      );
-    }
-  }
-  return files;
+function restSource(fetchUrl: typeof fetch, token: string | undefined): PrSource {
+  const authHeaders = bearerAuthHeaders(token, "GITHUB_TOKEN");
+  const jsonHeaders = { Accept: "application/vnd.github+json", ...authHeaders };
+  const diffHeaders = { Accept: "application/vnd.github.v3.diff", ...authHeaders };
+  const pullUrl = (pr: PrRef) => `${apiBaseUrl(pr.host)}/repos/${pr.repoPath}/pulls/${pr.number}`;
+  return {
+    fetchRevisions: async (pr) => {
+      const pull = await getJson<GitHubPull>(fetchUrl, pullUrl(pr), jsonHeaders, API);
+      return { base: pull.base, head: pull.head };
+    },
+    fetchContent: async (pr) => {
+      const url = pullUrl(pr);
+      const [pull, diff, files] = await Promise.all([
+        getJson<GitHubPull>(fetchUrl, url, jsonHeaders, API),
+        getText(fetchUrl, url, diffHeaders, API),
+        getAllPages<{ filename: string }>(fetchUrl, `${url}/files`, jsonHeaders, API),
+      ]);
+      return {
+        title: pull.title,
+        body: pull.body ?? "",
+        files: files.map((file) => file.filename),
+        diff,
+      };
+    },
+  };
 }
 
 function errorMessage(error: unknown): string {
