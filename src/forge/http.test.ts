@@ -39,7 +39,7 @@ describe("getText", () => {
     await expect(
       getText(fetchUrl as unknown as typeof fetch, TEST_URL, {}, "GitHub"),
     ).rejects.toThrow(
-      `GitHub API request timed out after ${config.timeouts.apiFetchMs}ms: ${TEST_URL}`,
+      `GitHub API request timed out after ${config.timeouts.forgeApiFetchMs}ms: ${TEST_URL}`,
     );
   });
 
@@ -60,7 +60,7 @@ describe("getText", () => {
     await expect(
       getText(fetchUrl as unknown as typeof fetch, TEST_URL, {}, "GitHub"),
     ).rejects.toThrow(
-      `GitHub API request timed out after ${config.timeouts.apiFetchMs}ms: ${TEST_URL}`,
+      `GitHub API request timed out after ${config.timeouts.forgeApiFetchMs}ms: ${TEST_URL}`,
     );
   });
 

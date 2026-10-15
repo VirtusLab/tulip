@@ -47,9 +47,6 @@ describe("parseGitLabMrUrl", () => {
     // Looks like gitlab.com but `gitlab.com` is userinfo; the real host is evil.example.com.
     "https://gitlab.com@evil.example.com/group/project/-/merge_requests/1",
     "https://gitlab.com/group/../project/-/merge_requests/1",
-    "https://gitlab.com/group/./project/-/merge_requests/1",
-    "https://gitlab.com/group/-/project/-/merge_requests/1",
-    "https://gitlab.com/group//project/-/merge_requests/1",
     "https://gitlab.com/group/project/-/merge_requests/abc",
     "https://gitlab.com/group/project/-/merge_requests/0",
     "https://gitlab.com/group/project/-/merge_requests/12?tab=diffs",
@@ -57,9 +54,6 @@ describe("parseGitLabMrUrl", () => {
     "http://gitlab.com/group/project/-/merge_requests/12",
     "https://github.com/owner/repo/pull/1",
     "not-a-url",
-    "https://gitlab.com/group/%2e%2e/-/merge_requests/1",
-    "https://gitlab.com/group/a\\..\\b/-/merge_requests/1",
-    "https://gitlab.com/group/pro+ject/-/merge_requests/1",
     "https://gitlab.com/group/project/-/merge_requests/12#note_5",
     "https://gitlab.com/group/project/-/merge_requests/12345678901",
   ])("returns undefined for %s", (url) => {

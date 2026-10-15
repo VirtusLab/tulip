@@ -1,5 +1,23 @@
-/** The forge-neutral half of how Tulip's own `git fetch` authenticates: no terminal prompt, and a
- * hint on failure. The credential helpers themselves are per forge (see ForgeAdapter). */
+/** The forge-neutral half of how Tulip's own `git fetch` authenticates: building credential
+ * helpers, no terminal prompt, and a hint on failure. Which helpers to use is per forge (see
+ * ForgeAdapter). */
+
+/** A git credential helper answering `get` with `username` and the token in env var `envName`, read
+ * from the environment when git runs the helper — the token itself is never on a command line.
+ * Silent when the variable is unset or empty. `envName` and `username` are inlined into a shell
+ * snippet, so they must be constants. A newline inside the token would add lines to git's
+ * credential protocol; `bearerAuthHeaders` (src/forge/http.ts) rejects such a token, so this can't
+ * happen when the forge's REST fetch used the token before the checkout (always so for GitLab). */
+export function tokenCredentialHelper(envName: string, username: string): string {
+  return `!f() { test "$1" = get && test -n "$${envName}" && printf "username=${username}\\npassword=%s\\n" "$${envName}"; }; f`;
+}
+
+/** `-c` args adding `helpers`, in order, for `https://<host>` and no other URL. Git consults helpers
+ * in config order and stops at the first that answers, so the operator's own helpers come first
+ * and these only fill in when none of them has a credential for the host. */
+export function credentialHelperArgs(host: string, helpers: string[]): string[] {
+  return helpers.flatMap((helper) => ["-c", `credential.https://${host}.helper=${helper}`]);
+}
 
 /** Makes an https fetch with no usable credentials fail at once instead of asking for a username
  * and password on the terminal — a prompt the forges reject anyway, and one that stalls a

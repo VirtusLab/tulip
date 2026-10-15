@@ -44,10 +44,10 @@ export const config = {
     /** Single `claude -p` invocation — see src/claude/exec.ts. */
     claudeProcessMs: 10 * 60 * 1000,
     /** Single `gh`/`git` subcommand — see src/forge/exec.ts. */
-    githubCommandMs: 2 * 60 * 1000,
+    forgeCommandMs: 2 * 60 * 1000,
     /** Single forge REST API request (GitHub's `gh`-unavailable fallback, and every GitLab
      * request) — see src/forge/http.ts. */
-    apiFetchMs: 60 * 1000,
+    forgeApiFetchMs: 60 * 1000,
   },
 
   /** Retry/cap counts and size limits that bound otherwise-unbounded loops or prompt sizes. */

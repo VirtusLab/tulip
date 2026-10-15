@@ -40,6 +40,9 @@ describe("parseGitHubPrUrl", () => {
     // Looks like github.com but `github.com` is userinfo; the real host is evil.example.com.
     "https://github.com@evil.example.com/owner/repo/pull/1",
     "https://github.com/owner/repo",
+    "https://github.com/a/b?x=1/pull/1",
+    "https://host/../repo/pull/1",
+    "https://github.com/a/%2e%2e/pull/1",
     "https://gitlab.com/group/project/-/merge_requests/1",
     "not-a-url",
   ])("returns undefined for an invalid URL: %s", (url) => {

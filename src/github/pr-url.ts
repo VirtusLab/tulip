@@ -1,10 +1,9 @@
 import type { PrRef } from "../forge/types.js";
+import { HOST_PATTERN, isValidRepoPath } from "../forge/url-parts.js";
 
-// The host is a bare hostname with an optional port. Userinfo (`user@host`) is refused: it would
-// let `https://github.com@evil.example.com/...` read as a github.com link while every request,
-// with the operator's credentials, went to evil.example.com.
-const GITHUB_PR_URL_PATTERN =
-  /^https:\/\/(?<host>[A-Za-z0-9.-]+(?::\d+)?)\/(?<owner>[^/\s]+)\/(?<repo>[^/\s]+)\/pull\/(?<number>\d+)\/?$/;
+const GITHUB_PR_URL_PATTERN = new RegExp(
+  `^https://(?<host>${HOST_PATTERN})/(?<repoPath>[^/]+/[^/]+)/pull/(?<number>\\d+)/?$`,
+);
 
 /**
  * Parses a GitHub PR URL into its parts. Accepts any host with the GitHub `/pull/<n>` shape — both
@@ -14,13 +13,13 @@ const GITHUB_PR_URL_PATTERN =
  */
 export function parseGitHubPrUrl(url: string): PrRef | undefined {
   const groups = GITHUB_PR_URL_PATTERN.exec(url)?.groups;
-  if (!groups) {
+  if (!groups?.host || !groups.repoPath || !isValidRepoPath(groups.repoPath)) {
     return undefined;
   }
   return {
     forge: "github",
-    host: groups.host ?? "",
-    repoPath: `${groups.owner ?? ""}/${groups.repo ?? ""}`,
+    host: groups.host,
+    repoPath: groups.repoPath,
     number: Number(groups.number),
   };
 }

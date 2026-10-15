@@ -19,7 +19,7 @@ const DEPTH = String(config.limits.checkoutFetchDepth);
 const ISOLATION_ENV = { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
 const NO_PROMPT_ENV = { GIT_TERMINAL_PROMPT: "0" };
 // Placement and ordering are asserted here; what the helpers do is tested against real git in
-// src/github/git-auth.test.ts and src/gitlab/git-auth.test.ts.
+// src/forge/git-auth.test.ts.
 const CREDENTIAL_ARGS = gitCredentialArgs("github.com");
 
 describe("createCheckout", () => {

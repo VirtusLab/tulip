@@ -13,7 +13,7 @@ export class HttpStatusError extends Error {
 }
 
 /** GETs `url` and returns the body. `apiName` ("GitHub", "GitLab") names the API in errors. Times
- * out after {@link config}.timeouts.apiFetchMs; throws {@link HttpStatusError} on a non-2xx
+ * out after {@link config}.timeouts.forgeApiFetchMs; throws {@link HttpStatusError} on a non-2xx
  * status. */
 export async function getText(
   fetchUrl: typeof fetch,
@@ -24,7 +24,7 @@ export async function getText(
   try {
     const response = await fetchUrl(url, {
       headers,
-      signal: AbortSignal.timeout(config.timeouts.apiFetchMs),
+      signal: AbortSignal.timeout(config.timeouts.forgeApiFetchMs),
     });
     if (!response.ok) {
       throw new HttpStatusError(
@@ -36,7 +36,7 @@ export async function getText(
   } catch (error) {
     if (error instanceof Error && error.name === "TimeoutError") {
       throw new Error(
-        `${apiName} API request timed out after ${config.timeouts.apiFetchMs}ms: ${url}`,
+        `${apiName} API request timed out after ${config.timeouts.forgeApiFetchMs}ms: ${url}`,
       );
     }
     throw error;
