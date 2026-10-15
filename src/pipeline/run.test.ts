@@ -937,9 +937,10 @@ describe("run", () => {
 
     await run(options({ pr }), deps);
 
-    expect(deps.createCheckout).toHaveBeenCalledWith(pr, expect.anything(), {
-      credentialHelpers: gitlabAdapter.gitCredentialHelpers,
-      authHint: gitlabAdapter.gitAuthHint,
-    });
+    expect(deps.createCheckout).toHaveBeenCalledWith(
+      pr,
+      expect.anything(),
+      gitlabAdapter.checkoutAuth,
+    );
   });
 });

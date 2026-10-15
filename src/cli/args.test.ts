@@ -112,12 +112,6 @@ describe("parseCliArgs", () => {
     });
   });
 
-  it("rejects --serve for a GitLab MR", () => {
-    const argv = ["https://gitlab.com/group/project/-/merge_requests/45", "--serve"];
-    expect(() => parseCliArgs(argv)).toThrow(CliUsageError);
-    expect(() => parseCliArgs(argv)).toThrow("--serve isn't supported for gitlab URLs");
-  });
-
   it("names both URL formats when the URL is invalid", () => {
     expect(() => parseCliArgs(["not-a-url"])).toThrow(/pull\/<number>.*merge_requests\/<number>/);
   });

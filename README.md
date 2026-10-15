@@ -147,7 +147,7 @@ GitHub** to post it as a PR comment, prefixed with the category name. Each box
 posts its own comment. Ctrl+C stops the server.
 
 Serve mode supports GitHub PRs only; with a GitLab merge request URL, Tulip
-stops with a usage error.
+stops with an error before fetching anything.
 
 This needs an authenticated `gh` CLI for the PR's host (self-hosted included) —
 `gh auth login --hostname <host>`; Tulip checks this before starting. Comments

@@ -32,7 +32,8 @@ export interface PrCheckout {
 export interface CheckoutAuth {
   /** Credential helpers for the repo's host, consulted after the operator's own. */
   credentialHelpers: string[];
-  /** Where to get credentials; shown when the fetch fails to authenticate. */
+  /** Where to get credentials, shown when the fetch fails to authenticate: a lowercase clause
+   * ending with a period. */
   authHint: string;
 }
 

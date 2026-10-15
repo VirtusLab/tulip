@@ -24,11 +24,11 @@ describe("forgeFor (GitHub)", () => {
   });
 
   it("offers gh's credential helper, then GITHUB_TOKEN's, and an auth hint", () => {
-    expect(adapter.gitCredentialHelpers).toEqual([
+    expect(adapter.checkoutAuth.credentialHelpers).toEqual([
       "!gh auth git-credential",
       tokenCredentialHelper("GITHUB_TOKEN", "x-access-token"),
     ]);
-    expect(adapter.gitAuthHint).toMatch(/gh auth login.*GITHUB_TOKEN/);
+    expect(adapter.checkoutAuth.authHint).toMatch(/gh auth login.*GITHUB_TOKEN/);
   });
 });
 
@@ -50,7 +50,9 @@ describe("forgeFor (GitLab)", () => {
   });
 
   it("offers a GITLAB_TOKEN credential helper and an auth hint naming the scope", () => {
-    expect(adapter.gitCredentialHelpers).toEqual([tokenCredentialHelper("GITLAB_TOKEN", "oauth2")]);
-    expect(adapter.gitAuthHint).toMatch(/GITLAB_TOKEN.*read_repository/);
+    expect(adapter.checkoutAuth.credentialHelpers).toEqual([
+      tokenCredentialHelper("GITLAB_TOKEN", "oauth2"),
+    ]);
+    expect(adapter.checkoutAuth.authHint).toMatch(/GITLAB_TOKEN.*read_repository/);
   });
 });

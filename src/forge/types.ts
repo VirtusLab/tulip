@@ -1,3 +1,5 @@
+import type { CheckoutAuth } from "../checkout/checkout.js";
+
 /** Which code host serves a pull/merge request. */
 export type Forge = "github" | "gitlab";
 
@@ -37,11 +39,7 @@ export interface ForgeAdapter {
   /** Fetches the PR's title, description, changed files, diff and base/head revisions; rejects
    * with a message naming the forge's API. */
   fetchPrMetadata(pr: PrRef): Promise<PrMetadata>;
-  /** Git credential helpers for the checkout's `git fetch`, consulted after the operator's own. */
-  readonly gitCredentialHelpers: string[];
-  /** Where a `git fetch` that failed to authenticate can get credentials, for the error message: a
-   * lowercase clause ending with a period. */
-  readonly gitAuthHint: string;
+  readonly checkoutAuth: CheckoutAuth;
   /** Posts PR comments for serve mode (docs/adr/0019); absent when the forge doesn't support it. */
   readonly commenter?: PrCommenter;
 }

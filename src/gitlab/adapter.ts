@@ -8,8 +8,9 @@ export const gitlabAdapter: ForgeAdapter = {
   webUrl: gitlabMrUrl,
   label: gitlabMrLabel,
   fetchPrMetadata: (pr) => fetchMrMetadata(pr),
-  // GitLab accepts a personal access token with any non-blank username; `oauth2` is the usual one.
-  gitCredentialHelpers: [tokenCredentialHelper("GITLAB_TOKEN", "oauth2")],
-  gitAuthHint:
-    "set up git credentials for that host, or set GITLAB_TOKEN (scope: read_repository).",
+  checkoutAuth: {
+    // GitLab accepts a personal access token with any non-blank username; `oauth2` is the usual one.
+    credentialHelpers: [tokenCredentialHelper("GITLAB_TOKEN", "oauth2")],
+    authHint: "set up git credentials for that host, or set GITLAB_TOKEN (scope: read_repository).",
+  },
 };

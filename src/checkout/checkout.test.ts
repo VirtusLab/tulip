@@ -168,11 +168,13 @@ describe("createCheckout", () => {
 });
 
 const execFileAsync = promisify(execFile);
+const { GIT_CONFIG_PARAMETERS: _, ...processEnv } = process.env;
 
+/** Runs real git, ignoring the developer's command-line config and askpass programs. */
 async function git(args: string[], cwd: string, env?: Record<string, string>): Promise<string> {
   const { stdout } = await execFileAsync("git", args, {
     cwd,
-    env: env ? { ...process.env, ...env } : undefined,
+    env: { ...processEnv, GIT_CONFIG_COUNT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "", ...env },
   });
   return stdout.trim();
 }

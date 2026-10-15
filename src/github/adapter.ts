@@ -11,11 +11,13 @@ export const githubAdapter: ForgeAdapter = {
   label: githubPrLabel,
   fetchPrMetadata: (pr) => fetchPrMetadata(pr),
   // A logged-in `gh`, then GITHUB_TOKEN: the order fetchPrMetadata uses.
-  gitCredentialHelpers: [
-    "!gh auth git-credential",
-    tokenCredentialHelper("GITHUB_TOKEN", "x-access-token"),
-  ],
-  gitAuthHint: "set up git credentials for that host, run `gh auth login`, or set GITHUB_TOKEN.",
+  checkoutAuth: {
+    credentialHelpers: [
+      "!gh auth git-credential",
+      tokenCredentialHelper("GITHUB_TOKEN", "x-access-token"),
+    ],
+    authHint: "set up git credentials for that host, run `gh auth login`, or set GITHUB_TOKEN.",
+  },
   commenter: {
     checkAuth: (host) => checkGhAuth(host),
     postComment: (prUrl, body) => postPrComment(prUrl, body),

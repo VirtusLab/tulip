@@ -130,7 +130,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       doCreateCheckout(
         options.pr,
         { base: metadata.base, head: metadata.head },
-        { credentialHelpers: adapter.gitCredentialHelpers, authHint: adapter.gitAuthHint },
+        adapter.checkoutAuth,
       ),
     );
     // Every claude session below runs with the checkout dir as its cwd (RULING), so it reads

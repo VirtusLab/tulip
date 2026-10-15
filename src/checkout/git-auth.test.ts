@@ -5,9 +5,11 @@ import { describe, expect, it } from "vitest";
 import { credentialHelperArgs, tokenCredentialHelper, wrapAuthFailure } from "./git-auth.js";
 
 const execFileAsync = promisify(execFile);
+const { GIT_CONFIG_PARAMETERS: _, ...processEnv } = process.env;
 
 /** Asks real git for credentials for `host`, with `args` as the only helper config in scope: the
- * operator's config is switched off and cwd holds no repo. `env` is merged over the process env.
+ * operator's config and askpass programs are switched off and cwd holds no repo. `env` is merged
+ * over the process env.
  * Resolves with git's answer, rejects when no helper answered. No network. */
 async function credentialFill(
   args: string[],
@@ -17,10 +19,13 @@ async function credentialFill(
   const child = execFileAsync("git", [...args, "credential", "fill"], {
     cwd: tmpdir(),
     env: {
-      ...process.env,
+      ...processEnv,
       GIT_CONFIG_NOSYSTEM: "1",
       GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_COUNT: "0",
       GIT_TERMINAL_PROMPT: "0",
+      GIT_ASKPASS: "",
+      SSH_ASKPASS: "",
       ...env,
     },
   });
