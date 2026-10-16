@@ -35,6 +35,16 @@ export const config = {
         strong: "claude-opus-5-5-high",
       },
     },
+    /** ChatGPT-signed-in Codex. `gpt-5.4` / `gpt-5.5` are retired on that path; `gpt-6-astra`
+     * is the strongest model but is not on every plan, so `strong` is `gpt-6.1-sol`. */
+    codex: {
+      bin: "codex",
+      models: {
+        fast: "gpt-6-luna",
+        balanced: "gpt-6-sol",
+        strong: "gpt-6.1-sol",
+      },
+    },
   },
 
   /** Model tier used to start each phase's fresh session; each agent maps it to a concrete
@@ -56,7 +66,7 @@ export const config = {
   /** Per-call ceilings for spawned subprocesses. Generous — high enough that they should only
    * ever fire on a genuinely hung process, not a slow-but-working one. */
   timeouts: {
-    /** Single agent CLI invocation (`claude -p`, `agent -p`) — see src/agent/exec.ts. */
+    /** Single agent CLI invocation (`claude -p`, `agent -p`, `codex exec`) — see src/agent/exec.ts. */
     agentProcessMs: 10 * 60 * 1000,
     /** Single `gh`/`git` subcommand — see src/github/exec.ts. */
     githubCommandMs: 2 * 60 * 1000,

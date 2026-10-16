@@ -38,7 +38,8 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
   `parseReply` (stdout to a normalized `AgentReply` with `structured`, `usage`, turns,
   duration), and an optional `prepareWorkspace(dir)`. Backends live in `src/agent/backends/`.
   Adding a CLI means adding a backend, a config entry, and its id in `AGENT_IDS` and `BACKENDS`
-  (src/agent/backend.ts).
+  (src/agent/backend.ts). Codex, added that way, is recorded in
+  [ADR 0027](0027-codex-backend.md).
 - **Model tiers.** Phases ask for `fast`, `balanced`, or `strong` (`config.models`), and each
   backend maps a tier to its own id (`config.agents.<id>.models`): Claude uses
   `haiku`/`sonnet`/`opus`; Cursor uses `claude-haiku-5-5-medium`/`claude-sonnet-5-5-medium`/

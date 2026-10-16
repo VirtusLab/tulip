@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
 import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
@@ -371,5 +372,62 @@ describe("invokeAgent with the cursor backend", () => {
     );
     expect(retryInput).toMatch(/no structured output in cursor's response/);
     expect(retryInput).toContain(JSON.stringify(SCHEMA));
+  });
+});
+
+describe("invokeAgent with the codex backend", () => {
+  function codexStdout(text: string): string {
+    return [
+      JSON.stringify({ type: "thread.started", thread_id: "thread-1" }),
+      JSON.stringify({
+        type: "item.completed",
+        item: { type: "agent_message", text },
+      }),
+      JSON.stringify({
+        type: "turn.completed",
+        usage: {
+          input_tokens: 10,
+          output_tokens: 2,
+          cache_write_input_tokens: 4,
+          cached_input_tokens: 30,
+        },
+      }),
+    ].join("\n");
+  }
+
+  it("writes the schema file before the process and removes it after", async () => {
+    let schemaPath: string | undefined;
+    const runAgentProcess = vi.fn(async (args: string[], input: string) => {
+      const index = args.indexOf("--output-schema");
+      schemaPath = args[index + 1];
+      expect(schemaPath).toBeDefined();
+      expect(await readFile(schemaPath ?? "", "utf8")).toBe(JSON.stringify(SCHEMA));
+      expect(input).toBe("do the thing");
+      expect(args.at(-1)).toBe("-");
+      return processResult(codexStdout('{"ok": true}'));
+    });
+
+    const { result, sessionId } = await invokeAgent(BASE_INVOCATION, {
+      runAgentProcess,
+      agent: createAgent("codex"),
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(sessionId).toBe("thread-1");
+    await expect(readFile(schemaPath ?? "", "utf8")).rejects.toThrow();
+  });
+
+  it("removes the schema file when the process fails", async () => {
+    let schemaPath: string | undefined;
+    const runAgentProcess = vi.fn(async (args: string[]) => {
+      schemaPath = args[args.indexOf("--output-schema") + 1];
+      expect(await readFile(schemaPath ?? "", "utf8")).toBe(JSON.stringify(SCHEMA));
+      throw new Error("codex exited");
+    });
+
+    await expect(
+      invokeAgent(BASE_INVOCATION, { runAgentProcess, agent: createAgent("codex") }),
+    ).rejects.toThrow("codex exited");
+    await expect(readFile(schemaPath ?? "", "utf8")).rejects.toThrow();
   });
 });

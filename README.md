@@ -15,8 +15,9 @@ And if you don't know the codebase at all, the prose and the generated diagrams
 may be enough on their own to understand the PR well enough to accept or reject
 it.
 
-Tulip uses a headless agent CLI to do the analysis: Claude Code's `claude` or
-Cursor's `agent`, whichever you use. No API key needed, just a logged-in CLI.
+Tulip uses a headless agent CLI to do the analysis: Claude Code's `claude`,
+Cursor's `agent`, or OpenAI's `codex`, whichever you use. No API key needed,
+just a logged-in CLI.
 
 <p align="center">
   <a href="screens/diagram.png"><img src="screens/diagram.png" alt="A generated explanation with a Mermaid diagram of the changed flow" width="380"></a>
@@ -33,7 +34,7 @@ Cursor's `agent`, whichever you use. No API key needed, just a logged-in CLI.
 
 Tulip fetches the PR and runs it through a few LLM passes, each using a model
 sized to the job (Haiku, Sonnet, or Opus; see [Choosing the agent](#choosing-the-agent)
-for the models used with Cursor):
+for the models used with Cursor and Codex):
 
 1. **Fetch & check out.** Get the PR (title, description, diff) via `gh` (or the
    GitHub API), check out its head revision, and write the full diff plus the
@@ -73,9 +74,10 @@ to open.
 
 - [Node.js](https://nodejs.org/) LTS (>= 24) — its bundled `npm` installs Tulip;
   [pnpm](https://pnpm.io/) is only needed to build from source
-- A logged-in agent CLI on `PATH` — Tulip drives it to analyze the PR. Either
-  [`claude`](https://claude.com/product/claude-code) or Cursor's
-  [`agent`](https://cursor.com/cli) (`agent login`); see
+- A logged-in agent CLI on `PATH` — Tulip drives it to analyze the PR. One of
+  [`claude`](https://claude.com/product/claude-code), Cursor's
+  [`agent`](https://cursor.com/cli) (`agent login`), or OpenAI's
+  [`codex`](https://developers.openai.com/codex) (`codex login`); see
   [Choosing the agent](#choosing-the-agent)
 - Optionally, the [`gh`](https://cli.github.com/) CLI, logged in — used to fetch
   PR data when available; Tulip falls back to the GitHub REST API otherwise
@@ -117,7 +119,7 @@ tulip https://github.com/owner/repo/pull/123
 ```
 
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
-`--agent <claude|cursor>`. Run `tulip --help` for details, or `tulip --version`
+`--agent <claude|cursor|codex>`. Run `tulip --help` for details, or `tulip --version`
 for the build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
@@ -131,7 +133,8 @@ There is no default agent. On the first run, Tulip asks which one you use:
 Which agent CLI should Tulip use to analyze PRs?
   1) claude  Claude Code (runs `claude`)
   2) cursor  Cursor CLI (runs `agent`)
-Enter 1-2:
+  3) codex   Codex CLI (runs `codex`)
+Enter 1-3:
 ```
 
 The answer is saved in `~/.config/tulip/config.json` (`$XDG_CONFIG_HOME/tulip/`
@@ -148,17 +151,24 @@ straight away and asks for `--agent`.
 Each pass asks for a fast, balanced, or strong model, mapped per agent in
 `src/config.ts`:
 
-| Tier     | `claude` | `cursor`                   |
-| -------- | -------- | -------------------------- |
-| fast     | `haiku`  | `claude-haiku-5-5-medium`  |
-| balanced | `sonnet` | `claude-sonnet-5-5-medium` |
-| strong   | `opus`   | `claude-opus-5-5-high`     |
+| Tier     | `claude` | `cursor`                   | `codex`       |
+| -------- | -------- | -------------------------- | ------------- |
+| fast     | `haiku`  | `claude-haiku-5-5-medium`  | `gpt-6-luna`  |
+| balanced | `sonnet` | `claude-sonnet-5-5-medium` | `gpt-6-sol`   |
+| strong   | `opus`   | `claude-opus-5-5-high`     | `gpt-6.1-sol` |
 
 With `cursor`, Tulip runs `agent` in its read-only `ask` mode and trusts the
 temporary checkout, after deleting the PR's `.cursor/` and `.claude/` dirs from
 it: Cursor would otherwise run hooks defined there. Cursor's CLI has no
 structured-output flag, so the JSON schema goes into the prompt and the reply is
 parsed and validated by Tulip (with one retry), as for `claude`.
+
+With `codex`, Tulip runs `codex exec` in a read-only sandbox
+(`--sandbox read-only --ask-for-approval never`) and deletes the PR's `.codex/`
+dir from the checkout first. The schema is written to a temporary file and passed
+as `--output-schema`; the prompt goes on stdin (`codex exec -`). `--json` replies
+are a JSONL event stream, and Tulip validates the last agent message (with one
+retry), as for the other agents.
 
 ### Reviewing on the page
 

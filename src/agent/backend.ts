@@ -1,4 +1,5 @@
 import { claudeBackend } from "./backends/claude.js";
+import { codexBackend } from "./backends/codex.js";
 import { cursorBackend } from "./backends/cursor.js";
 import { type AgentProcessRunner, createAgentProcessRunner } from "./exec.js";
 import type { JsonSchema } from "./schema.js";
@@ -6,7 +7,7 @@ import type { ModelTokens } from "./usage.js";
 
 /** Every agent CLI tulip can drive (docs/adr/0026). There is no default: the user picks one,
  * and the choice is remembered (see src/cli/agent-choice.ts). */
-export const AGENT_IDS = ["claude", "cursor"] as const;
+export const AGENT_IDS = ["claude", "cursor", "codex"] as const;
 
 export type AgentId = (typeof AGENT_IDS)[number];
 
@@ -40,6 +41,14 @@ export interface AgentCallArgs {
   schema: JsonSchema;
 }
 
+/** One call as the runner spawns it. `files` are written before the process starts and removed
+ * after it exits, so a backend can hand the CLI a path instead of putting a large payload in argv. */
+export interface AgentSpawnPlan {
+  args: string[];
+  prompt: string;
+  files?: { path: string; contents: string }[];
+}
+
 /**
  * Everything specific to one agent CLI: how to call it and how to read its reply. The generic
  * parts — retry on invalid output, schema validation, concurrency, usage, sessions — live in
@@ -59,6 +68,9 @@ export interface AgentBackend {
   /** The stdin text for one call, e.g. with the schema appended for a CLI without native
    * structured output. Applied to every turn, resumes and retries included. */
   preparePrompt(prompt: string, schema: JsonSchema): string;
+  /** When set, the runner uses this instead of {@link buildArgs} and {@link preparePrompt}.
+   * Use it when a call needs a file on disk (a schema file) as well as argv and stdin. */
+  planSpawn?(call: AgentCallArgs & { prompt: string }): AgentSpawnPlan;
   /** Parses one call's stdout; throws {@link AgentOutputError} if it isn't a valid envelope. */
   parseReply(stdout: string): AgentReply;
   /** Run once on the checkout before any call, to neutralize repo-controlled agent config the
@@ -78,6 +90,7 @@ export interface Agent {
 const BACKENDS: Record<AgentId, AgentBackend> = {
   claude: claudeBackend,
   cursor: cursorBackend,
+  codex: codexBackend,
 };
 
 export function backendFor(id: AgentId): AgentBackend {

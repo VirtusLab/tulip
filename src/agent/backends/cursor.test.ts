@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AgentOutputError } from "../errors.js";
 import type { JsonSchema } from "../schema.js";
-import { cursorBackend, extractJson } from "./cursor.js";
+import { extractJson } from "../util.js";
+import { cursorBackend } from "./cursor.js";
 
 const SCHEMA: JsonSchema = {
   type: "object",

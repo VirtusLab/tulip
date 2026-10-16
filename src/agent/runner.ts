@@ -1,6 +1,14 @@
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { formatDuration } from "../logging/duration.js";
 import type { Logger } from "../logging/logger.js";
-import { type Agent, type AgentReply, createAgent, type ModelTier } from "./backend.js";
+import {
+  type Agent,
+  type AgentReply,
+  type AgentSpawnPlan,
+  createAgent,
+  type ModelTier,
+} from "./backend.js";
 import { agentConcurrencyLimiter } from "./concurrency.js";
 import { AgentOutputError } from "./errors.js";
 import type { AgentProcessRunner } from "./exec.js";
@@ -97,17 +105,21 @@ async function execute(
   const call: UsageCall | undefined =
     tier === undefined ? undefined : { tier, model: backend.modelFor(tier) };
 
-  const args = backend.buildArgs({
+  const callArgs = {
     ...(call === undefined ? {} : { model: call.model }),
     ...(invocation.resumeSessionId === undefined
       ? {}
       : { resumeSessionId: invocation.resumeSessionId }),
     schema: invocation.schema,
-  });
-  const input = backend.preparePrompt(invocation.prompt, invocation.schema);
+  };
+  const planned = backend.planSpawn?.({ ...callArgs, prompt: invocation.prompt });
+  const args = planned?.args ?? backend.buildArgs(callArgs);
+  const input = planned?.prompt ?? backend.preparePrompt(invocation.prompt, invocation.schema);
   const runProcess = deps.runAgentProcess ?? agent.runProcess;
-  const { stdout } = await agentConcurrencyLimiter.run(() =>
-    runProcess(args, input, deps.cwd === undefined ? {} : { cwd: deps.cwd }),
+  const { stdout } = await withSpawnFiles(planned?.files ?? [], () =>
+    agentConcurrencyLimiter.run(() =>
+      runProcess(args, input, deps.cwd === undefined ? {} : { cwd: deps.cwd }),
+    ),
   );
   const reply = backend.parseReply(stdout);
 
@@ -124,6 +136,23 @@ async function execute(
     deps.logger.debug(`${backend.id} ${label}: ${turns} turn(s), ${duration}`);
   }
   return reply;
+}
+
+/** Writes `files` (a backend's schema file, say), runs `run`, then removes them — including when
+ * `run` throws, so a failed call doesn't leave the file behind. */
+async function withSpawnFiles<T>(
+  files: NonNullable<AgentSpawnPlan["files"]>,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    for (const file of files) {
+      await mkdir(dirname(file.path), { recursive: true });
+      await writeFile(file.path, file.contents, "utf8");
+    }
+    return await run();
+  } finally {
+    await Promise.all(files.map((file) => rm(file.path, { force: true })));
+  }
 }
 
 type ExtractResult<T> = { ok: true; value: T } | { ok: false; error: string };

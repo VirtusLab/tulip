@@ -37,9 +37,10 @@ describe("resolveAgent", () => {
     expect(await resolveAgent(undefined, { settingsPath, io })).toBe("cursor");
 
     expect(lines[0]).toBe("Which agent CLI should Tulip use to analyze PRs?");
-    expect(lines.slice(1, 3)).toEqual([
+    expect(lines.slice(1, 4)).toEqual([
       "  1) claude  Claude Code (runs `claude`)",
       "  2) cursor  Cursor CLI (runs `agent`)",
+      "  3) codex   Codex CLI (runs `codex`)",
     ]);
     expect(lines.at(-1)).toContain(
       `Using cursor for this and future runs (saved in ${settingsPath})`,
@@ -48,7 +49,7 @@ describe("resolveAgent", () => {
   });
 
   it("accepts an agent name as the answer, and re-asks on an invalid one", async () => {
-    const { io, lines } = fakeIo(["9", "codex", " Claude "]);
+    const { io, lines } = fakeIo(["9", "gemini", " Claude "]);
 
     expect(await resolveAgent(undefined, { settingsPath, io })).toBe("claude");
 
@@ -90,7 +91,7 @@ describe("resolveAgent", () => {
     const { io } = fakeIo([], false);
 
     await expect(resolveAgent(undefined, { settingsPath, io })).rejects.toThrow(
-      /No agent chosen yet\. Run once with --agent <claude\|cursor>/,
+      /No agent chosen yet\. Run once with --agent <claude\|cursor\|codex>/,
     );
     expect(io.ask).not.toHaveBeenCalled();
   });

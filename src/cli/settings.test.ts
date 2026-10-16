@@ -63,7 +63,7 @@ describe("readUserSettings / saveUserSettings", () => {
     await writeFile(file, "{not json");
     expect(await readUserSettings(file)).toEqual({});
 
-    await writeFile(file, JSON.stringify({ agent: "codex" }));
+    await writeFile(file, JSON.stringify({ agent: "gemini" }));
     expect(await readUserSettings(file)).toEqual({});
   });
 });

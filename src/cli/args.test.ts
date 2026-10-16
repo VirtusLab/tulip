@@ -80,13 +80,13 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs([VALID_URL])).not.toHaveProperty("agent");
   });
 
-  it.each(["claude", "cursor"])("accepts --agent %s", (agent) => {
+  it.each(["claude", "cursor", "codex"])("accepts --agent %s", (agent) => {
     expect(parseCliArgs([VALID_URL, "--agent", agent]).agent).toBe(agent);
   });
 
   it("throws for an unknown --agent, listing the valid ones", () => {
-    expect(() => parseCliArgs([VALID_URL, "--agent", "codex"])).toThrow(
-      'Invalid --agent: "codex". Expected one of: claude, cursor.',
+    expect(() => parseCliArgs([VALID_URL, "--agent", "gemini"])).toThrow(
+      'Invalid --agent: "gemini". Expected one of: claude, cursor, codex.',
     );
   });
 
