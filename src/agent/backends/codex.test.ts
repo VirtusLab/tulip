@@ -25,27 +25,31 @@ function jsonl(events: Record<string, unknown>[]): string {
   return events.map((event) => JSON.stringify(event)).join("\n");
 }
 
-function plan(overrides: { model?: string; resumeSessionId?: string; prompt?: string } = {}) {
-  return codexBackend.planSpawn?.({
+function plan(overrides: { model?: string; resumeSessionId?: string } = {}) {
+  const spawn = codexBackend.planSpawn({
     schema: SCHEMA,
-    prompt: overrides.prompt ?? "do the thing",
-    ...(overrides.model === undefined ? { model: "m1" } : { model: overrides.model }),
+    prompt: "do the thing",
+    model: overrides.model ?? "m1",
     ...(overrides.resumeSessionId === undefined
       ? {}
       : { resumeSessionId: overrides.resumeSessionId }),
   });
+  const file = spawn.files[0];
+  if (file === undefined) {
+    throw new Error("codex planSpawn did not return a schema file");
+  }
+  return { args: spawn.args, prompt: spawn.prompt, file };
 }
 
 describe("codexBackend.planSpawn", () => {
   it("runs exec read-only, with the schema file and stdin as the prompt", () => {
     const spawn = plan();
-    const schemaPath = spawn?.files?.[0]?.path;
 
-    expect(schemaPath).toMatch(/tulip-codex-.+\.json$/);
-    expect(schemaPath?.startsWith(tmpdir())).toBe(true);
-    expect(spawn?.files?.[0]?.contents).toBe(JSON.stringify(SCHEMA));
-    expect(spawn?.prompt).toBe("do the thing");
-    expect(spawn?.args).toEqual([
+    expect(spawn.file.path).toMatch(/tulip-codex-.+\.json$/);
+    expect(spawn.file.path.startsWith(tmpdir())).toBe(true);
+    expect(spawn.file.contents).toBe(JSON.stringify(SCHEMA));
+    expect(spawn.prompt).toBe("do the thing");
+    expect(spawn.args).toEqual([
       "exec",
       "--json",
       "--sandbox",
@@ -55,7 +59,7 @@ describe("codexBackend.planSpawn", () => {
       "--model",
       "m1",
       "--output-schema",
-      schemaPath,
+      spawn.file.path,
       "-",
     ]);
   });
@@ -63,11 +67,11 @@ describe("codexBackend.planSpawn", () => {
   it("passes --model on a resume, with the thread id before the stdin marker", () => {
     const spawn = plan({ resumeSessionId: "thread-1" });
 
-    expect(spawn?.args.slice(-7)).toEqual([
+    expect(spawn.args.slice(-7)).toEqual([
       "--model",
       "m1",
       "--output-schema",
-      spawn?.files?.[0]?.path,
+      spawn.file.path,
       "resume",
       "thread-1",
       "-",
@@ -78,11 +82,11 @@ describe("codexBackend.planSpawn", () => {
     const first = plan();
     const second = plan();
 
-    expect(first?.files?.[0]?.path).not.toBe(second?.files?.[0]?.path);
+    expect(first.file.path).not.toBe(second.file.path);
   });
 
   it("never widens the sandbox or bypasses hook trust", () => {
-    const args = plan({ resumeSessionId: "thread-1" })?.args ?? [];
+    const { args } = plan({ resumeSessionId: "thread-1" });
 
     for (const flag of FORBIDDEN) {
       expect(args).not.toContain(flag);

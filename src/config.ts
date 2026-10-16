@@ -23,7 +23,7 @@ export const config = {
        * argv position (see docs/adr/0002). Sessions instead rely on their default Read/Grep/Glob
        * access to the checked-out working tree (see src/github/checkout.ts) — no Bash grant, no
        * vector. Kept as a list (not removed) so it stays the one place to configure this, and
-       * `buildArgs` (src/agent/backends/claude.ts) omits `--allowedTools` entirely when it's
+       * `planSpawn` (src/agent/backends/claude.ts) omits `--allowedTools` entirely when it's
        * empty. */
       allowedTools: [],
     },

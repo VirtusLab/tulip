@@ -1,5 +1,5 @@
 import { config } from "../../config.js";
-import type { AgentBackend, AgentCallArgs, AgentReply } from "../backend.js";
+import type { AgentBackend, AgentCallArgs, AgentReply, AgentSpawnPlan } from "../backend.js";
 import { parseEnvelope, replyFrom } from "../util.js";
 
 /**
@@ -14,12 +14,11 @@ export const claudeBackend: AgentBackend = {
   bin: config.agents.claude.bin,
   installHint: "install Claude Code",
   modelFor: (tier) => config.agents.claude.models[tier],
-  buildArgs,
-  preparePrompt: (prompt) => prompt,
+  planSpawn,
   parseReply,
 };
 
-function buildArgs(call: AgentCallArgs): string[] {
+function planSpawn(call: AgentCallArgs): AgentSpawnPlan {
   const args = ["-p", "--output-format", "json", "--json-schema", JSON.stringify(call.schema)];
   // Omitted entirely when empty (the default — see src/config.ts's `agents.claude.allowedTools`
   // doc comment for why no Bash grant is safe to add): an empty `--allowedTools` flag isn't the
@@ -33,7 +32,7 @@ function buildArgs(call: AgentCallArgs): string[] {
   } else if (call.model) {
     args.push("--model", call.model);
   }
-  return args;
+  return { args, prompt: call.prompt, files: [] };
 }
 
 function parseReply(stdout: string): AgentReply {

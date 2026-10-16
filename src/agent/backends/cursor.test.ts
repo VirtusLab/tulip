@@ -25,9 +25,9 @@ function envelope(overrides: Record<string, unknown> = {}): string {
   });
 }
 
-describe("cursorBackend.buildArgs", () => {
+describe("cursorBackend.planSpawn", () => {
   it("runs headless, read-only (--mode ask), trusting the checkout, with the model", () => {
-    expect(cursorBackend.buildArgs({ model: "m1", schema: SCHEMA })).toEqual([
+    expect(cursorBackend.planSpawn({ model: "m1", schema: SCHEMA, prompt: "" }).args).toEqual([
       "-p",
       "--output-format",
       "json",
@@ -40,31 +40,31 @@ describe("cursorBackend.buildArgs", () => {
   });
 
   it("passes --model on a resume too, alongside --resume", () => {
-    const args = cursorBackend.buildArgs({
+    const args = cursorBackend.planSpawn({
       model: "m1",
       resumeSessionId: "chat-1",
       schema: SCHEMA,
-    });
+      prompt: "",
+    }).args;
 
     expect(args.slice(-4)).toEqual(["--model", "m1", "--resume", "chat-1"]);
   });
 
   it("never grants write/shell or auto-approves MCP servers", () => {
-    const args = cursorBackend.buildArgs({
+    const args = cursorBackend.planSpawn({
       model: "m1",
       resumeSessionId: "chat-1",
       schema: SCHEMA,
-    });
+      prompt: "",
+    }).args;
 
     for (const flag of ["--force", "-f", "--yolo", "--approve-mcps", "--auto-review"]) {
       expect(args).not.toContain(flag);
     }
   });
-});
 
-describe("cursorBackend.preparePrompt", () => {
   it("appends the JSON-only instruction and the schema to the prompt", () => {
-    const prompt = cursorBackend.preparePrompt("do the thing", SCHEMA);
+    const { prompt } = cursorBackend.planSpawn({ schema: SCHEMA, prompt: "do the thing" });
 
     expect(prompt.startsWith("do the thing\n\n")).toBe(true);
     expect(prompt).toMatch(/Reply with ONLY a single JSON object/);

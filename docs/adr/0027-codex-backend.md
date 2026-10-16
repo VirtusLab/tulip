@@ -32,11 +32,11 @@ non-interactive docs and the `codex exec` reference; the CLI was not run locally
   --output-schema <file> [resume <thread_id>] -`. `--model` is passed on resume too, as for
   Cursor. Never `--yolo`, `danger-full-access`, `workspace-write`, `--approve-for-me`, or
   `--dangerously-bypass-hook-trust`. No `--skip-git-repo-check`: the checkout is a git repo.
-- **Schema file.** Optional `AgentBackend.planSpawn` returns `{ args, prompt, files }`. The
-  runner uses it instead of `buildArgs` / `preparePrompt` when set, writes each file before
-  the process, and deletes it afterwards, including when the process fails. Codex's file is
-  one JSON file under `os.tmpdir()`, unique per call, outside the checkout. The prompt is not
-  rewritten. Tulip still validates the parsed JSON locally and retries once.
+- **Schema file.** Every backend implements `planSpawn`, which returns `{ args, prompt, files }`.
+  Claude and Cursor return no files. Codex returns one JSON file under `os.tmpdir()`, unique
+  per call, outside the checkout, because `--output-schema` takes a path. The runner writes
+  each file before the process and deletes it afterwards, including when the process fails.
+  The prompt is not rewritten. Tulip still validates the parsed JSON locally and retries once.
 - **Parsing.** `parseReply` walks the JSONL. The session id is the last `thread_id`. The text
   is the last completed `agent_message`, parsed with the shared `extractJson`. Usage comes
   from the last `turn.completed`; `reasoning_output_tokens` is not added on top of

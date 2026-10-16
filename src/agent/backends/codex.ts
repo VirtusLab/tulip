@@ -25,37 +25,27 @@ export const codexBackend: AgentBackend = {
   bin: config.agents.codex.bin,
   installHint: "install the Codex CLI (https://developers.openai.com/codex) and run `codex login`",
   modelFor: (tier) => config.agents.codex.models[tier],
-  buildArgs: (call) => spawnArgs(call, schemaFilePath()),
-  preparePrompt: (prompt) => prompt,
   planSpawn,
   parseReply,
   prepareWorkspace,
 };
 
-function planSpawn(call: AgentCallArgs & { prompt: string }): AgentSpawnPlan {
-  const path = schemaFilePath();
-  return {
-    args: spawnArgs(call, path),
-    prompt: call.prompt,
-    files: [{ path, contents: JSON.stringify(call.schema) }],
-  };
-}
-
-function schemaFilePath(): string {
-  return join(tmpdir(), `tulip-codex-${randomUUID()}.json`);
-}
-
-function spawnArgs(call: AgentCallArgs, schemaPath: string): string[] {
+function planSpawn(call: AgentCallArgs): AgentSpawnPlan {
+  const path = join(tmpdir(), `tulip-codex-${randomUUID()}.json`);
   const args = ["exec", "--json", "--sandbox", "read-only", "--ask-for-approval", "never"];
   if (call.model) {
     args.push("--model", call.model);
   }
-  args.push("--output-schema", schemaPath);
+  args.push("--output-schema", path);
   if (call.resumeSessionId) {
     args.push("resume", call.resumeSessionId);
   }
   args.push("-");
-  return args;
+  return {
+    args,
+    prompt: call.prompt,
+    files: [{ path, contents: JSON.stringify(call.schema) }],
+  };
 }
 
 /**
@@ -93,16 +83,12 @@ function parseReply(stdout: string): AgentReply {
   if (sessionId === undefined) {
     throw new AgentOutputError(`codex's output is missing string "thread_id": ${truncate(stdout)}`);
   }
-  return replyFrom(
-    { sessionId, text, fields: isPlainObject(usage) ? { usage } : {} },
-    extractJson(text),
-    {
-      input: "input_tokens",
-      output: "output_tokens",
-      cacheWrite: "cache_write_input_tokens",
-      cacheRead: "cached_input_tokens",
-    },
-  );
+  return replyFrom({ sessionId, text, fields: { usage } }, extractJson(text), {
+    input: "input_tokens",
+    output: "output_tokens",
+    cacheWrite: "cache_write_input_tokens",
+    cacheRead: "cached_input_tokens",
+  });
 }
 
 function parseEvent(line: string): Record<string, unknown> {

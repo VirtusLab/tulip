@@ -34,7 +34,7 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
   `AgentProcessRunner`, `Agent*Error`, `agentConcurrencyLimiter`, `RunnerDeps.runAgentProcess`).
   The generic retry, validation, concurrency, usage, and session code stays there.
 - **`AgentBackend`** (`src/agent/backend.ts`) holds what differs per CLI: `bin`, `installHint`,
-  `modelFor(tier)`, `buildArgs`, `preparePrompt` (the stdin text for every turn),
+  `modelFor(tier)`, `planSpawn` (argv, the stdin prompt, and any files for one call),
   `parseReply` (stdout to a normalized `AgentReply` with `structured`, `usage`, turns,
   duration), and an optional `prepareWorkspace(dir)`. Backends live in `src/agent/backends/`.
   Adding a CLI means adding a backend, a config entry, and its id in `AGENT_IDS` and `BACKENDS`
@@ -65,8 +65,8 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
 - **Cursor backend.**
   - Argv: `-p --output-format json --mode ask --trust --model <id> [--resume <id>]`. Never
     `--force`, `--yolo`, or `--approve-mcps`.
-  - `preparePrompt` appends `src/prompts/structured-output.md` (the schema, plus "reply with
-    only this JSON") to every turn, including retries.
+  - `planSpawn` appends `src/prompts/structured-output.md` (the schema, plus "reply with
+    only this JSON") to every turn's prompt, including retries.
   - `parseReply` takes the JSON from the whole text, else from the last fenced block, else from
     the leftmost balanced `{...}` that parses. If none parses, `structured` is `undefined` and
     the generic retry asks again. Validation is the same local check as for Claude.

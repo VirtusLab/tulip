@@ -32,13 +32,15 @@ export interface AgentReply {
   durationMs?: number;
 }
 
-/** The argv-relevant parts of one invocation, as handed to {@link AgentBackend.buildArgs}. */
+/** One invocation, as handed to {@link AgentBackend.planSpawn}. */
 export interface AgentCallArgs {
+  /** The stdin text. Argv stays fixed-length; see ./exec.ts. */
+  prompt: string;
+  schema: JsonSchema;
   /** The backend's own model id, resolved from the invocation's tier. Absent only for a resume
    * of a session that was never recorded (see {@link Agent.sessionTiers}). */
   model?: string;
   resumeSessionId?: string;
-  schema: JsonSchema;
 }
 
 /** One call as the runner spawns it. `files` are written before the process starts and removed
@@ -46,7 +48,7 @@ export interface AgentCallArgs {
 export interface AgentSpawnPlan {
   args: string[];
   prompt: string;
-  files?: { path: string; contents: string }[];
+  files: { path: string; contents: string }[];
 }
 
 /**
@@ -63,14 +65,9 @@ export interface AgentBackend {
   /** Completes "`<bin>` binary not found on PATH — <installHint> and ensure ...". */
   installHint: string;
   modelFor(tier: ModelTier): string;
-  /** argv for one call; the prompt itself always goes over stdin (see ./exec.ts). */
-  buildArgs(call: AgentCallArgs): string[];
-  /** The stdin text for one call, e.g. with the schema appended for a CLI without native
-   * structured output. Applied to every turn, resumes and retries included. */
-  preparePrompt(prompt: string, schema: JsonSchema): string;
-  /** When set, the runner uses this instead of {@link buildArgs} and {@link preparePrompt}.
-   * Use it when a call needs a file on disk (a schema file) as well as argv and stdin. */
-  planSpawn?(call: AgentCallArgs & { prompt: string }): AgentSpawnPlan;
+  /** argv, stdin, and any files for one call. The prompt itself always goes over stdin
+   * (see ./exec.ts). `files` is empty unless the CLI needs a path, such as a schema file. */
+  planSpawn(call: AgentCallArgs): AgentSpawnPlan;
   /** Parses one call's stdout; throws {@link AgentOutputError} if it isn't a valid envelope. */
   parseReply(stdout: string): AgentReply;
   /** Run once on the checkout before any call, to neutralize repo-controlled agent config the

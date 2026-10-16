@@ -2,9 +2,8 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "../../config.js";
 import { renderPrompt } from "../../prompts/loader.js";
-import type { AgentBackend, AgentCallArgs, AgentReply } from "../backend.js";
+import type { AgentBackend, AgentCallArgs, AgentReply, AgentSpawnPlan } from "../backend.js";
 import { AgentOutputError } from "../errors.js";
-import type { JsonSchema } from "../schema.js";
 import { extractJson, parseEnvelope, replyFrom, truncate } from "../util.js";
 
 /**
@@ -32,13 +31,12 @@ export const cursorBackend: AgentBackend = {
   bin: config.agents.cursor.bin,
   installHint: "install the Cursor CLI (https://cursor.com/cli) and run `agent login`",
   modelFor: (tier) => config.agents.cursor.models[tier],
-  buildArgs,
-  preparePrompt,
+  planSpawn,
   parseReply,
   prepareWorkspace,
 };
 
-function buildArgs(call: AgentCallArgs): string[] {
+function planSpawn(call: AgentCallArgs): AgentSpawnPlan {
   const args = ["-p", "--output-format", "json", "--mode", "ask", "--trust"];
   // Passed on resumes too: unlike `claude --resume`, nothing guarantees the session's model is
   // kept, and each session's model is known (see `Agent.sessionTiers`).
@@ -48,11 +46,8 @@ function buildArgs(call: AgentCallArgs): string[] {
   if (call.resumeSessionId) {
     args.push("--resume", call.resumeSessionId);
   }
-  return args;
-}
-
-function preparePrompt(prompt: string, schema: JsonSchema): string {
-  return `${prompt}\n\n${renderPrompt("structured-output", { schema: JSON.stringify(schema) })}`;
+  const prompt = `${call.prompt}\n\n${renderPrompt("structured-output", { schema: JSON.stringify(call.schema) })}`;
+  return { args, prompt, files: [] };
 }
 
 function parseReply(stdout: string): AgentReply {

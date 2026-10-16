@@ -105,20 +105,18 @@ async function execute(
   const call: UsageCall | undefined =
     tier === undefined ? undefined : { tier, model: backend.modelFor(tier) };
 
-  const callArgs = {
+  const planned = backend.planSpawn({
+    prompt: invocation.prompt,
+    schema: invocation.schema,
     ...(call === undefined ? {} : { model: call.model }),
     ...(invocation.resumeSessionId === undefined
       ? {}
       : { resumeSessionId: invocation.resumeSessionId }),
-    schema: invocation.schema,
-  };
-  const planned = backend.planSpawn?.({ ...callArgs, prompt: invocation.prompt });
-  const args = planned?.args ?? backend.buildArgs(callArgs);
-  const input = planned?.prompt ?? backend.preparePrompt(invocation.prompt, invocation.schema);
+  });
   const runProcess = deps.runAgentProcess ?? agent.runProcess;
-  const { stdout } = await withSpawnFiles(planned?.files ?? [], () =>
+  const { stdout } = await withSpawnFiles(planned.files, () =>
     agentConcurrencyLimiter.run(() =>
-      runProcess(args, input, deps.cwd === undefined ? {} : { cwd: deps.cwd }),
+      runProcess(planned.args, planned.prompt, deps.cwd === undefined ? {} : { cwd: deps.cwd }),
     ),
   );
   const reply = backend.parseReply(stdout);
@@ -141,7 +139,7 @@ async function execute(
 /** Writes `files` (a backend's schema file, say), runs `run`, then removes them — including when
  * `run` throws, so a failed call doesn't leave the file behind. */
 async function withSpawnFiles<T>(
-  files: NonNullable<AgentSpawnPlan["files"]>,
+  files: AgentSpawnPlan["files"],
   run: () => Promise<T>,
 ): Promise<T> {
   try {
