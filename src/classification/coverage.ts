@@ -1,6 +1,6 @@
+import type { RunnerDeps } from "../agent/runner.js";
+import { resumeSession } from "../agent/session.js";
 import type { Category } from "../categories/types.js";
-import type { RunnerDeps } from "../claude/runner.js";
-import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { categoryIdsMatch } from "./category-match.js";

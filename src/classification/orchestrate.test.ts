@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentProcessResult } from "../agent/exec.js";
 import type { Category } from "../categories/types.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
 import { config } from "../config.js";
 import type { Change, ParsedDiff } from "../diff/change.js";
 import { classifyChanges } from "./orchestrate.js";
@@ -14,7 +14,7 @@ function fileWithChange(id: string): ParsedDiff["files"][number] {
   return { path: change.path, status: "modified", binary: false, changes: [change] };
 }
 
-function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessResult {
+function envelope(structuredOutput: unknown, sessionId: string): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -42,7 +42,7 @@ describe("classifyChanges", () => {
     };
 
     let classifierResumeCount = 0;
-    const runClaudeProcess = vi.fn(async (args: string[], input: string) => {
+    const runAgentProcess = vi.fn(async (args: string[], input: string) => {
       if (args.includes("--model")) {
         // Classifier replies with the category id ("c1"), not the name ("A") — see
         // docs/adr/0005.
@@ -107,7 +107,7 @@ describe("classifyChanges", () => {
 
     const result = await classifyChanges(
       { diff, categories: CATEGORIES, phase1SessionId: "phase1-0" },
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
     expect(result.categories).toEqual([
@@ -120,7 +120,7 @@ describe("classifyChanges", () => {
     expect(result.assignments.has("c3")).toBe(false);
     expect(result.ignoredChangeIds).toEqual(new Set(["c3"]));
     expect([...result.changesById.keys()].sort()).toEqual(["c1", "c2", "c3", "c4"]);
-    expect(runClaudeProcess).toHaveBeenCalledTimes(4);
+    expect(runAgentProcess).toHaveBeenCalledTimes(4);
   });
 
   it("threads a category accepted while resolving batch 1 into batch 2's prompt", async () => {
@@ -133,7 +133,7 @@ describe("classifyChanges", () => {
     };
 
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], input: string) => {
       call++;
       if (call === 1) {
         // Batch 1 (fresh session): b1-0 comes back "none", suggesting category "B".
@@ -185,10 +185,10 @@ describe("classifyChanges", () => {
 
     const result = await classifyChanges(
       { diff, categories: CATEGORIES, phase1SessionId: "phase1-0" },
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
-    expect(runClaudeProcess).toHaveBeenCalledTimes(4);
+    expect(runAgentProcess).toHaveBeenCalledTimes(4);
     expect(result.categories).toEqual([
       { id: "c1", name: "A", description: "first", attention: "normal" },
       { id: "c2", name: "B", description: "refined", attention: "normal" },
@@ -211,7 +211,7 @@ describe("classifyChanges", () => {
     const diff: ParsedDiff = { files: [fileWithChange("c1")] };
 
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], input: string) => {
       call++;
       if (call === 1) {
         return envelope(
@@ -254,7 +254,7 @@ describe("classifyChanges", () => {
 
     const result = await classifyChanges(
       { diff, categories, phase1SessionId: "phase1-0" },
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
     // Ids stay code-assigned and intact (c4, not renumbered) even though it now sits third —

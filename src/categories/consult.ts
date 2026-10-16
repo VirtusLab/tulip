@@ -1,7 +1,7 @@
-import { ClaudeOutputError } from "../claude/errors.js";
-import type { RunnerDeps } from "../claude/runner.js";
-import type { JsonSchema } from "../claude/schema.js";
-import { resumeSession } from "../claude/session.js";
+import { AgentOutputError } from "../agent/errors.js";
+import type { RunnerDeps } from "../agent/runner.js";
+import type { JsonSchema } from "../agent/schema.js";
+import { resumeSession } from "../agent/session.js";
 import type { LineRange } from "../diff/change.js";
 import { renderPrompt } from "../prompts/loader.js";
 import { CATEGORY_SCHEMA, type CategoryProposal } from "./types.js";
@@ -81,7 +81,7 @@ export async function consultOnCategory(
   );
 
   if (result.accept && !result.category) {
-    throw new ClaudeOutputError("claude accepted the new category but didn't include it");
+    throw new AgentOutputError("the agent accepted the new category but didn't include it");
   }
 
   return { ...result, sessionId };

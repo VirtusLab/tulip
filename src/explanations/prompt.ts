@@ -56,7 +56,7 @@ function formatChange(
 
 /** Tells a session what its checkout gives it access to: the head revision's working tree,
  * readable directly with its Read/Grep/Glob tools (no Bash/git access is granted — see
- * src/config.ts's `claude.allowedTools` doc comment for why), plus the full diff and every
+ * src/config.ts's `agents.claude.allowedTools` doc comment for why), plus the full diff and every
  * changed file's pre-change content, both materialized as plain files (see
  * src/github/materialize.ts) so they're freely readable regardless of prompt size. Text lives
  * in src/prompts/explain-checkout-access.md (docs/adr/0006). */

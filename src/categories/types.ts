@@ -1,4 +1,4 @@
-import type { JsonSchema } from "../claude/schema.js";
+import type { JsonSchema } from "../agent/schema.js";
 
 /**
  * How closely a reviewer should read a category (docs/adr/0010): a formalization of ADR 0003's

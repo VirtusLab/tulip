@@ -1,5 +1,5 @@
-import type { RunnerDeps } from "../claude/runner.js";
-import { resumeSession } from "../claude/session.js";
+import type { RunnerDeps } from "../agent/runner.js";
+import { resumeSession } from "../agent/session.js";
 import { config } from "../config.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { findMermaidFences, type MermaidFenceMatch } from "../rendering/mermaid.js";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateAgainstSchema } from "../claude/schema.js";
+import { validateAgainstSchema } from "../agent/schema.js";
 import { SPLIT_SCHEMA } from "./wire.js";
 
 describe("SPLIT_SCHEMA", () => {

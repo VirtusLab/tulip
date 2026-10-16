@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ClaudeProcessResult } from "../claude/exec.js";
+import type { AgentProcessResult } from "../agent/exec.js";
 import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import type { ResolvedChange } from "./classify.js";
@@ -18,7 +18,7 @@ function change(id: string): ClassifiableChange {
   };
 }
 
-function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessResult {
+function envelope(structuredOutput: unknown, sessionId: string): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -50,17 +50,17 @@ describe("resolveNoneClassifications", () => {
         { kind: "categorized", assignments: [{ category: "Retry logic", codeType: "production" }] },
       ],
     ]);
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
 
     const result = await resolveNoneClassifications(
       resolved,
       new Map([["c1", change("c1")]]),
       baseState(),
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
     expect(result).toBe(resolved);
-    expect(runClaudeProcess).not.toHaveBeenCalled();
+    expect(runAgentProcess).not.toHaveBeenCalled();
   });
 
   it("accepts a new category, extends the list, and asks the classifier to redo just that change", async () => {
@@ -79,7 +79,7 @@ describe("resolveNoneClassifications", () => {
       ],
     ]);
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], input: string) => {
       call++;
       if (call === 1) {
         // consultOnCategory (resumes the phase-1 session)
@@ -115,7 +115,7 @@ describe("resolveNoneClassifications", () => {
       resolved,
       new Map([["c1", change("c1")]]),
       state,
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
     expect(result.get("c1")).toEqual({
@@ -153,7 +153,7 @@ describe("resolveNoneClassifications", () => {
       ],
     ]);
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       if (call === 1) {
         return envelope(
@@ -176,7 +176,7 @@ describe("resolveNoneClassifications", () => {
     const write = vi.fn();
 
     await resolveNoneClassifications(resolved, new Map([["c1", change("c1")]]), baseState(), {
-      runClaudeProcess,
+      runAgentProcess,
       logger: createLogger({ write }),
     });
 
@@ -204,7 +204,7 @@ describe("resolveNoneClassifications", () => {
       ],
     ]);
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       if (call === 1) {
         // The mocked phase-1 reply says "skim" — escape-hatch.ts must still force "normal".
@@ -228,7 +228,7 @@ describe("resolveNoneClassifications", () => {
 
     const state = baseState();
     await resolveNoneClassifications(resolved, new Map([["c1", change("c1")]]), state, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(state.categories.find((c) => c.id === "c2")?.attention).toBe("normal");
@@ -252,7 +252,7 @@ describe("resolveNoneClassifications", () => {
       ],
     ]);
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       if (call === 1) {
         return envelope(
@@ -280,7 +280,7 @@ describe("resolveNoneClassifications", () => {
 
     const state = baseState();
     await resolveNoneClassifications(resolved, new Map([["c1", change("c1")]]), state, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(state.categories).toContainEqual({
@@ -303,7 +303,7 @@ describe("resolveNoneClassifications", () => {
       ],
     ]);
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], input: string) => {
       call++;
       if (call === 1) {
         return envelope({ accept: false }, "phase1-session-2");
@@ -325,7 +325,7 @@ describe("resolveNoneClassifications", () => {
       resolved,
       new Map([["c1", change("c1")]]),
       state,
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
     expect(result.get("c1")).toEqual({
@@ -349,7 +349,7 @@ describe("resolveNoneClassifications", () => {
         },
       ],
     ]);
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope(
         {
           classifications: [
@@ -362,12 +362,12 @@ describe("resolveNoneClassifications", () => {
 
     const state = baseState({ acceptedNewCategories: MAX_ACCEPTED_NEW_CATEGORIES });
     await resolveNoneClassifications(resolved, new Map([["c1", change("c1")]]), state, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     // Only the classifier resume happened — no consultOnCategory call (that would be call 1 too, but
     // since it's capped, the only call is the classifier resume).
-    expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+    expect(runAgentProcess).toHaveBeenCalledTimes(1);
     expect(state.acceptedNewCategories).toBe(MAX_ACCEPTED_NEW_CATEGORIES);
   });
 
@@ -391,7 +391,7 @@ describe("resolveNoneClassifications", () => {
       ],
     ]);
     let consultCalls = 0;
-    const runClaudeProcess = vi.fn(async (args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (args: string[], _input: string) => {
       if (!args.includes("--resume") || args[args.indexOf("--resume") + 1] === "phase1-session") {
         consultCalls++;
         return envelope(
@@ -423,7 +423,7 @@ describe("resolveNoneClassifications", () => {
         ["c2", change("c2")],
       ]),
       state,
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
     // Only c1 gets consulted (bringing acceptedNewCategories to the cap); c2 is auto-rejected.
@@ -438,7 +438,7 @@ describe("resolveNoneClassifications", () => {
       attention: "normal" as const,
     };
     let consultCalls = 0;
-    const runClaudeProcess = vi.fn(async (args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (args: string[], _input: string) => {
       if (!args.includes("--resume") || args[args.indexOf("--resume") + 1] === "phase1-session") {
         consultCalls++;
         return envelope({ accept: false }, "phase1-session-2");
@@ -463,20 +463,20 @@ describe("resolveNoneClassifications", () => {
     ]);
 
     const afterFirstCall = await resolveNoneClassifications(resolved, changesById, state, {
-      runClaudeProcess,
+      runAgentProcess,
     });
     expect(afterFirstCall.get("c1")).toMatchObject({ kind: "none" });
     expect(consultCalls).toBe(1);
-    expect(runClaudeProcess).toHaveBeenCalledTimes(2); // 1 consult + 1 classifier-resume
+    expect(runAgentProcess).toHaveBeenCalledTimes(2); // 1 consult + 1 classifier-resume
 
     // A later batch's afterBatch hook is called with the whole accumulated map, in which c1 is
     // still "none" — without tracking, this would consult phase 1 on it a second time.
     const afterSecondCall = await resolveNoneClassifications(afterFirstCall, changesById, state, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(consultCalls).toBe(1);
-    expect(runClaudeProcess).toHaveBeenCalledTimes(2); // no new calls at all — c1 already consulted
+    expect(runAgentProcess).toHaveBeenCalledTimes(2); // no new calls at all — c1 already consulted
     expect(afterSecondCall).toBe(afterFirstCall);
   });
 
@@ -491,7 +491,7 @@ describe("resolveNoneClassifications", () => {
         },
       ],
     ]);
-    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], input: string) => {
       if (input.includes("Retry Logic")) {
         // Accepted, refined to a name that only differs in case/whitespace from the existing
         // category — categoryNamesMatch treats these as the same category.
@@ -522,7 +522,7 @@ describe("resolveNoneClassifications", () => {
       resolved,
       new Map([["c1", change("c1")]]),
       state,
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
     expect(state.categories).toEqual([
@@ -546,7 +546,7 @@ describe("resolveNoneClassifications", () => {
         },
       ],
     ]);
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope(
         {
           classifications: [
@@ -574,11 +574,11 @@ describe("resolveNoneClassifications", () => {
       resolved,
       new Map([["c1", change("c1")]]),
       baseState({ acceptedNewCategories: MAX_ACCEPTED_NEW_CATEGORIES }),
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
     // Single pass: one classifier resume, no internal retry loop.
-    expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+    expect(runAgentProcess).toHaveBeenCalledTimes(1);
     expect(result.get("c1")).toMatchObject({ kind: "none" });
   });
 });

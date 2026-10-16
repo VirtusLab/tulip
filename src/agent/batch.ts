@@ -1,6 +1,6 @@
 /**
  * Groups `items` into batches bounded by both a count (`maxCount`) and a total size (`maxChars`,
- * via `sizeOf`), to keep each `claude` prompt within limits. A single item whose own size exceeds
+ * via `sizeOf`), to keep each agent prompt within limits. A single item whose own size exceeds
  * `maxChars` still forms its own (oversized) batch rather than being dropped — so there is always
  * at least one item per batch.
  *

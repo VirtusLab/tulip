@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -19,8 +20,12 @@ const TSX_BIN = join(PROJECT_ROOT, "node_modules/.bin/tsx");
 const CLI_ENTRY = join(PROJECT_ROOT, "src/cli/index.ts");
 
 async function runCli(...args: string[]) {
+  return runCliWithEnv(process.env, ...args);
+}
+
+async function runCliWithEnv(env: NodeJS.ProcessEnv, ...args: string[]) {
   try {
-    const { stdout, stderr } = await execFileAsync(TSX_BIN, [CLI_ENTRY, ...args]);
+    const { stdout, stderr } = await execFileAsync(TSX_BIN, [CLI_ENTRY, ...args], { env });
     return { stdout, stderr, exitCode: 0 };
   } catch (error) {
     const execError = error as { stdout: string; stderr: string; code: number };
@@ -68,6 +73,24 @@ describe("tulip --version / -v", () => {
     },
     TSX_STARTUP_TIMEOUT,
   );
+});
+
+describe("tulip without a chosen agent", () => {
+  it("fails fast in a non-interactive run, before any fetch, asking for --agent", async () => {
+    const configHome = await mkdtemp(join(tmpdir(), "tulip-cli-config-"));
+    try {
+      const result = await runCliWithEnv(
+        { ...process.env, XDG_CONFIG_HOME: configHome },
+        "https://github.com/owner/repo/pull/1",
+      );
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toMatch(/No agent chosen yet\. Run once with --agent/);
+      expect(result.stdout).not.toMatch(/Processing PR/);
+    } finally {
+      await rm(configHome, { recursive: true, force: true });
+    }
+  }, 20_000);
 });
 
 /**

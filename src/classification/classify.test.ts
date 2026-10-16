@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { AgentOutputError } from "../agent/errors.js";
+import type { AgentProcessResult } from "../agent/exec.js";
 import type { Category } from "../categories/types.js";
-import { ClaudeOutputError } from "../claude/errors.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
 import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { type AfterBatchHook, classifyInBatches, resolveRawClassification } from "./classify.js";
@@ -32,7 +32,7 @@ function change(id: string, excerpt = "+line"): ClassifiableChange {
   };
 }
 
-function envelope(classifications: unknown, sessionId = "session-1"): ClaudeProcessResult {
+function envelope(classifications: unknown, sessionId = "session-1"): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -46,13 +46,13 @@ function envelope(classifications: unknown, sessionId = "session-1"): ClaudeProc
 describe("classifyInBatches", () => {
   it("sends the category list and special-category explanation with the batch", async () => {
     const changes = [change("c1")];
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
     );
 
-    await classifyInBatches(CATEGORIES, changes, passThrough, { runClaudeProcess });
+    await classifyInBatches(CATEGORIES, changes, passThrough, { runAgentProcess });
 
-    const [args, prompt] = runClaudeProcess.mock.calls[0] ?? [];
+    const [args, prompt] = runAgentProcess.mock.calls[0] ?? [];
     expect(prompt).toContain("[c1] Retry logic");
     expect(prompt).toContain("Adds backoff retries.");
     expect(prompt).toMatch(/"ignore"/);
@@ -67,13 +67,13 @@ describe("classifyInBatches", () => {
       { id: "c2", name: "Logging", description: "Adds structured logs.", attention: "normal" },
     ];
     const changes = [change("c1")];
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
     );
 
-    await classifyInBatches(twoCategories, changes, passThrough, { runClaudeProcess });
+    await classifyInBatches(twoCategories, changes, passThrough, { runAgentProcess });
 
-    const args = runClaudeProcess.mock.calls[0]?.[0] as string[];
+    const args = runAgentProcess.mock.calls[0]?.[0] as string[];
     const schema = JSON.parse(args[args.indexOf("--json-schema") + 1] ?? "{}");
     const categoryEnum =
       schema.properties.classifications.items.properties.assignments.items.properties.category.enum;
@@ -82,13 +82,13 @@ describe("classifyInBatches", () => {
 
   it("tells the classifier that docs/comments/doc-strings count as production", async () => {
     const changes = [change("c1")];
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
     );
 
-    await classifyInBatches(CATEGORIES, changes, passThrough, { runClaudeProcess });
+    await classifyInBatches(CATEGORIES, changes, passThrough, { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toMatch(
       /documentation\s+files, comments, and doc-strings count as\s+"production"/i,
     );
@@ -98,7 +98,7 @@ describe("classifyInBatches", () => {
   it("starts a fresh session for every batch, each with the full task explanation", async () => {
     const changes = Array.from({ length: TWO_BATCHES }, (_, i) => change(`c${i}`));
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       const batch =
         call === 1
@@ -114,11 +114,11 @@ describe("classifyInBatches", () => {
     });
 
     const result = await classifyInBatches(CATEGORIES, changes, passThrough, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
-    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
-    for (const [args, prompt] of runClaudeProcess.mock.calls) {
+    expect(runAgentProcess).toHaveBeenCalledTimes(2);
+    for (const [args, prompt] of runAgentProcess.mock.calls) {
       expect(args).toContain("--model");
       expect(args).not.toContain("--resume");
       expect(prompt).toContain("Retry logic");
@@ -136,7 +136,7 @@ describe("classifyInBatches", () => {
       attention: "normal",
     };
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       const batch =
         call === 1
@@ -157,9 +157,9 @@ describe("classifyInBatches", () => {
       categories: [...CATEGORIES, extraCategory],
     });
 
-    const result = await classifyInBatches(CATEGORIES, changes, afterBatch, { runClaudeProcess });
+    const result = await classifyInBatches(CATEGORIES, changes, afterBatch, { runAgentProcess });
 
-    const [secondArgs, secondPrompt] = runClaudeProcess.mock.calls[1] ?? [];
+    const [secondArgs, secondPrompt] = runAgentProcess.mock.calls[1] ?? [];
     const args = secondArgs as string[];
     const schema = JSON.parse(args[args.indexOf("--json-schema") + 1] ?? "{}");
     expect(
@@ -174,7 +174,7 @@ describe("classifyInBatches", () => {
   it("logs the batch count up front, then each batch's completion when there are several", async () => {
     const changes = Array.from({ length: TWO_BATCHES }, (_, i) => change(`c${i}`));
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       const batch =
         call === 1
@@ -190,7 +190,7 @@ describe("classifyInBatches", () => {
     const write = vi.fn();
 
     await classifyInBatches(CATEGORIES, changes, passThrough, {
-      runClaudeProcess,
+      runAgentProcess,
       logger: createLogger({ write }),
     });
 
@@ -202,13 +202,13 @@ describe("classifyInBatches", () => {
   });
 
   it("does not log per-batch progress for a single batch", async () => {
-    const runClaudeProcess = vi.fn(async () =>
+    const runAgentProcess = vi.fn(async () =>
       envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
     );
     const write = vi.fn();
 
     await classifyInBatches(CATEGORIES, [change("c1")], passThrough, {
-      runClaudeProcess,
+      runAgentProcess,
       logger: createLogger({ write }),
     });
 
@@ -219,12 +219,12 @@ describe("classifyInBatches", () => {
 
   it("parses assignments, keyed by changeId", async () => {
     const changes = [change("c1")];
-    const runClaudeProcess = vi.fn(async () =>
+    const runAgentProcess = vi.fn(async () =>
       envelope([{ changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] }]),
     );
 
     const { resolved } = await classifyInBatches(CATEGORIES, changes, passThrough, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(resolved.get("c1")).toEqual({
@@ -239,7 +239,7 @@ describe("classifyInBatches", () => {
       { id: "c2", name: "Logging", description: "Adds structured logs.", attention: "normal" },
     ];
     const changes = [change("c1")];
-    const runClaudeProcess = vi.fn(async () =>
+    const runAgentProcess = vi.fn(async () =>
       envelope([
         {
           changeId: "c1",
@@ -252,7 +252,7 @@ describe("classifyInBatches", () => {
     );
 
     const { resolved } = await classifyInBatches(twoCategories, changes, passThrough, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(resolved.get("c1")).toEqual({
@@ -266,7 +266,7 @@ describe("classifyInBatches", () => {
 
   it("splits production vs test code type per assignment", async () => {
     const changes = [change("c1"), change("c2")];
-    const runClaudeProcess = vi.fn(async () =>
+    const runAgentProcess = vi.fn(async () =>
       envelope([
         { changeId: "c1", assignments: [{ category: "c1", codeType: "production" }] },
         { changeId: "c2", assignments: [{ category: "c1", codeType: "test" }] },
@@ -274,7 +274,7 @@ describe("classifyInBatches", () => {
     );
 
     const { resolved } = await classifyInBatches(CATEGORIES, changes, passThrough, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(resolved.get("c1")).toMatchObject({ assignments: [{ codeType: "production" }] });
@@ -283,7 +283,7 @@ describe("classifyInBatches", () => {
 
   it("resolves an 'ignore' assignment to kind: ignored, regardless of other assignments", async () => {
     const changes = [change("c1")];
-    const runClaudeProcess = vi.fn(async () =>
+    const runAgentProcess = vi.fn(async () =>
       envelope([
         {
           changeId: "c1",
@@ -293,7 +293,7 @@ describe("classifyInBatches", () => {
     );
 
     const { resolved } = await classifyInBatches(CATEGORIES, changes, passThrough, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(resolved.get("c1")).toEqual({ kind: "ignored" });
@@ -356,12 +356,12 @@ describe("resolveRawClassification", () => {
     });
   });
 
-  it("throws ClaudeOutputError for 'none' without a suggestedCategory", () => {
+  it("throws AgentOutputError for 'none' without a suggestedCategory", () => {
     const entry: RawChangeClassification = {
       changeId: "c1",
       assignments: [{ category: "none", codeType: "production" }],
     };
 
-    expect(() => resolveRawClassification(entry)).toThrow(ClaudeOutputError);
+    expect(() => resolveRawClassification(entry)).toThrow(AgentOutputError);
   });
 });

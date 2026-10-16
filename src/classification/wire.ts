@@ -1,5 +1,5 @@
+import type { JsonSchema } from "../agent/schema.js";
 import { CATEGORY_SCHEMA, type Category, type CategoryProposal } from "../categories/types.js";
-import type { JsonSchema } from "../claude/schema.js";
 import { type CodeType, IGNORE_CATEGORY, NONE_CATEGORY } from "./types.js";
 
 /**
@@ -39,7 +39,7 @@ function buildClassificationSchema(categoryIds: string[]): JsonSchema {
 /**
  * Builds the classify schema fresh for each call, from the CURRENT category list — necessary
  * because the escape hatch (./escape-hatch.ts) can add a category id mid-run, so a static enum
- * baked in once would reject ids that didn't exist yet at that point. `src/claude/runner.ts`
+ * baked in once would reject ids that didn't exist yet at that point. `src/agent/runner.ts`
  * already validates every reply against the schema it was given (including `enum`) and retries
  * once, so a stray value here is still caught even if the CLI's own enforcement were ever soft
  * (see docs/adr/0005 for a live check confirming it's not).

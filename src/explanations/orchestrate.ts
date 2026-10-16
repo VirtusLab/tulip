@@ -59,8 +59,8 @@ function causeMessage(error: unknown): string {
 }
 
 /** Splits `categorySets` into ones with >= 1 change and ones with none in both production and
- * test — the latter would otherwise still get a full (opus) explain/review/render cycle for
- * nothing to say, ungrounded and wasted cost. */
+ * test — the latter would otherwise still get a full (strong-tier) explain/review/render cycle
+ * for nothing to say, ungrounded and wasted cost. */
 function partitionEmptyCategorySets(categorySets: CategoryChangeSet[]): {
   kept: CategoryChangeSet[];
   dropped: CategoryChangeSet[];
@@ -74,11 +74,11 @@ function partitionEmptyCategorySets(categorySets: CategoryChangeSet[]): {
 }
 
 /**
- * Phase 3 end to end: for every category, generates its explanation (task 6.2, opus), verifies
- * every change it was given is referenced by a snippet — amending if not (task 6.3), then runs
- * the clarity/conciseness/correctness review loop (task 6.4). Categories are explained
- * concurrently (`Promise.allSettled`); the shared `claude` process limiter (see
- * src/claude/concurrency.ts) caps actual parallelism at 3 regardless of category count, so this
+ * Phase 3 end to end: for every category, generates its explanation (task 6.2, strong tier),
+ * verifies every change it was given is referenced by a snippet — amending if not (task 6.3),
+ * then runs the clarity/conciseness/correctness review loop (task 6.4). Categories are explained
+ * concurrently (`Promise.allSettled`); the shared agent process limiter (see
+ * src/agent/concurrency.ts) caps actual parallelism at 3 regardless of category count, so this
  * doesn't need its own throttling. Throws {@link ExplainCategoriesError} if any category fails —
  * every failed category is reported, not just the first.
  */
@@ -150,9 +150,9 @@ async function explainOneCategory(
 
     // docs/adr/0015 §all-secondary: a category that owns none of its changes still runs (it's not
     // empty — partitionEmptyCategorySets kept it), but renders as mostly backlinks. It needs the
-    // explain pass to emit those backlinks; a full sonnet review+amend cycle would spend the most
-    // cost on the least original output, so skip review for it — the cheaper of the two options
-    // the ADR leaves open. Coverage above already passed trivially (empty primary set).
+    // explain pass to emit those backlinks; a full balanced-tier review+amend cycle would spend the
+    // most cost on the least original output, so skip review for it — the cheaper of the two
+    // options the ADR leaves open. Coverage above already passed trivially (empty primary set).
     const reviewed = await reviewOrSkip(input, set, covered, primaryChanges.length === 0, deps);
 
     // Runs after the review-amend loop (not before) since an amend can itself change a diagram —

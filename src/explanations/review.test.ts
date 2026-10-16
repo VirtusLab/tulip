@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentProcessResult } from "../agent/exec.js";
 import type { Category } from "../categories/types.js";
 import type { ClassifiableChange } from "../classification/types.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
 import { createLogger } from "../logging/logger.js";
 import { serializeSnippetRef } from "./markup.js";
 import { type ReviewLoopInput, reviewAndAmend } from "./review.js";
@@ -45,7 +45,7 @@ function baseInput(overrides: Partial<ReviewLoopInput> = {}): ReviewLoopInput {
   };
 }
 
-function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessResult {
+function envelope(structuredOutput: unknown, sessionId: string): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -58,42 +58,42 @@ function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessRe
 
 describe("reviewAndAmend", () => {
   it("returns the markdown unchanged when the first review approves", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ approved: true, issues: [] }, "review-1"),
     );
 
-    const result = await reviewAndAmend(baseInput(), { runClaudeProcess });
+    const result = await reviewAndAmend(baseInput(), { runAgentProcess });
 
     expect(result.markdown).toBe(`explanation\n\n${REF}`);
     expect(result.explainSessionId).toBe("explain-session");
-    expect(runClaudeProcess).toHaveBeenCalledTimes(1);
-    const [args, prompt] = runClaudeProcess.mock.calls[0] ?? [];
+    expect(runAgentProcess).toHaveBeenCalledTimes(1);
+    const [args, prompt] = runAgentProcess.mock.calls[0] ?? [];
     expect(prompt).toContain("Add retry logic to the fetcher");
     expect(prompt).toContain("Retry logic");
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("sonnet");
   });
 
   it("tells the reviewer its working directory is the head checkout, and gives both SHAs", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ approved: true, issues: [] }, "review-1"),
     );
 
-    await reviewAndAmend(baseInput(), { runClaudeProcess });
+    await reviewAndAmend(baseInput(), { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toContain("base-sha");
     expect(prompt).toContain("head-sha");
     expect(prompt).toMatch(/working directory is a checkout/);
     expect(prompt).toContain(".tulip/pr.diff");
     expect(prompt).toContain(".tulip/base");
     expect(prompt).toMatch(/removed\s+by the PR have no working-tree \(head\) copy/);
-    // No Bash/git access is granted (see src/config.ts's claude.allowedTools doc comment) — the
+    // No Bash/git access is granted (see src/config.ts's agents.claude.allowedTools doc comment) — the
     // prompt must not imply the session can run git commands itself.
     expect(prompt).not.toMatch(/git diff|git log|git blame|git show/);
   });
 
   it("gives the reviewer the same changes the explaining session got", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ approved: true, issues: [] }, "review-1"),
     );
 
@@ -102,10 +102,10 @@ describe("reviewAndAmend", () => {
         production: [CHANGE],
         test: [{ ...CHANGE, id: "c2", path: "src/fetch.test.ts" }],
       }),
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toContain("Code and doc changes in this group");
     expect(prompt).toContain("Test changes in this group");
     expect(prompt).toContain("src/fetch.ts");
@@ -116,20 +116,20 @@ describe("reviewAndAmend", () => {
   // The per-category "Coverage — Tests: ... · Docs: ..." strip is gone (docs/adr/0009), so the
   // review checklist no longer asks about it.
   it("doesn't ask the reviewer to check a coverage strip", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ approved: true, issues: [] }, "review-1"),
     );
 
-    await reviewAndAmend(baseInput(), { runClaudeProcess });
+    await reviewAndAmend(baseInput(), { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).not.toMatch(/coverage strip/i);
     expect(prompt).not.toMatch(/Coverage — /);
   });
 
   it("amends via the explaining session and re-checks coverage, without re-reviewing", async () => {
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], input: string) => {
       call++;
       if (call === 1) {
         // Review: raises an issue.
@@ -140,13 +140,13 @@ describe("reviewAndAmend", () => {
       return envelope({ markdown: `amended\n\n${REF}` }, "explain-session-2");
     });
 
-    const result = await reviewAndAmend(baseInput(), { runClaudeProcess });
+    const result = await reviewAndAmend(baseInput(), { runAgentProcess });
 
     expect(result.markdown).toBe(`amended\n\n${REF}`);
     expect(result.explainSessionId).toBe("explain-session-2");
     // Review + amend only: the amended version is not reviewed again (docs/adr/0025).
-    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
-    expect(runClaudeProcess.mock.calls[1]?.[0]).toContain("--resume");
+    expect(runAgentProcess).toHaveBeenCalledTimes(2);
+    expect(runAgentProcess.mock.calls[1]?.[0]).toContain("--resume");
   });
 
   it("does not re-impose snippet coverage on a secondary change after an amend", async () => {
@@ -154,7 +154,7 @@ describe("reviewAndAmend", () => {
     // must not force a snippet for it — even though the amended markdown drops every ref
     // (docs/adr/0015: relaxing only the initial explain would let an amend round re-force it).
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       if (call === 1) {
         return envelope({ approved: false, issues: [{ description: "reword it" }] }, "review-1");
@@ -167,17 +167,17 @@ describe("reviewAndAmend", () => {
       baseInput({
         changeOwners: new Map([["c1", { ownerCategoryId: "other", ownerTitle: "Other" }]]),
       }),
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
     // Exactly review, amend — no coverage-repair resume after.
-    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+    expect(runAgentProcess).toHaveBeenCalledTimes(2);
     expect(result.markdown).toBe("amended, no snippet");
   });
 
   it("logs the review outcome at info level", async () => {
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       if (call === 1) {
         return envelope({ approved: false, issues: [{ description: "too verbose" }] }, "review-1");
@@ -187,7 +187,7 @@ describe("reviewAndAmend", () => {
     const write = vi.fn();
     const logger = createLogger({ write });
 
-    await reviewAndAmend(baseInput(), { runClaudeProcess, logger });
+    await reviewAndAmend(baseInput(), { runAgentProcess, logger });
 
     expect(write.mock.calls.map((call) => String(call[0]))).toEqual([
       expect.stringContaining(

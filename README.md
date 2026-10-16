@@ -15,8 +15,8 @@ And if you don't know the codebase at all, the prose and the generated diagrams
 may be enough on their own to understand the PR well enough to accept or reject
 it.
 
-Tulip uses the headless `claude` CLI to do the analysis. No API key needed, just
-a logged-in Claude Code.
+Tulip uses a headless agent CLI to do the analysis: Claude Code's `claude` or
+Cursor's `agent`, whichever you use. No API key needed, just a logged-in CLI.
 
 <p align="center">
   <a href="screens/diagram.png"><img src="screens/diagram.png" alt="A generated explanation with a Mermaid diagram of the changed flow" width="380"></a>
@@ -32,7 +32,8 @@ a logged-in Claude Code.
 ## How it works
 
 Tulip fetches the PR and runs it through a few LLM passes, each using a model
-sized to the job (Haiku, Sonnet, or Opus):
+sized to the job (Haiku, Sonnet, or Opus; see [Choosing the agent](#choosing-the-agent)
+for the models used with Cursor):
 
 1. **Fetch & check out.** Get the PR (title, description, diff) via `gh` (or the
    GitHub API), check out its head revision, and write the full diff plus the
@@ -72,8 +73,10 @@ to open.
 
 - [Node.js](https://nodejs.org/) LTS (>= 24) — its bundled `npm` installs Tulip;
   [pnpm](https://pnpm.io/) is only needed to build from source
-- A logged-in [`claude`](https://claude.com/product/claude-code) CLI on `PATH` —
-  Tulip drives it to analyze the PR
+- A logged-in agent CLI on `PATH` — Tulip drives it to analyze the PR. Either
+  [`claude`](https://claude.com/product/claude-code) or Cursor's
+  [`agent`](https://cursor.com/cli) (`agent login`); see
+  [Choosing the agent](#choosing-the-agent)
 - Optionally, the [`gh`](https://cli.github.com/) CLI, logged in — used to fetch
   PR data when available; Tulip falls back to the GitHub REST API otherwise
   (set `GITHUB_TOKEN` to raise the unauthenticated rate limit)
@@ -113,11 +116,49 @@ Example:
 tulip https://github.com/owner/repo/pull/123
 ```
 
-Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`. Run `tulip
---help` for details, or `tulip --version` for the build.
+Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
+`--agent <claude|cursor>`. Run `tulip --help` for details, or `tulip --version`
+for the build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser.
+
+### Choosing the agent
+
+There is no default agent. On the first run, Tulip asks which one you use:
+
+```text
+Which agent CLI should Tulip use to analyze PRs?
+  1) claude  Claude Code (runs `claude`)
+  2) cursor  Cursor CLI (runs `agent`)
+Enter 1-2:
+```
+
+The answer is saved in `~/.config/tulip/config.json` (`$XDG_CONFIG_HOME/tulip/`
+if set; `%APPDATA%\tulip\` on Windows) and used from then on. To pick or switch
+without the prompt, pass `--agent`; that choice is saved too:
+
+```sh
+tulip <PR URL> --agent cursor
+```
+
+A non-interactive run (no terminal to ask in, e.g. CI) with nothing saved fails
+straight away and asks for `--agent`.
+
+Each pass asks for a fast, balanced, or strong model, mapped per agent in
+`src/config.ts`:
+
+| Tier     | `claude` | `cursor`                   |
+| -------- | -------- | -------------------------- |
+| fast     | `haiku`  | `claude-haiku-5-5-medium`  |
+| balanced | `sonnet` | `claude-sonnet-5-5-medium` |
+| strong   | `opus`   | `claude-opus-5-5-high`     |
+
+With `cursor`, Tulip runs `agent` in its read-only `ask` mode and trusts the
+temporary checkout, after deleting the PR's `.cursor/` and `.claude/` dirs from
+it: Cursor would otherwise run hooks defined there. Cursor's CLI has no
+structured-output flag, so the JSON schema goes into the prompt and the reply is
+parsed and validated by Tulip (with one retry), as for `claude`.
 
 ### Reviewing on the page
 

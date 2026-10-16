@@ -1,7 +1,7 @@
+import { AgentOutputError } from "../agent/errors.js";
+import type { RunnerDeps } from "../agent/runner.js";
+import { runSession } from "../agent/session.js";
 import type { Category, CategoryProposal } from "../categories/types.js";
-import { ClaudeOutputError } from "../claude/errors.js";
-import type { RunnerDeps } from "../claude/runner.js";
-import { runSession } from "../claude/session.js";
 import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { batchChanges } from "./batch.js";
@@ -61,7 +61,7 @@ export type AfterBatchHook = (
 }>;
 
 /**
- * Runs the haiku classifier over every batch of `changes`, each in a fresh session given the
+ * Runs the fast-tier classifier over every batch of `changes`, each in a fresh session given the
  * full task explanation and the current category list (docs/adr/0025: a fresh session per batch
  * keeps each reply free of earlier batches' context). Batches still run one after another, and
  * `afterBatch` is called after each to resolve that batch's "none" replies before moving on —
@@ -77,7 +77,7 @@ export async function classifyInBatches(
   const logger = deps.logger ?? createLogger();
   const batches = batchChanges(changes);
   if (batches.length === 0) {
-    throw new ClaudeOutputError("classifyInBatches was called with no changes to classify");
+    throw new AgentOutputError("classifyInBatches was called with no changes to classify");
   }
   logger.info(`classifying ${changes.length} change(s) in ${batches.length} batch(es)...`);
 
@@ -138,8 +138,8 @@ export function resolveRawClassification(entry: RawChangeClassification): Resolv
   const none = entry.assignments.find((assignment) => assignment.category === NONE_CATEGORY);
   if (none) {
     if (!none.suggestedCategory) {
-      throw new ClaudeOutputError(
-        `claude classified change "${entry.changeId}" as "none" without a suggestedCategory`,
+      throw new AgentOutputError(
+        `the agent classified change "${entry.changeId}" as "none" without a suggestedCategory`,
       );
     }
     return { kind: "none", suggestedCategory: none.suggestedCategory, existingAssignments: real };

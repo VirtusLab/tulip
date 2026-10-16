@@ -8,41 +8,56 @@
  * depend on it without risking a cycle.
  */
 export const config = {
-  /** Fixed CLI flags applied to every `claude` invocation, regardless of phase. */
-  claude: {
-    /** `--allowedTools` entries, e.g. `"Bash(git log:*)"` (syntax per `claude --help`'s own
-     * `--allowedTools` example, "Bash(git *) Edit": a `Tool(prefix)` specifier, one per argv
-     * token). Deliberately empty: a security review found that any `Bash(git ...)` grant lets
-     * the model run e.g. `git log --output=<path>`, writing attacker-controlled content (a
-     * malicious PR's own commit message) to an arbitrary path — `claude`'s prefix-based
-     * `--allowedTools`/`--disallowedTools` matching can't block a flag that may appear at any
-     * argv position (see docs/adr/0002). Sessions instead rely on their default Read/Grep/Glob
-     * access to the checked-out working tree (see src/github/checkout.ts) — no Bash grant, no
-     * vector. Kept as a list (not removed) so it stays the one place to configure this, and
-     * `buildArgs` (src/claude/runner.ts) omits `--allowedTools` entirely when it's empty. */
-    allowedTools: [],
+  /** Per-agent CLI settings (docs/adr/0026). Each agent maps the generic model tiers used by
+   * `models` below to its own `--model` ids — see src/agent/backends. */
+  agents: {
+    claude: {
+      bin: "claude",
+      models: { fast: "haiku", balanced: "sonnet", strong: "opus" },
+      /** `--allowedTools` entries, e.g. `"Bash(git log:*)"` (syntax per `claude --help`'s own
+       * `--allowedTools` example, "Bash(git *) Edit": a `Tool(prefix)` specifier, one per argv
+       * token). Deliberately empty: a security review found that any `Bash(git ...)` grant lets
+       * the model run e.g. `git log --output=<path>`, writing attacker-controlled content (a
+       * malicious PR's own commit message) to an arbitrary path — `claude`'s prefix-based
+       * `--allowedTools`/`--disallowedTools` matching can't block a flag that may appear at any
+       * argv position (see docs/adr/0002). Sessions instead rely on their default Read/Grep/Glob
+       * access to the checked-out working tree (see src/github/checkout.ts) — no Bash grant, no
+       * vector. Kept as a list (not removed) so it stays the one place to configure this, and
+       * `buildArgs` (src/agent/backends/claude.ts) omits `--allowedTools` entirely when it's
+       * empty. */
+      allowedTools: [],
+    },
+    cursor: {
+      bin: "agent",
+      models: {
+        fast: "claude-haiku-5-5-medium",
+        balanced: "claude-sonnet-5-5-medium",
+        strong: "claude-opus-5-5-high",
+      },
+    },
   },
 
-  /** `claude --model` alias used to start each phase's fresh session. */
+  /** Model tier used to start each phase's fresh session; each agent maps it to a concrete
+   * model via `agents.<id>.models`. */
   models: {
     /** Phase 1: proposes the PR's category list — see src/categories/generate.ts. */
-    categoryGeneration: "sonnet",
+    categoryGeneration: "balanced",
     /** Phase 2: classifies each change into a category — see src/classification/classify.ts. */
-    classification: "haiku",
+    classification: "fast",
     /** Proposes where to split large changes into per-concern sub-changes (docs/adr/0016) — see
      * src/splitting. */
-    changeSplitting: "sonnet",
+    changeSplitting: "balanced",
     /** Phase 3: writes a category's explanation — see src/explanations/explain.ts. */
-    explanation: "opus",
+    explanation: "strong",
     /** Phase 3: reviews/critiques an explanation draft — see src/explanations/review.ts. */
-    review: "sonnet",
+    review: "balanced",
   },
 
   /** Per-call ceilings for spawned subprocesses. Generous — high enough that they should only
    * ever fire on a genuinely hung process, not a slow-but-working one. */
   timeouts: {
-    /** Single `claude -p` invocation — see src/claude/exec.ts. */
-    claudeProcessMs: 10 * 60 * 1000,
+    /** Single agent CLI invocation (`claude -p`, `agent -p`) — see src/agent/exec.ts. */
+    agentProcessMs: 10 * 60 * 1000,
     /** Single `gh`/`git` subcommand — see src/github/exec.ts. */
     githubCommandMs: 2 * 60 * 1000,
     /** Single GitHub REST API request (the `gh`-unavailable fallback) — see src/github/pr-fetcher.ts. */
@@ -51,9 +66,9 @@ export const config = {
 
   /** Retry/cap counts and size limits that bound otherwise-unbounded loops or prompt sizes. */
   limits: {
-    /** Max `claude` processes running at once, global to the tool (per spec) — see
-     * src/claude/concurrency.ts. */
-    maxConcurrentClaudeProcesses: 3,
+    /** Max agent CLI processes running at once, global to the tool (per spec) — see
+     * src/agent/concurrency.ts. */
+    maxConcurrentAgentProcesses: 3,
     /** Default `--diff-threshold`: max diff lines fed verbatim to the explaining LLM before
      * falling back to a file+line-range reference — see src/cli/args.ts. */
     defaultDiffThreshold: 400,
@@ -92,7 +107,7 @@ export const config = {
      * GitHub REST API — see src/github/pr-fetcher.ts. */
     maxPrFilesSafetyNet: 3000,
     /** Commit depth fetched for each of the checkout's base/head revisions — enough for `git
-     * log`/`git blame` in a claude session to see real history, not just the tip commit — see
+     * log`/`git blame` in an agent session to see real history, not just the tip commit — see
      * src/github/checkout.ts. */
     checkoutFetchDepth: 50,
   },

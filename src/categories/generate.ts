@@ -1,7 +1,7 @@
-import { ClaudeOutputError } from "../claude/errors.js";
-import type { RunnerDeps } from "../claude/runner.js";
-import type { JsonSchema } from "../claude/schema.js";
-import { runSession } from "../claude/session.js";
+import { AgentOutputError } from "../agent/errors.js";
+import type { RunnerDeps } from "../agent/runner.js";
+import type { JsonSchema } from "../agent/schema.js";
+import { runSession } from "../agent/session.js";
 import { config } from "../config.js";
 import type { FileStatus } from "../diff/change.js";
 import { renderPrompt } from "../prompts/loader.js";
@@ -56,7 +56,7 @@ function buildPrompt(input: GenerateCategoriesInput): string {
 }
 
 /**
- * Phase 1: primes a fresh sonnet session with the PR's title, description and file list, and
+ * Phase 1: primes a fresh balanced-tier session with the PR's title, description and file list, and
  * asks it to propose a list of categories, each rated for attention, to group the PR's changes
  * by (code then derives presentation order from the rating — see {@link GenerateCategoriesResult}).
  * The returned
@@ -77,7 +77,7 @@ export async function generateCategories(
   );
 
   if (result.categories.length === 0) {
-    throw new ClaudeOutputError("claude returned an empty category list");
+    throw new AgentOutputError("the agent returned an empty category list");
   }
 
   return { categories: assignCategoryIds(result.categories), sessionId };

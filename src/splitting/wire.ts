@@ -1,4 +1,4 @@
-import type { JsonSchema } from "../claude/schema.js";
+import type { JsonSchema } from "../agent/schema.js";
 import type { DiffSide } from "../diff/change.js";
 
 /**

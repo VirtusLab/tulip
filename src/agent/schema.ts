@@ -1,7 +1,8 @@
 /**
  * Minimal JSON Schema subset: object/array/string/number/integer/boolean/null, nested
- * `properties`/`items`, `required`, `enum`. Passed through to `claude --json-schema` as-is,
- * and also used locally by {@link validateAgainstSchema} for lightweight response validation —
+ * `properties`/`items`, `required`, `enum`. Handed to the agent as-is (`claude --json-schema`,
+ * or appended to the prompt for Cursor — see src/agent/backends), and also used locally by
+ * {@link validateAgainstSchema} for lightweight response validation —
  * not a full JSON Schema implementation, just enough to catch a model emitting the wrong shape.
  */
 export interface JsonSchema {
@@ -73,7 +74,7 @@ function matchesType(value: unknown, type: NonNullable<JsonSchema["type"]>): boo
   }
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 

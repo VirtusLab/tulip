@@ -1,6 +1,6 @@
+import type { RunnerDeps } from "../agent/runner.js";
+import { resumeSession } from "../agent/session.js";
 import { type ClassifiableChange, changeLocationRanges } from "../classification/types.js";
-import type { RunnerDeps } from "../claude/runner.js";
-import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
 import type { LineRange } from "../diff/change.js";
 import { createLogger } from "../logging/logger.js";

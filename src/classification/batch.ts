@@ -1,4 +1,4 @@
-import { batchBySize } from "../claude/batch.js";
+import { batchBySize } from "../agent/batch.js";
 import { config } from "../config.js";
 import type { ClassifiableChange } from "./types.js";
 
