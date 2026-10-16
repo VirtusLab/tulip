@@ -154,8 +154,8 @@ Each pass asks for a fast, balanced, or strong model, mapped per agent in
 
 | Tier     | `claude` | `cursor-anthropic`         | `cursor-grok`     | `codex`       |
 | -------- | -------- | -------------------------- | ----------------- | ------------- |
-| fast     | `haiku`  | `claude-haiku-5-5-medium`  | `grok-4.7-medium` | `gpt-6-luna`  |
-| balanced | `sonnet` | `claude-sonnet-5-5-medium` | `grok-4.7-high`   | `gpt-6-sol`   |
+| fast     | `haiku`  | `claude-haiku-5-5-medium`  | `grok-4.7-low`    | `gpt-6-luna`  |
+| balanced | `sonnet` | `claude-sonnet-5-5-medium` | `grok-4.7-medium` | `gpt-6-sol`   |
 | strong   | `opus`   | `claude-opus-5-5-high`     | `grok-4.7-high`   | `gpt-6.1-sol` |
 
 `cursor-anthropic` and `cursor-grok` both run `agent` in its read-only `ask` mode

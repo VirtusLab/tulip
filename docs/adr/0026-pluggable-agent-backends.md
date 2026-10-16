@@ -44,8 +44,8 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
   backend maps a tier to its own id (`config.agents.<id>.models`): Claude uses
   `haiku`/`sonnet`/`opus`. Cursor is two ids that share one implementation:
   `cursor-anthropic` uses `claude-haiku-5-5-medium`/`claude-sonnet-5-5-medium`/
-  `claude-opus-5-5-high`; `cursor-grok` uses `grok-4.7-medium` for fast and
-  `grok-4.7-high` for balanced and strong.
+  `claude-opus-5-5-high`; `cursor-grok` uses `grok-4.7-low`/`grok-4.7-medium`/
+  `grok-4.7-high`, one effort step per tier. `xhigh` is not used.
 - **One `Agent` per run** (`createAgent(id)`) bundles the backend, its process runner, and a
   map from each session to its tier. A resume therefore knows its model: Cursor passes
   `--model` on every resume, while Claude doesn't need it. The usage summary labels each row

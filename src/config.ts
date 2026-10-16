@@ -36,13 +36,14 @@ export const config = {
         strong: "claude-opus-5-5-high",
       },
     },
-    /** Grok 4.7 effort slugs. `high` is Cursor's default. `strong` stays on `high` too:
-     * `grok-4.7-xhigh` was still reading the checkout at 9 minutes on an explanation. */
+    /** One Grok model, stepped by effort to mirror the Claude cursor tiers: `low` for fast
+     * (haiku-medium), `medium` for balanced (sonnet-medium), `high` for strong (opus-high).
+     * `xhigh` is a step past opus-high and was still reading the checkout at 9 minutes. */
     "cursor-grok": {
       bin: "agent",
       models: {
-        fast: "grok-4.7-medium",
-        balanced: "grok-4.7-high",
+        fast: "grok-4.7-low",
+        balanced: "grok-4.7-medium",
         strong: "grok-4.7-high",
       },
     },
