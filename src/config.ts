@@ -36,14 +36,14 @@ export const config = {
         strong: "claude-opus-5-5-high",
       },
     },
-    /** Grok 4.7 effort slugs. `grok-4.7-xhigh` is the form the CLI accepts; not checked with
-     * `agent models` here. `high` is Cursor's default effort for this model. */
+    /** Grok 4.7 effort slugs. `high` is Cursor's default. `strong` stays on `high` too:
+     * `grok-4.7-xhigh` was still reading the checkout at 9 minutes on an explanation. */
     "cursor-grok": {
       bin: "agent",
       models: {
         fast: "grok-4.7-medium",
         balanced: "grok-4.7-high",
-        strong: "grok-4.7-xhigh",
+        strong: "grok-4.7-high",
       },
     },
     /** ChatGPT-signed-in Codex. `gpt-5.4` / `gpt-5.5` are retired on that path; `gpt-6-astra`
@@ -77,8 +77,10 @@ export const config = {
   /** Per-call ceilings for spawned subprocesses. Generous — high enough that they should only
    * ever fire on a genuinely hung process, not a slow-but-working one. */
   timeouts: {
-    /** Single agent CLI invocation (`claude -p`, `agent -p`, `codex exec`) — see src/agent/exec.ts. */
-    agentProcessMs: 10 * 60 * 1000,
+    /** Single agent CLI invocation (`claude -p`, `agent -p`, `codex exec`) — see src/agent/exec.ts.
+     * 30 minutes: a `grok-4.7-xhigh` explanation was still reading the checkout at 9 minutes when a
+     * 10 minute cap killed it. */
+    agentProcessMs: 30 * 60 * 1000,
     /** Single `gh`/`git` subcommand — see src/github/exec.ts. */
     githubCommandMs: 2 * 60 * 1000,
     /** Single GitHub REST API request (the `gh`-unavailable fallback) — see src/github/pr-fetcher.ts. */

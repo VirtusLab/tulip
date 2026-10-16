@@ -26,8 +26,10 @@ function envelope(overrides: Record<string, unknown> = {}): string {
 }
 
 describe("cursor backends", () => {
-  it("maps the Grok strong tier to grok-4.7-xhigh", () => {
-    expect(cursorGrokBackend.modelFor("strong")).toBe("grok-4.7-xhigh");
+  it("maps Grok fast to medium and the other tiers to high", () => {
+    expect(cursorGrokBackend.modelFor("fast")).toBe("grok-4.7-medium");
+    expect(cursorGrokBackend.modelFor("balanced")).toBe("grok-4.7-high");
+    expect(cursorGrokBackend.modelFor("strong")).toBe("grok-4.7-high");
   });
 });
 
