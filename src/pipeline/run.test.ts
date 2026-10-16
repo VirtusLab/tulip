@@ -356,9 +356,9 @@ describe("run", () => {
   it("builds the agent named by options.agent", async () => {
     const deps = baseDeps();
 
-    await run(options({ agent: "cursor" }), deps);
+    await run(options({ agent: "cursor-anthropic" }), deps);
 
-    expect(phaseRunnerDeps(deps.generateCategories).agent?.backend.id).toBe("cursor");
+    expect(phaseRunnerDeps(deps.generateCategories).agent?.backend.id).toBe("cursor-anthropic");
   });
 
   it("prepares the agent's workspace in the checkout after materializing, before phase 1", async () => {

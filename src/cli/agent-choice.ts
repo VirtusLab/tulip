@@ -52,9 +52,10 @@ export async function resolveAgent(
 
 async function askForAgent(io: AgentChoiceIo): Promise<AgentId> {
   io.write("Which agent CLI should Tulip use to analyze PRs?");
+  const idWidth = Math.max(...AGENT_IDS.map((id) => id.length)) + 2;
   AGENT_IDS.forEach((id, index) => {
     const backend = backendFor(id);
-    io.write(`  ${index + 1}) ${id.padEnd(8)}${backend.label} (runs \`${backend.bin}\`)`);
+    io.write(`  ${index + 1}) ${id.padEnd(idWidth)}${backend.label} (runs \`${backend.bin}\`)`);
   });
   const range = `1-${AGENT_IDS.length}`;
   for (;;) {

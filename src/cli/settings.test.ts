@@ -43,9 +43,9 @@ describe("readUserSettings / saveUserSettings", () => {
   });
 
   it("round-trips the agent, creating missing directories", async () => {
-    await saveUserSettings(path, { agent: "cursor" });
+    await saveUserSettings(path, { agent: "cursor-anthropic" });
 
-    expect(await readUserSettings(path)).toEqual({ agent: "cursor" });
+    expect(await readUserSettings(path)).toEqual({ agent: "cursor-anthropic" });
   });
 
   it("keeps other keys already in the file when saving", async () => {
@@ -53,9 +53,9 @@ describe("readUserSettings / saveUserSettings", () => {
     const withExtra = { ...JSON.parse(await readFile(path, "utf8")), other: 1 };
     await writeFile(path, JSON.stringify(withExtra));
 
-    await saveUserSettings(path, { agent: "cursor" });
+    await saveUserSettings(path, { agent: "cursor-grok" });
 
-    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ agent: "cursor", other: 1 });
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ agent: "cursor-grok", other: 1 });
   });
 
   it("treats malformed JSON or an unknown agent as nothing saved", async () => {
@@ -64,6 +64,9 @@ describe("readUserSettings / saveUserSettings", () => {
     expect(await readUserSettings(file)).toEqual({});
 
     await writeFile(file, JSON.stringify({ agent: "gemini" }));
+    expect(await readUserSettings(file)).toEqual({});
+
+    await writeFile(file, JSON.stringify({ agent: "cursor" }));
     expect(await readUserSettings(file)).toEqual({});
   });
 });

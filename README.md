@@ -119,8 +119,8 @@ tulip https://github.com/owner/repo/pull/123
 ```
 
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
-`--agent <claude|cursor|codex>`. Run `tulip --help` for details, or `tulip --version`
-for the build.
+`--agent <claude|cursor-anthropic|cursor-grok|codex>`. Run `tulip --help` for details,
+or `tulip --version` for the build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser.
@@ -131,10 +131,11 @@ There is no default agent. On the first run, Tulip asks which one you use:
 
 ```text
 Which agent CLI should Tulip use to analyze PRs?
-  1) claude  Claude Code (runs `claude`)
-  2) cursor  Cursor CLI (runs `agent`)
-  3) codex   Codex CLI (runs `codex`)
-Enter 1-3:
+  1) claude            Claude Code (runs `claude`)
+  2) cursor-anthropic  Cursor + Anthropic (runs `agent`)
+  3) cursor-grok       Cursor + Grok (runs `agent`)
+  4) codex             Codex CLI (runs `codex`)
+Enter 1-4:
 ```
 
 The answer is saved in `~/.config/tulip/config.json` (`$XDG_CONFIG_HOME/tulip/`
@@ -142,7 +143,7 @@ if set; `%APPDATA%\tulip\` on Windows) and used from then on. To pick or switch
 without the prompt, pass `--agent`; that choice is saved too:
 
 ```sh
-tulip <PR URL> --agent cursor
+tulip <PR URL> --agent cursor-anthropic
 ```
 
 A non-interactive run (no terminal to ask in, e.g. CI) with nothing saved fails
@@ -151,17 +152,18 @@ straight away and asks for `--agent`.
 Each pass asks for a fast, balanced, or strong model, mapped per agent in
 `src/config.ts`:
 
-| Tier     | `claude` | `cursor`                   | `codex`       |
-| -------- | -------- | -------------------------- | ------------- |
-| fast     | `haiku`  | `claude-haiku-5-5-medium`  | `gpt-6-luna`  |
-| balanced | `sonnet` | `claude-sonnet-5-5-medium` | `gpt-6-sol`   |
-| strong   | `opus`   | `claude-opus-5-5-high`     | `gpt-6.1-sol` |
+| Tier     | `claude` | `cursor-anthropic`         | `cursor-grok`     | `codex`       |
+| -------- | -------- | -------------------------- | ----------------- | ------------- |
+| fast     | `haiku`  | `claude-haiku-5-5-medium`  | `grok-4.7-medium` | `gpt-6-luna`  |
+| balanced | `sonnet` | `claude-sonnet-5-5-medium` | `grok-4.7-high`   | `gpt-6-sol`   |
+| strong   | `opus`   | `claude-opus-5-5-high`     | `grok-4.7-xhigh`  | `gpt-6.1-sol` |
 
-With `cursor`, Tulip runs `agent` in its read-only `ask` mode and trusts the
-temporary checkout, after deleting the PR's `.cursor/` and `.claude/` dirs from
-it: Cursor would otherwise run hooks defined there. Cursor's CLI has no
-structured-output flag, so the JSON schema goes into the prompt and the reply is
-parsed and validated by Tulip (with one retry), as for `claude`.
+`cursor-anthropic` and `cursor-grok` both run `agent` in its read-only `ask` mode
+and trust the temporary checkout, after deleting the PR's `.cursor/` and
+`.claude/` dirs from it: Cursor would otherwise run hooks defined there. They
+differ only in the model ids above. Cursor's CLI has no structured-output flag,
+so the JSON schema goes into the prompt and the reply is parsed and validated by
+Tulip (with one retry), as for `claude`.
 
 With `codex`, Tulip runs `codex exec` in a read-only sandbox
 (`--sandbox read-only --ask-for-approval never`) and deletes the PR's `.codex/`

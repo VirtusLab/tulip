@@ -34,18 +34,19 @@ describe("resolveAgent", () => {
   it("asks on first run when no --agent is given, and remembers the answer", async () => {
     const { io, lines } = fakeIo(["2"]);
 
-    expect(await resolveAgent(undefined, { settingsPath, io })).toBe("cursor");
+    expect(await resolveAgent(undefined, { settingsPath, io })).toBe("cursor-anthropic");
 
     expect(lines[0]).toBe("Which agent CLI should Tulip use to analyze PRs?");
-    expect(lines.slice(1, 4)).toEqual([
-      "  1) claude  Claude Code (runs `claude`)",
-      "  2) cursor  Cursor CLI (runs `agent`)",
-      "  3) codex   Codex CLI (runs `codex`)",
+    expect(lines.slice(1, 5)).toEqual([
+      "  1) claude            Claude Code (runs `claude`)",
+      "  2) cursor-anthropic  Cursor + Anthropic (runs `agent`)",
+      "  3) cursor-grok       Cursor + Grok (runs `agent`)",
+      "  4) codex             Codex CLI (runs `codex`)",
     ]);
     expect(lines.at(-1)).toContain(
-      `Using cursor for this and future runs (saved in ${settingsPath})`,
+      `Using cursor-anthropic for this and future runs (saved in ${settingsPath})`,
     );
-    expect(await readUserSettings(settingsPath)).toEqual({ agent: "cursor" });
+    expect(await readUserSettings(settingsPath)).toEqual({ agent: "cursor-anthropic" });
   });
 
   it("accepts an agent name as the answer, and re-asks on an invalid one", async () => {
@@ -58,17 +59,17 @@ describe("resolveAgent", () => {
   });
 
   it("uses the remembered agent without asking", async () => {
-    await saveUserSettings(settingsPath, { agent: "cursor" });
+    await saveUserSettings(settingsPath, { agent: "cursor-grok" });
     const { io, lines } = fakeIo();
 
-    expect(await resolveAgent(undefined, { settingsPath, io })).toBe("cursor");
+    expect(await resolveAgent(undefined, { settingsPath, io })).toBe("cursor-grok");
 
     expect(io.ask).not.toHaveBeenCalled();
     expect(lines).toEqual([]);
   });
 
   it("lets --agent override the remembered agent, and remembers the new one", async () => {
-    await saveUserSettings(settingsPath, { agent: "cursor" });
+    await saveUserSettings(settingsPath, { agent: "cursor-anthropic" });
     const { io, lines } = fakeIo();
 
     expect(await resolveAgent("claude", { settingsPath, io })).toBe("claude");
@@ -91,7 +92,7 @@ describe("resolveAgent", () => {
     const { io } = fakeIo([], false);
 
     await expect(resolveAgent(undefined, { settingsPath, io })).rejects.toThrow(
-      /No agent chosen yet\. Run once with --agent <claude\|cursor\|codex>/,
+      /No agent chosen yet\. Run once with --agent <claude\|cursor-anthropic\|cursor-grok\|codex>/,
     );
     expect(io.ask).not.toHaveBeenCalled();
   });

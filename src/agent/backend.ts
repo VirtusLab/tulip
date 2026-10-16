@@ -1,13 +1,13 @@
 import { claudeBackend } from "./backends/claude.js";
 import { codexBackend } from "./backends/codex.js";
-import { cursorBackend } from "./backends/cursor.js";
+import { cursorAnthropicBackend, cursorGrokBackend } from "./backends/cursor.js";
 import { type AgentProcessRunner, createAgentProcessRunner } from "./exec.js";
 import type { JsonSchema } from "./schema.js";
 import type { ModelTokens } from "./usage.js";
 
 /** Every agent CLI tulip can drive (docs/adr/0026). There is no default: the user picks one,
  * and the choice is remembered (see src/cli/agent-choice.ts). */
-export const AGENT_IDS = ["claude", "cursor", "codex"] as const;
+export const AGENT_IDS = ["claude", "cursor-anthropic", "cursor-grok", "codex"] as const;
 
 export type AgentId = (typeof AGENT_IDS)[number];
 
@@ -86,7 +86,8 @@ export interface Agent {
 
 const BACKENDS: Record<AgentId, AgentBackend> = {
   claude: claudeBackend,
-  cursor: cursorBackend,
+  "cursor-anthropic": cursorAnthropicBackend,
+  "cursor-grok": cursorGrokBackend,
   codex: codexBackend,
 };
 

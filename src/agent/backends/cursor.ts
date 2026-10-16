@@ -2,7 +2,13 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "../../config.js";
 import { renderPrompt } from "../../prompts/loader.js";
-import type { AgentBackend, AgentCallArgs, AgentReply, AgentSpawnPlan } from "../backend.js";
+import type {
+  AgentBackend,
+  AgentCallArgs,
+  AgentId,
+  AgentReply,
+  AgentSpawnPlan,
+} from "../backend.js";
 import { AgentOutputError } from "../errors.js";
 import { extractJson, parseEnvelope, replyFrom, truncate } from "../util.js";
 
@@ -14,8 +20,16 @@ import { extractJson, parseEnvelope, replyFrom, truncate } from "../util.js";
  */
 const REPO_CONFIG_DIRS = [".cursor", ".claude"];
 
+const CURSOR_LABELS = {
+  "cursor-anthropic": "Cursor + Anthropic",
+  "cursor-grok": "Cursor + Grok",
+} as const;
+
+type CursorId = keyof typeof CURSOR_LABELS;
+
 /**
- * Cursor's headless `agent -p`. It has no native structured output, so the schema is appended to
+ * Cursor's headless `agent -p`, shared by the Anthropic and Grok entries. They differ only in
+ * `--model` (docs/adr/0026). It has no native structured output, so the schema is appended to
  * every prompt and the JSON is parsed out of the reply text; `invokeAgent` validates it as for any
  * other backend. Its `--output-format json` envelope's camelCase `usage` isn't in Cursor's
  * published docs but is present in practice (docs/adr/0026).
@@ -25,16 +39,22 @@ const REPO_CONFIG_DIRS = [".cursor", ".claude"];
  * `--trust` skips the workspace-trust prompt that otherwise aborts a headless run in the fresh
  * checkout dir. `--force`/`--yolo`/`--approve-mcps` must never be added.
  */
-export const cursorBackend: AgentBackend = {
-  id: "cursor",
-  label: "Cursor CLI",
-  bin: config.agents.cursor.bin,
-  installHint: "install the Cursor CLI (https://cursor.com/cli) and run `agent login`",
-  modelFor: (tier) => config.agents.cursor.models[tier],
-  planSpawn,
-  parseReply,
-  prepareWorkspace,
-};
+function createCursorBackend(id: CursorId): AgentBackend {
+  const settings = config.agents[id];
+  return {
+    id,
+    label: CURSOR_LABELS[id],
+    bin: settings.bin,
+    installHint: "install the Cursor CLI (https://cursor.com/cli) and run `agent login`",
+    modelFor: (tier) => settings.models[tier],
+    planSpawn,
+    parseReply: (stdout) => parseReply(stdout, id),
+    prepareWorkspace,
+  };
+}
+
+export const cursorAnthropicBackend = createCursorBackend("cursor-anthropic");
+export const cursorGrokBackend = createCursorBackend("cursor-grok");
 
 function planSpawn(call: AgentCallArgs): AgentSpawnPlan {
   const args = ["-p", "--output-format", "json", "--mode", "ask", "--trust"];
@@ -50,10 +70,10 @@ function planSpawn(call: AgentCallArgs): AgentSpawnPlan {
   return { args, prompt, files: [] };
 }
 
-function parseReply(stdout: string): AgentReply {
-  const envelope = parseEnvelope(stdout, "cursor");
+function parseReply(stdout: string, id: AgentId): AgentReply {
+  const envelope = parseEnvelope(stdout, id);
   if (envelope.fields.is_error === true) {
-    throw new AgentOutputError(`cursor reported an error: ${truncate(envelope.text)}`);
+    throw new AgentOutputError(`${id} reported an error: ${truncate(envelope.text)}`);
   }
   return replyFrom(envelope, extractJson(envelope.text), {
     input: "inputTokens",

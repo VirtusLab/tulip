@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AgentOutputError } from "../errors.js";
 import type { JsonSchema } from "../schema.js";
 import { extractJson } from "../util.js";
-import { cursorBackend } from "./cursor.js";
+import { cursorAnthropicBackend, cursorGrokBackend } from "./cursor.js";
 
 const SCHEMA: JsonSchema = {
   type: "object",
@@ -25,22 +25,21 @@ function envelope(overrides: Record<string, unknown> = {}): string {
   });
 }
 
-describe("cursorBackend.planSpawn", () => {
+describe("cursor backends", () => {
+  it("maps the Grok strong tier to grok-4.7-xhigh", () => {
+    expect(cursorGrokBackend.modelFor("strong")).toBe("grok-4.7-xhigh");
+  });
+});
+
+describe("cursorAnthropicBackend.planSpawn", () => {
   it("runs headless, read-only (--mode ask), trusting the checkout, with the model", () => {
-    expect(cursorBackend.planSpawn({ model: "m1", schema: SCHEMA, prompt: "" }).args).toEqual([
-      "-p",
-      "--output-format",
-      "json",
-      "--mode",
-      "ask",
-      "--trust",
-      "--model",
-      "m1",
-    ]);
+    expect(
+      cursorAnthropicBackend.planSpawn({ model: "m1", schema: SCHEMA, prompt: "" }).args,
+    ).toEqual(["-p", "--output-format", "json", "--mode", "ask", "--trust", "--model", "m1"]);
   });
 
   it("passes --model on a resume too, alongside --resume", () => {
-    const args = cursorBackend.planSpawn({
+    const args = cursorAnthropicBackend.planSpawn({
       model: "m1",
       resumeSessionId: "chat-1",
       schema: SCHEMA,
@@ -51,7 +50,7 @@ describe("cursorBackend.planSpawn", () => {
   });
 
   it("never grants write/shell or auto-approves MCP servers", () => {
-    const args = cursorBackend.planSpawn({
+    const args = cursorAnthropicBackend.planSpawn({
       model: "m1",
       resumeSessionId: "chat-1",
       schema: SCHEMA,
@@ -64,7 +63,7 @@ describe("cursorBackend.planSpawn", () => {
   });
 
   it("appends the JSON-only instruction and the schema to the prompt", () => {
-    const { prompt } = cursorBackend.planSpawn({ schema: SCHEMA, prompt: "do the thing" });
+    const { prompt } = cursorAnthropicBackend.planSpawn({ schema: SCHEMA, prompt: "do the thing" });
 
     expect(prompt.startsWith("do the thing\n\n")).toBe(true);
     expect(prompt).toMatch(/Reply with ONLY a single JSON object/);
@@ -72,9 +71,9 @@ describe("cursorBackend.planSpawn", () => {
   });
 });
 
-describe("cursorBackend.parseReply", () => {
+describe("cursorAnthropicBackend.parseReply", () => {
   it("maps the envelope: session id, text, parsed JSON, duration, camelCase usage", () => {
-    const reply = cursorBackend.parseReply(
+    const reply = cursorAnthropicBackend.parseReply(
       envelope({
         usage: { inputTokens: 4, outputTokens: 5, cacheReadTokens: 6, cacheWriteTokens: 7 },
       }),
@@ -90,38 +89,42 @@ describe("cursorBackend.parseReply", () => {
   });
 
   it("reads a missing or non-numeric usage count as 0, never throwing", () => {
-    const reply = cursorBackend.parseReply(
+    const reply = cursorAnthropicBackend.parseReply(
       envelope({ usage: { inputTokens: "lots", outputTokens: 7 } }),
     );
     expect(reply.usage).toEqual({ input: 0, output: 7, cacheWrite: 0, cacheRead: 0 });
   });
 
   it("leaves usage absent when the envelope has none", () => {
-    expect(cursorBackend.parseReply(envelope()).usage).toBeUndefined();
+    expect(cursorAnthropicBackend.parseReply(envelope()).usage).toBeUndefined();
   });
 
   it("leaves structured undefined when the reply text has no JSON", () => {
-    expect(cursorBackend.parseReply(envelope({ result: "just prose" })).structured).toBeUndefined();
+    expect(
+      cursorAnthropicBackend.parseReply(envelope({ result: "just prose" })).structured,
+    ).toBeUndefined();
   });
 
   it("throws AgentOutputError on unparseable stdout", () => {
-    expect(() => cursorBackend.parseReply("not json")).toThrow(AgentOutputError);
+    expect(() => cursorAnthropicBackend.parseReply("not json")).toThrow(AgentOutputError);
   });
 
   it("throws AgentOutputError when result/session_id are missing", () => {
-    expect(() => cursorBackend.parseReply(JSON.stringify({ type: "result" }))).toThrow(
+    expect(() => cursorAnthropicBackend.parseReply(JSON.stringify({ type: "result" }))).toThrow(
       /missing string "result"\/"session_id"/,
     );
   });
 
   it("throws AgentOutputError, not a TypeError, when result isn't a string", () => {
-    expect(() => cursorBackend.parseReply(envelope({ result: 42 }))).toThrow(AgentOutputError);
+    expect(() => cursorAnthropicBackend.parseReply(envelope({ result: 42 }))).toThrow(
+      AgentOutputError,
+    );
   });
 
   it("throws AgentOutputError when the envelope reports an error", () => {
-    expect(() => cursorBackend.parseReply(envelope({ is_error: true, result: "boom" }))).toThrow(
-      /reported an error: boom/,
-    );
+    expect(() =>
+      cursorAnthropicBackend.parseReply(envelope({ is_error: true, result: "boom" })),
+    ).toThrow(/cursor-anthropic reported an error: boom/);
   });
 });
 
@@ -157,7 +160,7 @@ describe("extractJson", () => {
   });
 });
 
-describe("cursorBackend.prepareWorkspace", () => {
+describe("cursorAnthropicBackend.prepareWorkspace", () => {
   let dir: string | undefined;
 
   afterEach(async () => {
@@ -173,7 +176,7 @@ describe("cursorBackend.prepareWorkspace", () => {
     await writeFile(join(dir, ".claude", "settings.json"), "{}");
     await writeFile(join(dir, "README.md"), "hi");
 
-    await cursorBackend.prepareWorkspace?.(dir);
+    await cursorAnthropicBackend.prepareWorkspace?.(dir);
 
     expect(await readdir(dir)).toEqual(["README.md"]);
   });
@@ -187,7 +190,7 @@ describe("cursorBackend.prepareWorkspace", () => {
     await mkdir(checkout);
     await symlink(outside, join(checkout, ".cursor"));
 
-    await cursorBackend.prepareWorkspace?.(checkout);
+    await cursorAnthropicBackend.prepareWorkspace?.(checkout);
 
     await expect(lstat(join(checkout, ".cursor"))).rejects.toThrow();
     expect(await readdir(outside)).toEqual(["keep.txt"]);
@@ -196,6 +199,6 @@ describe("cursorBackend.prepareWorkspace", () => {
   it("is a no-op when neither dir exists", async () => {
     dir = await mkdtemp(join(tmpdir(), "tulip-cursor-ws-"));
 
-    await expect(cursorBackend.prepareWorkspace?.(dir)).resolves.toBeUndefined();
+    await expect(cursorAnthropicBackend.prepareWorkspace?.(dir)).resolves.toBeUndefined();
   });
 });

@@ -42,8 +42,10 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
   [ADR 0027](0027-codex-backend.md).
 - **Model tiers.** Phases ask for `fast`, `balanced`, or `strong` (`config.models`), and each
   backend maps a tier to its own id (`config.agents.<id>.models`): Claude uses
-  `haiku`/`sonnet`/`opus`; Cursor uses `claude-haiku-5-5-medium`/`claude-sonnet-5-5-medium`/
-  `claude-opus-5-5-high`.
+  `haiku`/`sonnet`/`opus`. Cursor is two ids that share one implementation:
+  `cursor-anthropic` uses `claude-haiku-5-5-medium`/`claude-sonnet-5-5-medium`/
+  `claude-opus-5-5-high`; `cursor-grok` uses `grok-4.7-medium`/`grok-4.7-high`/
+  `grok-4.7-xhigh`. A saved `cursor` is unknown and the user is asked again.
 - **One `Agent` per run** (`createAgent(id)`) bundles the backend, its process runner, and a
   map from each session to its tier. A resume therefore knows its model: Cursor passes
   `--model` on every resume, while Claude doesn't need it. The usage summary labels each row
@@ -51,7 +53,7 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
   threads it to every phase via `RunnerDeps.agent`.
 - **No default agent; the choice is remembered.** Before any other work,
   `src/cli/agent-choice.ts` decides the agent:
-  - `--agent <claude|cursor>` wins, and is saved if it differs from the saved choice.
+  - `--agent <claude|cursor-anthropic|cursor-grok|codex>` wins, and is saved if it differs from the saved choice.
   - Otherwise the saved choice is used: `agent` in `~/.config/tulip/config.json`
     (`$XDG_CONFIG_HOME/tulip/config.json` if set, `%APPDATA%\tulip\config.json` on Windows;
     `src/cli/settings.ts`).
@@ -62,7 +64,8 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
   again. If the save itself fails, the run continues with a warning. Phase unit tests, which call
   phases without an agent, still fall back to the Claude backend inside `invokeAgent`; the
   pipeline always passes the chosen one.
-- **Cursor backend.**
+- **Cursor backends.** `cursor-anthropic` and `cursor-grok` share argv, prompt preparation,
+  reply parsing, and workspace cleanup. Only the `--model` id differs.
   - Argv: `-p --output-format json --mode ask --trust --model <id> [--resume <id>]`. Never
     `--force`, `--yolo`, or `--approve-mcps`.
   - `planSpawn` appends `src/prompts/structured-output.md` (the schema, plus "reply with

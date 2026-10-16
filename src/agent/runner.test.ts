@@ -325,7 +325,7 @@ describe("invokeAgent with the cursor backend", () => {
     const { result, sessionId } = await invokeAgent(BASE_INVOCATION, {
       runAgentProcess,
       usage,
-      agent: createAgent("cursor"),
+      agent: createAgent("cursor-anthropic"),
     });
 
     expect(result).toEqual({ ok: true });
@@ -339,13 +339,13 @@ describe("invokeAgent with the cursor backend", () => {
       "ask",
       "--trust",
       "--model",
-      config.agents.cursor.models.balanced,
+      config.agents["cursor-anthropic"].models.balanced,
     ]);
     expect(input).toContain("do the thing");
     expect(input).toContain(JSON.stringify(SCHEMA));
     expect(usage.rows()).toEqual([
       {
-        model: config.agents.cursor.models.balanced,
+        model: config.agents["cursor-anthropic"].models.balanced,
         tokens: { input: 10, output: 2, cacheWrite: 4, cacheRead: 30 },
       },
     ]);
@@ -359,7 +359,7 @@ describe("invokeAgent with the cursor backend", () => {
 
     const { result } = await invokeAgent(BASE_INVOCATION, {
       runAgentProcess,
-      agent: createAgent("cursor"),
+      agent: createAgent("cursor-anthropic"),
     });
 
     expect(result).toEqual({ ok: false });
@@ -368,9 +368,9 @@ describe("invokeAgent with the cursor backend", () => {
     expect(retryArgs).toContain("--resume");
     expect((retryArgs as string[])[(retryArgs as string[]).indexOf("--resume") + 1]).toBe("chat-1");
     expect((retryArgs as string[])[(retryArgs as string[]).indexOf("--model") + 1]).toBe(
-      config.agents.cursor.models.balanced,
+      config.agents["cursor-anthropic"].models.balanced,
     );
-    expect(retryInput).toMatch(/no structured output in cursor's response/);
+    expect(retryInput).toMatch(/no structured output in cursor-anthropic's response/);
     expect(retryInput).toContain(JSON.stringify(SCHEMA));
   });
 });

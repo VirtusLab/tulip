@@ -27,12 +27,23 @@ export const config = {
        * empty. */
       allowedTools: [],
     },
-    cursor: {
+    /** Both Cursor entries run the same `agent` binary. They differ only in `--model` ids. */
+    "cursor-anthropic": {
       bin: "agent",
       models: {
         fast: "claude-haiku-5-5-medium",
         balanced: "claude-sonnet-5-5-medium",
         strong: "claude-opus-5-5-high",
+      },
+    },
+    /** Grok 4.7 effort slugs. `grok-4.7-xhigh` is the form the CLI accepts; not checked with
+     * `agent models` here. `high` is Cursor's default effort for this model. */
+    "cursor-grok": {
+      bin: "agent",
+      models: {
+        fast: "grok-4.7-medium",
+        balanced: "grok-4.7-high",
+        strong: "grok-4.7-xhigh",
       },
     },
     /** ChatGPT-signed-in Codex. `gpt-5.4` / `gpt-5.5` are retired on that path; `gpt-6-astra`
