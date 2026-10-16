@@ -45,7 +45,7 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
   `haiku`/`sonnet`/`opus`. Cursor is two ids that share one implementation:
   `cursor-anthropic` uses `claude-haiku-5-5-medium`/`claude-sonnet-5-5-medium`/
   `claude-opus-5-5-high`; `cursor-grok` uses `grok-4.7-medium`/`grok-4.7-high`/
-  `grok-4.7-xhigh`. A saved `cursor` is unknown and the user is asked again.
+  `grok-4.7-xhigh`.
 - **One `Agent` per run** (`createAgent(id)`) bundles the backend, its process runner, and a
   map from each session to its tier. A resume therefore knows its model: Cursor passes
   `--model` on every resume, while Claude doesn't need it. The usage summary labels each row
