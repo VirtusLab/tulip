@@ -5,7 +5,7 @@ import { type AgentProcessRunner, createAgentProcessRunner } from "./exec.js";
 import type { JsonSchema } from "./schema.js";
 import type { ModelTokens } from "./usage.js";
 
-/** Every agent CLI tulip can drive (docs/adr/0026). There is no default: the user picks one,
+/** Every agent CLI tulip can drive (docs/adr/0027). There is no default: the user picks one,
  * and the choice is remembered (see src/cli/agent-choice.ts). */
 export const AGENT_IDS = ["claude", "cursor-anthropic", "cursor-grok", "codex"] as const;
 

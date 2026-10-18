@@ -4,7 +4,7 @@ import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import * as path from "node:path";
 import { config } from "../config.js";
-import { postPrComment } from "../github/pr-comment.js";
+import type { PrCommenter } from "../forge/types.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 
 /** What {@link createReviewServer} needs: the render temp dir to serve, the PR to post to, the
@@ -16,8 +16,8 @@ export interface ReviewServerOptions {
   prUrl: string;
   /** Category names in render order; the POST body's `categoryIndex` indexes into this. */
   categoryNames: string[];
-  /** Posts a comment; defaults to {@link postPrComment}. Injected in tests. */
-  postComment?: (prUrl: string, body: string) => Promise<string>;
+  /** Posts a comment, e.g. the PR's forge's {@link PrCommenter.postComment}. */
+  postComment: PrCommenter["postComment"];
   logger?: Logger;
 }
 
@@ -47,7 +47,6 @@ function sendJson(res: http.ServerResponse, status: number, payload: unknown): v
  * and the request body is size-bounded.
  */
 export function createReviewServer(opts: ReviewServerOptions): http.Server {
-  const postComment = opts.postComment ?? postPrComment;
   const logger = opts.logger ?? createLogger();
   const dir = path.resolve(opts.dir);
 
@@ -72,7 +71,7 @@ export function createReviewServer(opts: ReviewServerOptions): http.Server {
       req.method === "POST" &&
       (req.url === "/api/comment" || req.url?.startsWith("/api/comment?"))
     ) {
-      void handleComment(req, res, opts, postComment, logger, expectedOrigin);
+      void handleComment(req, res, opts, logger, expectedOrigin);
       return;
     }
 
@@ -130,7 +129,6 @@ async function handleComment(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   opts: ReviewServerOptions,
-  postComment: (prUrl: string, body: string) => Promise<string>,
   logger: Logger,
   expectedOrigin: string,
 ): Promise<void> {
@@ -187,7 +185,7 @@ async function handleComment(
   const category = opts.categoryNames[categoryIndex as number];
   const body = `*Comment from Tulip's PR explanation, for the category: ${category}*\n\n${trimmed}`;
   try {
-    const url = await postComment(opts.prUrl, body);
+    const url = await opts.postComment(opts.prUrl, body);
     sendJson(res, 200, { url });
   } catch (error) {
     // Detail stays in the log; the response never carries it (no stack leak to the browser).

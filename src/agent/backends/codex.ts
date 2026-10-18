@@ -9,7 +9,7 @@ import { isPlainObject } from "../schema.js";
 import { extractJson, replyFrom, truncate } from "../util.js";
 
 /**
- * OpenAI Codex's headless `codex exec` (docs/adr/0027). `--json` prints a JSONL event stream
+ * OpenAI Codex's headless `codex exec` (docs/adr/0028). `--json` prints a JSONL event stream
  * rather than one envelope. `--output-schema` takes a file path, so {@link planSpawn} puts the
  * schema in a temp file instead of argv; the prompt stays on stdin, and argv ends with `-` so
  * stdin is the prompt rather than extra context next to a prompt argument.

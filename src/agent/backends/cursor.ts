@@ -16,7 +16,7 @@ import { extractJson, parseEnvelope, replyFrom, truncate } from "../util.js";
  * Checkout-relative dirs Cursor's `agent` loads config from, removed by `prepareWorkspace`.
  * `--trust` (required headless) lets project config run unprompted, and both were verified to
  * execute a PR's hooks: `.cursor/hooks.json`, and Claude Code's `.claude/settings.json` hooks,
- * which Cursor also honors (docs/adr/0026).
+ * which Cursor also honors (docs/adr/0027).
  */
 const REPO_CONFIG_DIRS = [".cursor", ".claude"];
 
@@ -29,10 +29,10 @@ type CursorId = keyof typeof CURSOR_LABELS;
 
 /**
  * Cursor's headless `agent -p`, shared by the Anthropic and Grok entries. They differ only in
- * `--model` (docs/adr/0026). It has no native structured output, so the schema is appended to
+ * `--model` (docs/adr/0027). It has no native structured output, so the schema is appended to
  * every prompt and the JSON is parsed out of the reply text; `invokeAgent` validates it as for any
  * other backend. Its `--output-format json` envelope's camelCase `usage` isn't in Cursor's
- * published docs but is present in practice (docs/adr/0026).
+ * published docs but is present in practice (docs/adr/0027).
  *
  * `--mode ask` is the CLI's read-only mode: `-p` alone grants write and shell tools, which a
  * prompt-injected PR could use (see docs/adr/0002 for why tulip grants no command execution).

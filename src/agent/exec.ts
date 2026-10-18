@@ -23,7 +23,7 @@ export interface AgentProcessOptions {
  * Prompt content is delivered via stdin rather than as an argv element: prompts embed full PR
  * diffs and can be arbitrarily large, while a single argv string is capped by the OS (e.g. Linux's
  * ~128KB `MAX_ARG_STRLEN`). `claude -p` and Cursor's `agent -p` read the prompt from piped stdin
- * (docs/adr/0026). Codex reads it when argv ends with `-` (`codex exec -`, docs/adr/0027); a
+ * (docs/adr/0027). Codex reads it when argv ends with `-` (`codex exec -`, docs/adr/0028); a
  * prompt string beside a pipe would make stdin extra context instead. Callers never pass the
  * prompt as an argv token.
  */

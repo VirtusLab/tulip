@@ -27,7 +27,7 @@ export interface ExplainCategoryInput {
    * references only, not verbatim (see src/pipeline/run.js's PipelineOptions). */
   diffThreshold: number;
   /** PR base revision's commit SHA — told to the session so it can `git diff`/`git show` against
-   * it (see src/github/checkout.js; both SHAs are fetched into the session's checkout). */
+   * it (see src/checkout/checkout.ts; both SHAs are fetched into the session's checkout). */
   baseSha: string;
   /** PR head revision's commit SHA — the checkout's working tree is this revision. */
   headSha: string;

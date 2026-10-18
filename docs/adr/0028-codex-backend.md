@@ -1,8 +1,8 @@
-# 27. Codex CLI backend
+# 28. Codex CLI backend
 
 ## Context
 
-[ADR 0026](0026-pluggable-agent-backends.md) split the agent CLIs behind `AgentBackend` so a
+[ADR 0027](0027-pluggable-agent-backends.md) split the agent CLIs behind `AgentBackend` so a
 third CLI is another backend, a config entry, and an id in `AGENT_IDS`. Codex (`codex exec`)
 differs from both Claude and Cursor in ways that matter here. These were taken from Codex's
 non-interactive docs and the `codex exec` reference; the CLI was not run locally.

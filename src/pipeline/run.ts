@@ -5,17 +5,16 @@ import { createUsageLedger, formatUsageSummary } from "../agent/usage.js";
 import { generateCategories } from "../categories/generate.js";
 import { reviewAndAmendCategories } from "../categories/review.js";
 import type { Category } from "../categories/types.js";
+import { createCheckout, type PrCheckout } from "../checkout/checkout.js";
+import { materializeChangeArtifacts } from "../checkout/materialize.js";
 import { type CategoryChangeSet, groupChangesByCategory } from "../classification/group.js";
 import { type ClassifyChangesResult, classifyChanges } from "../classification/orchestrate.js";
 import { prepareClassifiableChanges } from "../classification/prepare.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
-import { createCheckout, type PrCheckout } from "../github/checkout.js";
-import { checkGhAuth } from "../github/gh-auth.js";
-import { materializeChangeArtifacts } from "../github/materialize.js";
-import { fetchPrMetadata, type PrMetadata } from "../github/pr-fetcher.js";
-import type { PrRef } from "../github/pr-url.js";
+import type { PrMetadata, PrRef } from "../forge/types.js";
+import { forgeFor } from "../forge-registry/registry.js";
 import { startTimer } from "../logging/duration.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
@@ -32,10 +31,10 @@ export interface PipelineOptions {
   verbose: boolean;
   /** Auto-open the rendered page in the default browser when done. */
   open: boolean;
-  /** Run a local review server that posts per-category PR comments via `gh` (docs/adr/0019),
-   * instead of rendering a static page and exiting. */
+  /** Run a local review server that posts per-category PR comments (docs/adr/0019), instead of
+   * rendering a static page and exiting. Fails when the PR's forge has no `commenter`. */
   serve: boolean;
-  /** Which agent CLI runs every LLM pass (docs/adr/0026); chosen by the user, no default (see
+  /** Which agent CLI runs every LLM pass (docs/adr/0027); chosen by the user, no default (see
    * src/cli/agent-choice.ts). */
   agent: AgentId;
 }
@@ -47,7 +46,7 @@ export type BrowserOpener = (path: string) => Promise<void>;
 /** Test/advanced-use seams: every phase function, injectable for orchestration tests. All
  * default to the real epic 2-7 implementations. */
 export interface PipelineDeps {
-  fetchPrMetadata?: typeof fetchPrMetadata;
+  forgeFor?: typeof forgeFor;
   createCheckout?: typeof createCheckout;
   materializeChangeArtifacts?: typeof materializeChangeArtifacts;
   generateCategories?: typeof generateCategories;
@@ -56,7 +55,6 @@ export interface PipelineDeps {
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
   renderExplanations?: typeof renderExplanations;
-  checkGhAuth?: typeof checkGhAuth;
   serveForReview?: typeof serveForReview;
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
    * never actually spawns a browser. */
@@ -86,7 +84,6 @@ class PhaseError extends Error {
  */
 export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Promise<void> {
   const logger = deps.logger ?? createLogger({ verbose: options.verbose });
-  const doFetchPrMetadata = deps.fetchPrMetadata ?? fetchPrMetadata;
   const doCreateCheckout = deps.createCheckout ?? createCheckout;
   const doMaterializeChangeArtifacts =
     deps.materializeChangeArtifacts ?? materializeChangeArtifacts;
@@ -96,12 +93,11 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
-  const doCheckGhAuth = deps.checkGhAuth ?? checkGhAuth;
   const doServeForReview = deps.serveForReview ?? serveForReview;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
-  const { host, owner, repo, number } = options.pr;
-  const prUrl = `https://${host}/${owner}/${repo}/pull/${number}`;
+  const adapter = (deps.forgeFor ?? forgeFor)(options.pr);
+  const prUrl = adapter.webUrl(options.pr);
 
   logger.info(formatVersion());
   logger.info(`Processing PR ${prUrl}`);
@@ -114,15 +110,17 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
   let checkout: PrCheckout | undefined;
   try {
-    // Serve mode has no posting fallback, so a broken `gh` makes it pointless: fail fast here,
-    // before any fetch/checkout/LLM work. Not wrapped in runPhase — checkGhAuth's message is
-    // already actionable and must reach the user verbatim via describeFailure.
-    if (options.serve) {
-      await doCheckGhAuth(host);
+    // Serve mode has no posting fallback, so an unsupported forge or broken auth makes it
+    // pointless: fail fast here, before any fetch/checkout/LLM work. Not wrapped in runPhase —
+    // these messages are already actionable and must reach the user verbatim via describeFailure.
+    const commenter = options.serve ? adapter.commenter : undefined;
+    if (options.serve && !commenter) {
+      throw new Error(`--serve isn't supported for ${options.pr.forge} URLs`);
     }
+    await commenter?.checkAuth(options.pr.host);
 
-    logger.info(`fetching ${owner}/${repo}#${number}...`);
-    const metadata = await runPhase("fetching PR", () => doFetchPrMetadata(options.pr));
+    logger.info(`fetching ${adapter.label(options.pr)}...`);
+    const metadata = await runPhase("fetching PR", () => adapter.fetchPrMetadata(options.pr));
 
     const diff = parseDiff(metadata.diff);
     warnOnFileListMismatch(metadata, diff, logger);
@@ -137,7 +135,11 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.debug("creating checkout...");
     checkout = await runPhase("creating checkout", () =>
-      doCreateCheckout(options.pr, { base: metadata.base, head: metadata.head }),
+      doCreateCheckout(
+        options.pr,
+        { base: metadata.base, head: metadata.head },
+        adapter.checkoutAuth,
+      ),
     );
     // Every agent session below runs with the checkout dir as its cwd (RULING), so it reads
     // the actual repo files instead of inheriting this process's cwd. Captured into its own
@@ -259,13 +261,14 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     const categoryNames = explanations.map((explanation) => explanation.category.name);
 
-    if (options.serve) {
+    if (commenter) {
       // Serves the rendered dir over http://, opens it (honoring --no-open), and blocks until
       // Ctrl+C; on resolve the finally below cleans up the checkout, as in the static path.
       await doServeForReview({
         dir,
         prUrl,
         categoryNames,
+        postComment: commenter.postComment,
         open: options.open,
         logger,
         openInBrowser: doOpenInBrowser,
@@ -394,8 +397,8 @@ function buildRenamedFromMap(diff: ParsedDiff): Map<string, string> {
 }
 
 /**
- * Sanity check carried from Epic 2's review: cross-checks `PrMetadata.files` (what GitHub says
- * changed) against the parsed diff's file paths (what we actually analyze). A mismatch would
+ * Sanity check carried from Epic 2's review: cross-checks `PrMetadata.files` (what the forge
+ * says changed) against the parsed diff's file paths (what we actually analyze). A mismatch would
  * mean some files silently aren't reviewed (or a parsing bug) — worth a warning, but not fatal.
  */
 function warnOnFileListMismatch(metadata: PrMetadata, diff: ParsedDiff, logger: Logger): void {

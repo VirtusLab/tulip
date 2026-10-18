@@ -4,15 +4,16 @@ import { AgentBinaryMissingError, AgentOutputError } from "../agent/errors.js";
 import type { ModelTokens, UsageLedger } from "../agent/usage.js";
 import type { GenerateCategoriesResult } from "../categories/generate.js";
 import type { CategoryReviewLoopResult } from "../categories/review.js";
+import type { PrCheckout } from "../checkout/checkout.js";
 import { IncompleteCoverageError } from "../classification/coverage.js";
 import type { ClassifyChangesResult } from "../classification/orchestrate.js";
 import type { ClassifiableChange } from "../classification/types.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { SnippetCoverageError } from "../explanations/coverage.js";
 import type { CategoryExplanation } from "../explanations/types.js";
-import type { PrCheckout } from "../github/checkout.js";
-import type { PrMetadata } from "../github/pr-fetcher.js";
-import type { PrRef } from "../github/pr-url.js";
+import type { ForgeAdapter, PrCommenter, PrMetadata, PrRef } from "../forge/types.js";
+import { forgeFor } from "../forge-registry/registry.js";
+import { gitlabAdapter } from "../gitlab/adapter.js";
 import type { AssembleResult } from "../rendering/assemble.js";
 import { type PipelineDeps, type PipelineOptions, run } from "./run.js";
 
@@ -22,7 +23,7 @@ vi.mock("../version.js", () => ({
   formatVersion: vi.fn(() => "Tulip 9.9.9 (test123, built now)"),
 }));
 
-const PR: PrRef = { host: "github.com", owner: "octo", repo: "widgets", number: 42 };
+const PR: PrRef = { forge: "github", host: "github.com", repoPath: "octo/widgets", number: 42 };
 
 const ADDED_FILE_DIFF = [
   "diff --git a/src/new.ts b/src/new.ts",
@@ -102,11 +103,26 @@ function classificationResult(): ClassifyChangesResult {
 
 function baseDeps(order: string[] = []) {
   const checkout = fakeCheckout();
-  return {
+  const deps = {
     fetchPrMetadata: vi.fn(async () => {
       order.push("fetch");
       return metadata();
     }),
+    commenter: {
+      checkAuth: vi.fn(async (): Promise<void> => {
+        order.push("auth");
+      }),
+      postComment: vi.fn(async () => "comment-url"),
+    } as PrCommenter | undefined,
+    // The real adapter, with the network-facing parts replaced by the fakes above.
+    forgeFor: (pr: PrRef): ForgeAdapter => {
+      const { commenter: _, ...adapter } = forgeFor(pr);
+      return {
+        ...adapter,
+        fetchPrMetadata: () => deps.fetchPrMetadata(),
+        ...(deps.commenter && { commenter: deps.commenter }),
+      };
+    },
     createCheckout: vi.fn(async () => {
       order.push("checkout");
       return checkout;
@@ -158,15 +174,13 @@ function baseDeps(order: string[] = []) {
       order.push("render");
       return { dir: "/tmp/tulip-render", indexPath: "/tmp/tulip-render/index.html" };
     }),
-    checkGhAuth: vi.fn(async (): Promise<void> => {
-      order.push("gh-auth");
-    }),
     serveForReview: vi.fn(async (): Promise<void> => {
       order.push("serve");
     }),
     openInBrowser: vi.fn(async (): Promise<void> => {}),
     logger: { info: vi.fn(), debug: vi.fn() },
   };
+  return deps;
 }
 
 function options(overrides: Partial<PipelineOptions> = {}): PipelineOptions {
@@ -876,14 +890,15 @@ describe("run", () => {
     ).toBe(true);
   });
 
-  it("in serve mode, preflights gh auth before fetching, renders with serve, and serves the dir", async () => {
+  it("in serve mode, preflights auth before fetching, renders with serve, and serves the dir", async () => {
     const order: string[] = [];
     const deps = baseDeps(order);
 
     await run(options({ serve: true }), deps);
 
-    expect(deps.checkGhAuth).toHaveBeenCalledWith(PR.host);
-    expect(order.indexOf("gh-auth")).toBeLessThan(order.indexOf("fetch"));
+    const commenter = deps.commenter;
+    expect(commenter?.checkAuth).toHaveBeenCalledWith(PR.host);
+    expect(order.indexOf("auth")).toBeLessThan(order.indexOf("fetch"));
     expect(deps.renderExplanations).toHaveBeenCalledWith(
       expect.objectContaining({ serve: true }),
       expect.anything(),
@@ -894,6 +909,7 @@ describe("run", () => {
         dir: "/tmp/tulip-render",
         prUrl: "https://github.com/octo/widgets/pull/42",
         categoryNames: ["Greeting"],
+        postComment: commenter?.postComment,
         open: true,
         logger: deps.logger,
         openInBrowser: deps.openInBrowser,
@@ -903,11 +919,14 @@ describe("run", () => {
     expect(deps.openInBrowser).not.toHaveBeenCalledWith("/tmp/tulip-render/index.html");
   });
 
-  it("in serve mode, a failed gh-auth preflight aborts before fetching and never serves", async () => {
+  it("in serve mode, a failed auth preflight aborts before fetching and never serves", async () => {
     const deps = baseDeps();
-    deps.checkGhAuth = vi.fn(async () => {
-      throw new Error("gh is not authenticated for github.com; run `gh auth login`");
-    });
+    deps.commenter = {
+      checkAuth: vi.fn(async () => {
+        throw new Error("gh is not authenticated for github.com; run `gh auth login`");
+      }),
+      postComment: vi.fn(async () => "comment-url"),
+    };
 
     await run(options({ serve: true }), deps);
 
@@ -918,19 +937,37 @@ describe("run", () => {
     expect(lines.some((line) => line.includes("gh is not authenticated"))).toBe(true);
   });
 
-  it("without serve, opens the index file and never checks gh auth or serves", async () => {
+  it("without serve, opens the index file and never checks auth or serves", async () => {
     const deps = baseDeps();
 
     await run(options({ serve: false }), deps);
 
     expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
     expect(deps.serveForReview).not.toHaveBeenCalled();
-    expect(deps.checkGhAuth).not.toHaveBeenCalled();
+    expect(deps.commenter?.checkAuth).not.toHaveBeenCalled();
+  });
+
+  it("in serve mode, fails before fetching when the forge can't post comments", async () => {
+    const deps = baseDeps();
+    deps.commenter = undefined;
+    const pr: PrRef = { forge: "gitlab", host: "gitlab.com", repoPath: "group/project", number: 7 };
+
+    await run(options({ pr, serve: true }), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.fetchPrMetadata).not.toHaveBeenCalled();
+    expect(deps.serveForReview).not.toHaveBeenCalled();
+    expect(infoLines(deps)).toContain("--serve isn't supported for gitlab URLs");
   });
 
   it("uses the PR's host in the serve-mode URL, not a hardcoded github.com", async () => {
     const deps = baseDeps();
-    const pr: PrRef = { host: "git.xyz.com", owner: "octo", repo: "widgets", number: 42 };
+    const pr: PrRef = {
+      forge: "github",
+      host: "git.xyz.com",
+      repoPath: "octo/widgets",
+      number: 42,
+    };
 
     await run(options({ pr, serve: true }), deps);
 
@@ -940,6 +977,41 @@ describe("run", () => {
     );
     expect(deps.serveForReview).toHaveBeenCalledWith(
       expect.objectContaining({ prUrl: "https://git.xyz.com/octo/widgets/pull/42" }),
+    );
+  });
+
+  it("names a GitLab merge request by its MR URL and label", async () => {
+    const deps = baseDeps();
+    const pr: PrRef = {
+      forge: "gitlab",
+      host: "git.example.com",
+      repoPath: "group/project",
+      number: 7,
+    };
+
+    await run(options({ pr }), deps);
+
+    const lines = infoLines(deps);
+    expect(lines[1]).toBe("Processing PR https://git.example.com/group/project/-/merge_requests/7");
+    expect(lines[2]).toBe("fetching group/project!7...");
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prUrl: "https://git.example.com/group/project/-/merge_requests/7",
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("checks out a GitLab merge request with GitLab's git credentials", async () => {
+    const deps = baseDeps();
+    const pr: PrRef = { forge: "gitlab", host: "gitlab.com", repoPath: "group/project", number: 7 };
+
+    await run(options({ pr }), deps);
+
+    expect(deps.createCheckout).toHaveBeenCalledWith(
+      pr,
+      expect.anything(),
+      gitlabAdapter.checkoutAuth,
     );
   });
 });
