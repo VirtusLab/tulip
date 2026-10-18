@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentProcessResult } from "../agent/exec.js";
 import type { Category } from "../categories/types.js";
 import { buildExcerpt } from "../classification/excerpt.js";
 import type { ClassifiableChange } from "../classification/types.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
 import { config } from "../config.js";
 import { explainCategory } from "./explain.js";
 import type { ExplainCategoryInput } from "./types.js";
@@ -49,7 +49,7 @@ function baseInput(overrides: Partial<ExplainCategoryInput> = {}): ExplainCatego
   };
 }
 
-function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudeProcessResult {
+function envelope(structuredOutput: unknown, sessionId = "session-1"): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -62,13 +62,13 @@ function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudePro
 
 describe("explainCategory", () => {
   it("sends the PR title/description, category, and both change sections", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
 
-    await explainCategory(baseInput(), { runClaudeProcess });
+    await explainCategory(baseInput(), { runAgentProcess });
 
-    const [args, prompt] = runClaudeProcess.mock.calls[0] ?? [];
+    const [args, prompt] = runAgentProcess.mock.calls[0] ?? [];
     expect(prompt).toContain("Add retry logic to the fetcher");
     expect(prompt).toContain("Retries transient network failures with backoff.");
     expect(prompt).toContain("Retry logic");
@@ -83,24 +83,24 @@ describe("explainCategory", () => {
   });
 
   it("tells the model docs live in the first (production) array and where they go", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
 
-    await explainCategory(baseInput(), { runClaudeProcess });
+    await explainCategory(baseInput(), { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toMatch(/doc files, comments, and doc-strings.*go under "## Documentation"/i);
   });
 
   it("asks for conditional sections, not a fixed two-way split or a coverage strip", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
 
-    await explainCategory(baseInput(), { runClaudeProcess });
+    await explainCategory(baseInput(), { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     // The main section must be named for its content, not hardcoded as "production" — this is
     // what keeps a docs-only category from being mislabeled "## Production code".
     expect(prompt).toMatch(/name it for what it covers, not "production"/i);
@@ -115,41 +115,41 @@ describe("explainCategory", () => {
   });
 
   it("drops the redundant documentation bullet from the production checklist", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
 
-    await explainCategory(baseInput(), { runClaudeProcess });
+    await explainCategory(baseInput(), { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     // Documentation is now its own conditional "## Documentation" section (asserted above); the
     // checklist bullet duplicating that is gone.
     expect(prompt).not.toMatch(/any documentation added or changed, and what kind/i);
   });
 
   it("tells the session its cwd is the head checkout, and gives both base/head SHAs", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
 
     await explainCategory(baseInput({ baseSha: "abc123base", headSha: "def456head" }), {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toContain("abc123base");
     expect(prompt).toContain("def456head");
     expect(prompt).toMatch(/working directory is a checkout/);
     expect(prompt).toContain(".tulip/pr.diff");
     expect(prompt).toContain(".tulip/base");
     expect(prompt).toMatch(/removed\s+by the PR have no working-tree \(head\) copy/);
-    // No Bash/git access is granted (see src/config.ts's claude.allowedTools doc comment) — the
+    // No Bash/git access is granted (see src/config.ts's agents.claude.allowedTools doc comment) — the
     // prompt must not imply the session can run git commands itself.
     expect(prompt).not.toMatch(/git diff|git log|git blame|git show/);
   });
 
   it("includes the full diff for a change whose range is at or under the threshold", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
 
@@ -159,15 +159,15 @@ describe("explainCategory", () => {
         production: [change({ head: { range: { start: 10, end: 10 }, lines: ["+kept line"] } })],
         diffThreshold: 5,
       }),
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toContain("+kept line");
   });
 
   it("references only file/line-range when the diff-line count exceeds the threshold", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
     // The threshold is the total number of diff lines (docs/adr/0018): a change with more diff
@@ -179,10 +179,10 @@ describe("explainCategory", () => {
         production: [change({ head: { range: { start: 1, end: 500 }, lines: bigLines } })],
         diffThreshold: 3,
       }),
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).not.toContain("+line 250");
     expect(prompt).toContain("src/fetch.ts");
     expect(prompt).toContain("head 1-500");
@@ -194,7 +194,7 @@ describe("explainCategory", () => {
     // `change.excerpt` — phase 2 truncates excerpts by character count (config.limits
     // .maxExcerptChars) for cheap classification prompts, which is unrelated to this
     // line-count threshold and must not cause an in-threshold change to be omitted here.
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
     const longLine = `+${"x".repeat(MAX_EXCERPT_CHARS)}`;
@@ -214,10 +214,10 @@ describe("explainCategory", () => {
         ],
         diffThreshold: 1000,
       }),
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toContain(longLine);
     expect(prompt).toContain("+line2");
     expect(prompt).toContain("+line3");
@@ -225,9 +225,9 @@ describe("explainCategory", () => {
   });
 
   it("returns the markdown and session id", async () => {
-    const runClaudeProcess = vi.fn(async () => envelope({ markdown: "# hello" }, "abc"));
+    const runAgentProcess = vi.fn(async () => envelope({ markdown: "# hello" }, "abc"));
 
-    const result = await explainCategory(baseInput(), { runClaudeProcess });
+    const result = await explainCategory(baseInput(), { runAgentProcess });
 
     expect(result.markdown).toBe("# hello");
     expect(result.sessionId).toBe("abc");

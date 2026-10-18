@@ -1,7 +1,7 @@
+import { batchBySize } from "../agent/batch.js";
+import type { RunnerDeps } from "../agent/runner.js";
+import { runSession } from "../agent/session.js";
 import type { Category } from "../categories/types.js";
-import { batchBySize } from "../claude/batch.js";
-import type { RunnerDeps } from "../claude/runner.js";
-import { runSession } from "../claude/session.js";
 import { config } from "../config.js";
 import { changeDiffLines, type ParsedDiff } from "../diff/change.js";
 import { createLogger } from "../logging/logger.js";
@@ -26,7 +26,7 @@ function diffTextSize(candidate: SplitCandidate): number {
  * Splits over-threshold changes into per-concern sub-changes (docs/adr/0016), running between
  * category review and classification. Each candidate `Change` (line count above
  * `config.limits.splitThreshold`, either side) is offered, in batches run concurrently
- * (docs/adr/0025), to a fresh sonnet session that proposes interior split points;
+ * (docs/adr/0025), to a fresh balanced-tier session that proposes interior split points;
  * {@link buildPartition} turns those into a gap-free tiling, so coverage is guaranteed regardless
  * of the model's output. Returns a new {@link ParsedDiff} with candidates
  * replaced by their sub-changes, in place, preserving file and change order and every
@@ -59,8 +59,8 @@ export async function splitLargeChanges(
   );
   logger.info(`splitting ${candidates.length} large change(s) in ${batches.length} batch(es)...`);
 
-  // Batches are independent, so they run concurrently; the shared `claude` process limiter (see
-  // src/claude/concurrency.ts) caps actual parallelism. Results are merged in batch order so the
+  // Batches are independent, so they run concurrently; the shared agent process limiter (see
+  // src/agent/concurrency.ts) caps actual parallelism. Results are merged in batch order so the
   // outcome doesn't depend on which session finished first.
   const batchResults = await Promise.all(
     batches.map(async (batch): Promise<SplitResponse["splits"]> => {

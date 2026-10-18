@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ClaudeOutputError } from "../claude/errors.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
+import { AgentOutputError } from "../agent/errors.js";
+import type { AgentProcessResult } from "../agent/exec.js";
 import { type GenerateCategoriesInput, generateCategories } from "./generate.js";
 
 const INPUT: GenerateCategoriesInput = {
@@ -12,7 +12,7 @@ const INPUT: GenerateCategoriesInput = {
   ],
 };
 
-function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudeProcessResult {
+function envelope(structuredOutput: unknown, sessionId = "session-1"): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -25,7 +25,7 @@ function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudePro
 
 describe("generateCategories", () => {
   it("requests a schema shaped as { categories: [{ name, description, attention }] }, attention a hard-constrained enum", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -33,9 +33,9 @@ describe("generateCategories", () => {
       }),
     );
 
-    await generateCategories(INPUT, { runClaudeProcess });
+    await generateCategories(INPUT, { runAgentProcess });
 
-    const args = runClaudeProcess.mock.calls[0]?.[0] as string[];
+    const args = runAgentProcess.mock.calls[0]?.[0] as string[];
     const schema = JSON.parse(args[args.indexOf("--json-schema") + 1] ?? "{}");
     expect(schema).toEqual({
       type: "object",
@@ -58,7 +58,7 @@ describe("generateCategories", () => {
   });
 
   it("sends a prompt containing the title, description, files, and category guidance", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -66,9 +66,9 @@ describe("generateCategories", () => {
       }),
     );
 
-    await generateCategories(INPUT, { runClaudeProcess });
+    await generateCategories(INPUT, { runAgentProcess });
 
-    const [args, prompt] = runClaudeProcess.mock.calls[0] ?? [];
+    const [args, prompt] = runAgentProcess.mock.calls[0] ?? [];
     expect(prompt).toContain(INPUT.title);
     expect(prompt).toContain(INPUT.description);
     expect(prompt).toContain("src/fetch.ts (modified)");
@@ -79,7 +79,7 @@ describe("generateCategories", () => {
   });
 
   it("groups by functionality/concern, never by file type", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -87,16 +87,16 @@ describe("generateCategories", () => {
       }),
     );
 
-    await generateCategories(INPUT, { runClaudeProcess });
+    await generateCategories(INPUT, { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     // The old "by functionality or type" wording licensed a type-based split — must be gone.
     expect(prompt).not.toMatch(/functionality or type/i);
     expect(prompt).toMatch(/never by file type/i);
   });
 
   it("bans a standalone tests or documentation group and requires tests/docs to ride along", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -104,15 +104,15 @@ describe("generateCategories", () => {
       }),
     );
 
-    await generateCategories(INPUT, { runClaudeProcess });
+    await generateCategories(INPUT, { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toMatch(/don't\s+make a "tests" group or a "documentation" group/i);
     expect(prompt).toMatch(/tests and doc changes go in the same\s+group as the code they cover/i);
   });
 
   it("allows a coherent boilerplate group without licensing a tests/docs split", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -120,15 +120,15 @@ describe("generateCategories", () => {
       }),
     );
 
-    await generateCategories(INPUT, { runClaudeProcess });
+    await generateCategories(INPUT, { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toMatch(/repetitive or mechanical\s+code/i);
     expect(prompt).toMatch(/this never means a tests or docs group/i);
   });
 
   it("asks for a per-group attention rating with the default-to-middle rubric and the anti-partition line", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -136,9 +136,9 @@ describe("generateCategories", () => {
       }),
     );
 
-    await generateCategories(INPUT, { runClaudeProcess });
+    await generateCategories(INPUT, { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toMatch(/read closely/i);
     expect(prompt).toMatch(/read through/i);
     expect(prompt).toMatch(/skim/i);
@@ -152,7 +152,7 @@ describe("generateCategories", () => {
   });
 
   it("no longer asks the model to order the groups — ordering is derived from attention, in code", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -160,16 +160,16 @@ describe("generateCategories", () => {
       }),
     );
 
-    await generateCategories(INPUT, { runClaudeProcess });
+    await generateCategories(INPUT, { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).not.toMatch(/order the groups by how much attention they need/i);
     expect(prompt).not.toMatch(/most important first/i);
     expect(prompt).toMatch(/you don't need to order the groups/i);
   });
 
   it("asks for short names, with file lists/qualifiers/parentheticals kept out of the name", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -177,9 +177,9 @@ describe("generateCategories", () => {
       }),
     );
 
-    await generateCategories(INPUT, { runClaudeProcess });
+    await generateCategories(INPUT, { runAgentProcess });
 
-    const prompt = runClaudeProcess.mock.calls[0]?.[1];
+    const prompt = runAgentProcess.mock.calls[0]?.[1];
     expect(prompt).toMatch(/keep the name to a\s+few words/i);
     expect(prompt).toMatch(/never a file list,\s+method-name qualifiers, or a parenthetical/i);
   });
@@ -189,9 +189,9 @@ describe("generateCategories", () => {
       { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
       { name: "Backoff tests", description: "Covers the new retry behavior.", attention: "normal" },
     ];
-    const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
+    const runAgentProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
 
-    const result = await generateCategories(INPUT, { runClaudeProcess });
+    const result = await generateCategories(INPUT, { runAgentProcess });
 
     expect(result.categories).toEqual([
       { id: "c1", name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -214,9 +214,9 @@ describe("generateCategories", () => {
       { name: "Retry logic", description: "Adds backoff retries.", attention: "close" },
       { name: "Docs", description: "Updates the README.", attention: "normal" },
     ];
-    const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
+    const runAgentProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
 
-    const result = await generateCategories(INPUT, { runClaudeProcess });
+    const result = await generateCategories(INPUT, { runAgentProcess });
 
     expect(result.categories.map((c) => [c.id, c.name, c.attention])).toEqual([
       ["c1", "Retry logic", "close"],
@@ -230,9 +230,9 @@ describe("generateCategories", () => {
       { name: "B", description: "Second in the model's reply.", attention: "skim" },
       { name: "A", description: "First in the model's reply.", attention: "skim" },
     ];
-    const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
+    const runAgentProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
 
-    const result = await generateCategories(INPUT, { runClaudeProcess });
+    const result = await generateCategories(INPUT, { runAgentProcess });
 
     expect(result.categories.map((c) => c.name)).toEqual(["B", "A"]);
   });
@@ -248,9 +248,9 @@ describe("generateCategories", () => {
         attention: "normal",
       },
     ];
-    const runClaudeProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
+    const runAgentProcess = vi.fn(async () => envelope({ categories: proposals }, "abc"));
 
-    const result = await generateCategories(INPUT, { runClaudeProcess });
+    const result = await generateCategories(INPUT, { runAgentProcess });
 
     expect(result.categories).toEqual([
       { id: "c1", name: "Retry logic", description: "Adds retries.", attention: "normal" },
@@ -258,7 +258,7 @@ describe("generateCategories", () => {
   });
 
   it("renders byte-identical prompt output (regression guard for wording changes)", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -266,15 +266,15 @@ describe("generateCategories", () => {
       }),
     );
 
-    await generateCategories(INPUT, { runClaudeProcess });
+    await generateCategories(INPUT, { runAgentProcess });
 
-    await expect(runClaudeProcess.mock.calls[0]?.[1]).toMatchFileSnapshot(
+    await expect(runAgentProcess.mock.calls[0]?.[1]).toMatchFileSnapshot(
       "__snapshots__/generate.default.txt",
     );
   });
 
   it("renders byte-identical prompt output for an empty/whitespace description", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({
         categories: [
           { name: "Retry logic", description: "Adds backoff retries.", attention: "normal" },
@@ -284,19 +284,17 @@ describe("generateCategories", () => {
 
     await generateCategories(
       { title: "Trivial fix", description: "   ", files: [{ path: "src/a.ts", status: "added" }] },
-      { runClaudeProcess },
+      { runAgentProcess },
     );
 
-    await expect(runClaudeProcess.mock.calls[0]?.[1]).toMatchFileSnapshot(
+    await expect(runAgentProcess.mock.calls[0]?.[1]).toMatchFileSnapshot(
       "__snapshots__/generate.empty-description.txt",
     );
   });
 
   it("rejects an empty category list", async () => {
-    const runClaudeProcess = vi.fn(async () => envelope({ categories: [] }));
+    const runAgentProcess = vi.fn(async () => envelope({ categories: [] }));
 
-    await expect(generateCategories(INPUT, { runClaudeProcess })).rejects.toThrow(
-      ClaudeOutputError,
-    );
+    await expect(generateCategories(INPUT, { runAgentProcess })).rejects.toThrow(AgentOutputError);
   });
 });

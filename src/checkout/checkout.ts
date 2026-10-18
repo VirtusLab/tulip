@@ -52,7 +52,7 @@ const COMMIT_SHA_PATTERN = /^([0-9a-f]{40}|[0-9a-f]{64})$/;
 
 /**
  * Creates a local checkout containing just enough history to read any file at the PR's base or
- * head revision, with the head revision's working tree checked out (so a claude session's
+ * head revision, with the head revision's working tree checked out (so an agent session's
  * Read/Grep/Glob tools see real files). Fetches both commits shallowly (depth {@link config}.limits
  * .checkoutFetchDepth) by SHA, so it works even when the base/head branches have since moved or
  * been deleted. The repo is cloned from `https://<host>/<repoPath>.git`. The fetch authenticates

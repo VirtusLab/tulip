@@ -1,5 +1,5 @@
-import type { RunnerDeps } from "../claude/runner.js";
-import { runSession } from "../claude/session.js";
+import type { RunnerDeps } from "../agent/runner.js";
+import { runSession } from "../agent/session.js";
 import { config } from "../config.js";
 import { buildExplainPrompt } from "./prompt.js";
 import type { ExplainCategoryInput } from "./types.js";
@@ -12,10 +12,10 @@ export interface ExplainCategoryResult {
 }
 
 /**
- * Task 6.2: generates one category's explanation, in a fresh opus session (high capability, per
- * spec). Prompted with the PR's title/description, a task explanation, this category's
- * name/description, and its changes — full diff excerpt or a file+side+line-range reference
- * only, per a configurable per-change threshold (see ./prompt.ts).
+ * Task 6.2: generates one category's explanation, in a fresh strong-tier session (high
+ * capability, per spec). Prompted with the PR's title/description, a task explanation, this
+ * category's name/description, and its changes — full diff excerpt or a file+side+line-range
+ * reference only, per a configurable per-change threshold (see ./prompt.ts).
  */
 export async function explainCategory(
   input: ExplainCategoryInput,

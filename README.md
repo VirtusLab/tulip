@@ -16,8 +16,9 @@ And if you don't know the codebase at all, the prose and the generated diagrams
 may be enough on their own to understand the PR well enough to accept or reject
 it.
 
-Tulip uses the headless `claude` CLI to do the analysis. No API key needed, just
-a logged-in Claude Code.
+Tulip uses a headless agent CLI to do the analysis: Claude Code's `claude` by
+default, or Cursor's `agent` or OpenAI's `codex`. No API key needed, just a
+logged-in CLI.
 
 <p align="center">
   <a href="screens/diagram.png"><img src="screens/diagram.png" alt="A generated explanation with a Mermaid diagram of the changed flow" width="380"></a>
@@ -33,7 +34,8 @@ a logged-in Claude Code.
 ## How it works
 
 Tulip fetches the PR and runs it through a few LLM passes, each using a model
-sized to the job (Haiku, Sonnet, or Opus):
+sized to the job (Haiku, Sonnet, or Opus; see [Choosing the agent](#choosing-the-agent)
+for the models used with Cursor and Codex):
 
 1. **Fetch & check out.** Get the PR (title, description, diff) via `gh` (or the
    GitHub API) — or, for a GitLab merge request, via the GitLab API — check out
@@ -73,8 +75,11 @@ to open.
 
 - [Node.js](https://nodejs.org/) LTS (>= 24) — its bundled `npm` installs Tulip;
   [pnpm](https://pnpm.io/) is only needed to build from source
-- A logged-in [`claude`](https://claude.com/product/claude-code) CLI on `PATH` —
-  Tulip drives it to analyze the PR
+- A logged-in agent CLI on `PATH` — Tulip drives it to analyze the PR:
+  [`claude`](https://claude.com/product/claude-code) (the default), Cursor's
+  [`agent`](https://cursor.com/cli) (`agent login`), or OpenAI's
+  [`codex`](https://developers.openai.com/codex) (`codex login`); see
+  [Choosing the agent](#choosing-the-agent)
 - Optionally, the [`gh`](https://cli.github.com/) CLI, logged in — used to fetch
   PR data when available; Tulip falls back to the GitHub REST API otherwise
   (set `GITHUB_TOKEN` to raise the unauthenticated rate limit)
@@ -129,11 +134,53 @@ tulip https://github.com/owner/repo/pull/123
 tulip https://gitlab.com/group/project/-/merge_requests/45
 ```
 
-Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`. Run `tulip
---help` for details, or `tulip --version` for the build.
+Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
+`--agent <id>`. Run `tulip --help` for details, or `tulip --version` for the
+build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser.
+
+### Choosing the agent
+
+Tulip uses `claude` unless you pass `--agent` with another id from the table
+below:
+
+```sh
+tulip <PR URL> --agent cursor-anthropic
+```
+
+The choice is saved in `~/.config/tulip/config.json` (`$XDG_CONFIG_HOME/tulip/`
+if set; `%APPDATA%\tulip\` on Windows) and used on later runs until you pass
+another `--agent`.
+
+Each pass asks for a fast, balanced, or strong model, mapped per agent in
+`src/config.ts`:
+
+| Tier     | `claude` | `cursor-anthropic`         | `cursor-grok`     | `codex`       |
+| -------- | -------- | -------------------------- | ----------------- | ------------- |
+| fast     | `haiku`  | `claude-haiku-5-5-medium`  | `grok-4.7-low`    | `gpt-6-luna`  |
+| balanced | `sonnet` | `claude-sonnet-5-5-medium` | `grok-4.7-medium` | `gpt-6-sol`   |
+| strong   | `opus`   | `claude-opus-5-5-high`     | `grok-4.7-high`   | `gpt-6.1-sol` |
+
+`cursor-anthropic` and `cursor-grok` both run `agent` in its read-only `ask` mode
+and trust the temporary checkout, after deleting the PR's `.cursor/` and
+`.claude/` dirs from it: Cursor would otherwise run hooks defined there. They
+differ only in the model ids above. Cursor's CLI has no structured-output flag,
+so the JSON schema goes into the prompt and the reply is parsed and validated by
+Tulip (with one retry), as for `claude`.
+
+With `codex`, Tulip runs `codex exec` with `--ignore-user-config` and deletes the
+PR's `.codex/` dir from the checkout first. The model's shell can read only the
+checkout and system dirs, has no network, and gets only core env vars (`PATH`,
+`HOME`, ...). Web search, apps, and plugins are off. The schema goes in a temporary
+file passed as `--output-schema` (made strict, as OpenAI requires); the prompt
+goes on stdin. Tulip validates the last agent message of the `--json` event
+stream (with one retry), as for the other agents.
+
+The page's Content Security Policy lets it load only its own assets, so
+model-written text can't make it fetch a URL on open. Remote images in the PR
+description don't show either.
 
 ### Reviewing on the page
 

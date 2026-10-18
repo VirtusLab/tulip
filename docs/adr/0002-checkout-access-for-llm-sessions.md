@@ -125,9 +125,10 @@ maintain or trust.
 
 ### Decision
 
-- `config.claude.allowedTools` defaults to `[]`. The field (and `buildArgs`' handling of it) stay
-  in place — `buildArgs` omits `--allowedTools` from argv entirely when the list is empty, rather
-  than passing an empty flag — so the mechanism remains available, just unused.
+- `config.agents.claude.allowedTools` defaults to `[]`. The field (and `planSpawn`'s handling of
+  it, in src/agent/backends/claude.ts) stay in place — `planSpawn` omits `--allowedTools` from
+  argv entirely when the list is empty, rather than passing an empty flag — so the mechanism
+  remains available, just unused.
 - No shim, no wrapper, no `--disallowedTools` allowlist-of-exclusions: none of these can be
   verified airtight against an argv-position-independent flag, and none were needed once Bash
   access itself is off the table.
@@ -152,8 +153,10 @@ maintain or trust.
   server-side before exec-ing the real binary, with output-flag detection independent of argv
   position) — not a bare `--allowedTools` entry, which this incident showed is insufficient by
   itself for anything that can write files. Left as explicit future work, not implemented now.
-- `config.claude.allowedTools` and its plumbing (`buildArgs`' empty-list check) stay as
+- `config.agents.claude.allowedTools` and its plumbing (`planSpawn`'s empty-list check) stay as
   documented dead-but-ready code for that future work, rather than being deleted outright.
+- Codex is the exception: its shell is its only way to read files, so it runs commands in a
+  confined sandbox instead ([ADR 0028](0028-codex-backend.md)).
 
 ## Amendment: deterministic materialization of the diff and base files
 

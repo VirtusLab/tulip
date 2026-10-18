@@ -1,4 +1,9 @@
 import { spawn } from "node:child_process";
+import { AgentBinaryMissingError } from "../agent/errors.js";
+import type { Agent, AgentId } from "../agent/types.js";
+import { createUsageLedger, formatUsageSummary } from "../agent/usage.js";
+import { prepareWorkspace } from "../agent/workspace.js";
+import { createAgentFor } from "../agent-registry/registry.js";
 import { generateCategories } from "../categories/generate.js";
 import { reviewAndAmendCategories } from "../categories/review.js";
 import type { Category } from "../categories/types.js";
@@ -7,8 +12,6 @@ import { materializeChangeArtifacts } from "../checkout/materialize.js";
 import { type CategoryChangeSet, groupChangesByCategory } from "../classification/group.js";
 import { type ClassifyChangesResult, classifyChanges } from "../classification/orchestrate.js";
 import { prepareClassifiableChanges } from "../classification/prepare.js";
-import { ClaudeBinaryMissingError } from "../claude/errors.js";
-import { createUsageLedger, formatUsageSummary } from "../claude/usage.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { parseDiff } from "../diff/parse-diff.js";
 import { explainCategories } from "../explanations/orchestrate.js";
@@ -33,6 +36,8 @@ export interface PipelineOptions {
   /** Run a local review server that posts per-category PR comments (docs/adr/0019), instead of
    * rendering a static page and exiting. Fails when the PR's forge has no `commenter`. */
   serve: boolean;
+  /** Which agent CLI runs every LLM pass (docs/adr/0027); see src/cli/agent-choice.ts. */
+  agent: AgentId;
 }
 
 /** Opens `path` (a local file) in the user's default browser. Rejects if the opener binary is
@@ -45,6 +50,7 @@ export interface PipelineDeps {
   forgeFor?: typeof forgeFor;
   createCheckout?: typeof createCheckout;
   materializeChangeArtifacts?: typeof materializeChangeArtifacts;
+  prepareWorkspace?: typeof prepareWorkspace;
   generateCategories?: typeof generateCategories;
   reviewAndAmendCategories?: typeof reviewAndAmendCategories;
   splitLargeChanges?: typeof splitLargeChanges;
@@ -55,12 +61,14 @@ export interface PipelineDeps {
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
    * never actually spawns a browser. */
   openInBrowser?: BrowserOpener;
+  /** Overrides the agent built from `options.agent`. */
+  agent?: Agent;
   logger?: Logger;
 }
 
 /** Tags an underlying error with which pipeline phase it happened in, for a clear top-level
  * failure message (task 8.2). The original error is kept as `cause` so callers can still branch
- * on its type (e.g. ClaudeBinaryMissingError). */
+ * on its type (e.g. AgentBinaryMissingError). */
 class PhaseError extends Error {
   constructor(phase: string, cause: unknown) {
     super(`${phase} failed: ${causeMessage(cause)}`);
@@ -81,6 +89,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doCreateCheckout = deps.createCheckout ?? createCheckout;
   const doMaterializeChangeArtifacts =
     deps.materializeChangeArtifacts ?? materializeChangeArtifacts;
+  const doPrepareWorkspace = deps.prepareWorkspace ?? prepareWorkspace;
   const doGenerateCategories = deps.generateCategories ?? generateCategories;
   const doReviewAndAmendCategories = deps.reviewAndAmendCategories ?? reviewAndAmendCategories;
   const doSplitLargeChanges = deps.splitLargeChanges ?? splitLargeChanges;
@@ -93,8 +102,11 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const adapter = (deps.forgeFor ?? forgeFor)(options.pr);
   const prUrl = adapter.webUrl(options.pr);
 
+  // One per run, so every phase's sessions (and their resumes) go through the same agent.
+  const agent = deps.agent ?? createAgentFor(options.agent);
+
   logger.info(formatVersion());
-  logger.info(`Processing PR ${prUrl}`);
+  logger.info(`Processing PR ${prUrl} with ${agent.backend.id}`);
   logger.debug(`options: ${JSON.stringify(options)}`);
 
   // Shared by every phase (threaded via each phase's RunnerDeps), summarized at the end.
@@ -119,7 +131,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     if (prepareClassifiableChanges(diff).length === 0) {
       // Binary-only/mode-only PR: nothing for phases 1-3 to work with. Exit cleanly rather than
-      // sending an empty change list into classification, which would blame claude for an empty
+      // sending an empty change list into classification, which would blame the agent for an empty
       // reply to a task that was never meaningful.
       logger.info("nothing to review: this PR has no classifiable changes");
       return;
@@ -133,7 +145,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
         adapter.checkoutAuth,
       ),
     );
-    // Every claude session below runs with the checkout dir as its cwd (RULING), so it reads
+    // Every agent session below runs with the checkout dir as its cwd (RULING), so it reads
     // the actual repo files instead of inheriting this process's cwd. Captured into its own
     // const (rather than reading `checkout.dir` in the closures below) because TypeScript can't
     // narrow a mutated outer `let` across a closure boundary.
@@ -143,6 +155,11 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     await runPhase("materializing change artifacts", () =>
       doMaterializeChangeArtifacts(checkout as PrCheckout, diff, metadata.diff, { logger }),
     );
+    // Before any agent call: strips repo-controlled config the agent CLI would load from its cwd
+    // (see `AgentBackend.repoConfigDirs`).
+    await runPhase("preparing agent workspace", () =>
+      doPrepareWorkspace(checkoutDir, agent.backend),
+    );
 
     const changedFiles = diff.files.map((file) => ({ path: file.path, status: file.status }));
 
@@ -151,7 +168,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     const phase1 = await runPhase("phase 1 (generating categories)", () =>
       doGenerateCategories(
         { title: metadata.title, description: metadata.body, files: changedFiles },
-        { cwd: checkoutDir, usage, logger },
+        { cwd: checkoutDir, usage, logger, agent },
       ),
     );
     logger.info(
@@ -170,7 +187,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categories: phase1.categories,
           generateSessionId: phase1.sessionId,
         },
-        { cwd: checkoutDir, usage, logger },
+        { cwd: checkoutDir, usage, logger, agent },
       ),
     );
     logger.info(
@@ -186,7 +203,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     const splitDiff = await runPhase("splitting large changes", () =>
       doSplitLargeChanges(
         { diff, categories: categoryReview.categories },
-        { logger, cwd: checkoutDir, usage },
+        { logger, cwd: checkoutDir, usage, agent },
       ),
     );
 
@@ -199,7 +216,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categories: categoryReview.categories,
           phase1SessionId: categoryReview.sessionId,
         },
-        { cwd: checkoutDir, usage, logger },
+        { cwd: checkoutDir, usage, logger, agent },
       ),
     );
 
@@ -219,7 +236,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categorySets,
           changeOwners,
         },
-        { logger, cwd: checkoutDir, usage },
+        { logger, cwd: checkoutDir, usage, agent },
       ),
     );
     logger.info(
@@ -276,8 +293,12 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     // Printed whenever any LLM work ran — on success, and after a mid-run failure that still
     // burned tokens; empty for an untouched ledger.
     const usageSummary = formatUsageSummary(usage);
+    const unreported = usage.unreportedCalls();
     if (usageSummary) {
       logger.info(usageSummary);
+    }
+    if (unreported > 0) {
+      logger.info(`${unreported} ${agent.backend.id} call(s) didn't report token usage`);
     }
     if (checkout) {
       logger.debug("cleaning up checkout...");
@@ -329,11 +350,11 @@ function openCommandFor(
   return { command: "xdg-open", args: [path] };
 }
 
-/** Builds the final, user-facing failure line: no stack trace, and — for the common "claude
+/** Builds the final, user-facing failure line: no stack trace, and — for the common "agent CLI
  * isn't installed/logged in" case — just its own already-actionable message. */
 function describeFailure(error: unknown): string {
   const cause = error instanceof PhaseError ? error.cause : error;
-  if (cause instanceof ClaudeBinaryMissingError) {
+  if (cause instanceof AgentBinaryMissingError) {
     return cause.message;
   }
   return causeMessage(error);

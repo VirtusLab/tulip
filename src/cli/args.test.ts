@@ -76,6 +76,20 @@ describe("parseCliArgs", () => {
     },
   );
 
+  it("leaves the agent unset when --agent isn't given", () => {
+    expect(parseCliArgs([VALID_URL])).not.toHaveProperty("agent");
+  });
+
+  it.each(["claude", "cursor-anthropic", "cursor-grok", "codex"])("accepts --agent %s", (agent) => {
+    expect(parseCliArgs([VALID_URL, "--agent", agent]).agent).toBe(agent);
+  });
+
+  it("throws for an unknown --agent, listing the valid ones", () => {
+    expect(() => parseCliArgs([VALID_URL, "--agent", "gemini"])).toThrow(
+      'Invalid --agent: "gemini". Expected one of: claude, cursor-anthropic, cursor-grok, codex.',
+    );
+  });
+
   it("throws for an unknown flag", () => {
     expect(() => parseCliArgs([VALID_URL, "--unknown-flag"])).toThrow(CliUsageError);
   });
@@ -101,6 +115,13 @@ describe("parseCliArgs", () => {
     const verboseLine = lines.find((line) => line.includes("--verbose"));
     const thresholdLine = lines.find((line) => line.includes("--diff-threshold"));
     expect(verboseLine?.indexOf("Show")).toBe(thresholdLine?.indexOf("Max"));
+  });
+
+  it("aligns the --agent usage column with the others", () => {
+    const lines = usage().split("\n");
+    const verboseLine = lines.find((line) => line.includes("--verbose"));
+    const agentLine = lines.find((line) => line.includes("--agent"));
+    expect(agentLine?.indexOf("Agent CLI")).toBe(verboseLine?.indexOf("Show"));
   });
 
   it("parses a GitLab MR URL", () => {

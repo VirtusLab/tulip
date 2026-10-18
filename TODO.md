@@ -3,7 +3,8 @@
 Remaining tasks, roughly by priority.
 
 ## Security / robustness
-- [ ] Restrict the spawned `claude` process's tools (e.g. `--disallowedTools Edit,Write,Bash` or a read-only permission mode) — today it inherits the user's permission config and can modify files if the user pre-allowed those tools
+- [ ] Restrict the spawned `claude` process's tools (e.g. `--disallowedTools Edit,Write,Bash` or a read-only permission mode) — today it inherits the user's permission config and can modify files if the user pre-allowed those tools (the Cursor backends already run in read-only `--mode ask`)
+- [ ] Check whether `claude -p` runs a PR's `.claude/settings.json` hooks from the checkout; if so, add `.claude` to the claude backend's `repoConfigDirs`, as the Cursor backends do (docs/adr/0027)
 - [ ] Aggregate page-embed budget: the 200KB context-embed cap is per file per side; a many-file PR can still produce a very large page
 - [ ] Reject protocol-relative (`//host`) URLs in prose links (inert under `file://`, still worth closing)
 

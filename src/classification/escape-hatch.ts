@@ -1,7 +1,7 @@
+import type { RunnerDeps } from "../agent/runner.js";
+import { resumeSession } from "../agent/session.js";
 import { consultOnCategory } from "../categories/consult.js";
 import { type Category, nextCategoryId } from "../categories/types.js";
-import type { RunnerDeps } from "../claude/runner.js";
-import { resumeSession } from "../claude/session.js";
 import { config } from "../config.js";
 import type { ChangeSideContent } from "../diff/change.js";
 import { createLogger, type Logger } from "../logging/logger.js";

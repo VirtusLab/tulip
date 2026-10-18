@@ -1,7 +1,9 @@
 import { parseArgs } from "node:util";
+import { AGENT_IDS, type AgentId, isAgentId } from "../agent/types.js";
 import { config } from "../config.js";
 import type { PrRef } from "../forge/types.js";
 import { parsePrUrl } from "../forge-registry/pr-url.js";
+import { DEFAULT_AGENT } from "./agent-choice.js";
 
 /** Default `--diff-threshold`: max diff lines fed verbatim to the explaining LLM. */
 const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;
@@ -21,6 +23,9 @@ export interface RunOptions {
   /** Run a local review server that posts a per-category PR comment (docs/adr/0019). Only for
    * forges with a `commenter`. Defaults to false (render a static page and exit). */
   serve: boolean;
+  /** Which agent CLI runs the LLM passes (docs/adr/0027), when given as `--agent`. When absent,
+   * the remembered choice or the default is used (see ./agent-choice.ts). */
+  agent?: AgentId;
 }
 
 /** Thrown for any invalid invocation; the message is shown to the user alongside usage info. */
@@ -52,6 +57,8 @@ export function usage(): string {
     "  --no-open             Don't automatically open the rendered page in your browser",
     "  --serve               Run a local review server; post a PR comment per category via gh",
     "                        (GitHub PRs only)",
+    `  --agent <id>          Agent CLI that runs the analysis (default: ${DEFAULT_AGENT}). Remembered for`,
+    `                        later runs. One of: ${AGENT_IDS.join(" | ")}`,
     "  -h, --help            Show this help and exit",
     "  -v, --version         Show version information and exit",
   ].join("\n");
@@ -67,6 +74,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
     verbose?: boolean;
     "no-open"?: boolean;
     serve?: boolean;
+    agent?: string;
     help?: boolean;
     version?: boolean;
   };
@@ -79,6 +87,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
         verbose: { type: "boolean" },
         "no-open": { type: "boolean" },
         serve: { type: "boolean" },
+        agent: { type: "string" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
       },
@@ -120,7 +129,15 @@ export function parseCliArgs(argv: string[]): RunOptions {
     verbose: values.verbose ?? false,
     open: !values["no-open"],
     serve: values.serve ?? false,
+    ...(values.agent === undefined ? {} : { agent: parseAgent(values.agent) }),
   };
+}
+
+function parseAgent(raw: string): AgentId {
+  if (!isAgentId(raw)) {
+    throw new CliUsageError(`Invalid --agent: "${raw}". Expected one of: ${AGENT_IDS.join(", ")}.`);
+  }
+  return raw;
 }
 
 function parseDiffThreshold(raw: string | undefined): number {

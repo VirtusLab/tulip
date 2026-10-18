@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AgentBinaryMissingError, AgentOutputError } from "../agent/errors.js";
+import type { Agent, AgentBackend, ModelTokens } from "../agent/types.js";
+import type { UsageLedger } from "../agent/usage.js";
 import type { GenerateCategoriesResult } from "../categories/generate.js";
 import type { CategoryReviewLoopResult } from "../categories/review.js";
 import type { PrCheckout } from "../checkout/checkout.js";
 import { IncompleteCoverageError } from "../classification/coverage.js";
 import type { ClassifyChangesResult } from "../classification/orchestrate.js";
 import type { ClassifiableChange } from "../classification/types.js";
-import { ClaudeBinaryMissingError, ClaudeOutputError } from "../claude/errors.js";
-import type { UsageLedger } from "../claude/usage.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { SnippetCoverageError } from "../explanations/coverage.js";
 import type { CategoryExplanation } from "../explanations/types.js";
@@ -129,6 +130,9 @@ function baseDeps(order: string[] = []) {
     materializeChangeArtifacts: vi.fn(async (): Promise<void> => {
       order.push("materialize");
     }),
+    prepareWorkspace: vi.fn(async (_dir: string, _backend: AgentBackend): Promise<void> => {
+      order.push("prepare-workspace");
+    }),
     generateCategories: vi.fn(async (): Promise<GenerateCategoriesResult> => {
       order.push("phase1");
       return {
@@ -183,7 +187,15 @@ function baseDeps(order: string[] = []) {
 }
 
 function options(overrides: Partial<PipelineOptions> = {}): PipelineOptions {
-  return { pr: PR, diffThreshold: 400, verbose: false, open: true, serve: false, ...overrides };
+  return {
+    pr: PR,
+    diffThreshold: 400,
+    verbose: false,
+    open: true,
+    serve: false,
+    agent: "claude",
+    ...overrides,
+  };
 }
 
 function infoLines(deps: PipelineDeps): string[] {
@@ -193,27 +205,36 @@ function infoLines(deps: PipelineDeps): string[] {
 
 /** The RunnerDeps object (2nd arg) a mocked phase was called with, for inspecting the threaded
  * `usage` ledger. */
-function phaseRunnerDeps(fn: { mock: { calls: unknown[][] } }): { usage?: UsageLedger } {
-  return (fn.mock.calls[0]?.[1] ?? {}) as { usage?: UsageLedger };
+function phaseRunnerDeps(fn: { mock: { calls: unknown[][] } }): {
+  usage?: UsageLedger;
+  agent?: Agent;
+} {
+  return (fn.mock.calls[0]?.[1] ?? {}) as { usage?: UsageLedger; agent?: Agent };
 }
 
-/** A generateCategories mock that records some usage into the ledger it's handed, so run()'s
- * end-of-run summary has something to print. The double cast bridges baseDeps' zero-arg mock
- * signature to the real (input, runnerDeps) shape run() calls it with. */
-function recordingGenerate(): ReturnType<typeof baseDeps>["generateCategories"] {
+/** The RunnerDeps every LLM phase is called with. */
+function expectedRunnerDeps(deps: ReturnType<typeof baseDeps>) {
+  return {
+    cwd: "/tmp/tulip-checkout",
+    usage: expect.any(Object),
+    logger: deps.logger,
+    agent: expect.any(Object),
+  };
+}
+
+/** A generateCategories mock that records one sonnet call per entry of `usages` (`undefined` = a
+ * call that reported none) into the ledger it's handed, so run()'s end-of-run summary has
+ * something to print. The double cast bridges baseDeps' zero-arg mock signature to the real
+ * (input, runnerDeps) shape run() calls it with. */
+function recordingGenerate(
+  ...usages: (ModelTokens | undefined)[]
+): ReturnType<typeof baseDeps>["generateCategories"] {
+  const calls =
+    usages.length > 0 ? usages : [{ input: 100, output: 20, cacheRead: 5, cacheWrite: 3 }];
   return vi.fn(async (_input: unknown, runnerDeps: { usage: UsageLedger }) => {
-    runnerDeps.usage.record(
-      { model: "sonnet" },
-      {
-        session_id: "s1",
-        usage: {
-          input_tokens: 100,
-          output_tokens: 20,
-          cache_read_input_tokens: 5,
-          cache_creation_input_tokens: 3,
-        },
-      },
-    );
+    for (const usage of calls) {
+      runnerDeps.usage.record({ tier: "balanced", model: "sonnet" }, usage);
+    }
     return {
       categories: [
         { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" as const },
@@ -245,6 +266,7 @@ describe("run", () => {
       "fetch",
       "checkout",
       "materialize",
+      "prepare-workspace",
       "phase1",
       "phase1-review",
       "split",
@@ -264,7 +286,7 @@ describe("run", () => {
         description: "Adds a greeting helper.",
         files: [{ path: "src/new.ts", status: "added" }],
       },
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
+      expectedRunnerDeps(deps),
     );
     expect(deps.reviewAndAmendCategories).toHaveBeenCalledWith(
       {
@@ -276,7 +298,7 @@ describe("run", () => {
         ],
         generateSessionId: "s1",
       },
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
+      expectedRunnerDeps(deps),
     );
     expect(deps.classifyChanges).toHaveBeenCalledWith(
       {
@@ -286,7 +308,7 @@ describe("run", () => {
         ],
         phase1SessionId: "s1",
       },
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
+      expectedRunnerDeps(deps),
     );
     expect(deps.explainCategories).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -306,11 +328,7 @@ describe("run", () => {
           }),
         ],
       }),
-      expect.objectContaining({
-        logger: deps.logger,
-        cwd: "/tmp/tulip-checkout",
-        usage: expect.any(Object),
-      }),
+      expectedRunnerDeps(deps),
     );
     expect(deps.renderExplanations).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -329,6 +347,14 @@ describe("run", () => {
     expect(phaseRunnerDeps(deps.classifyChanges).usage).toBe(sharedUsage);
     expect(phaseRunnerDeps(deps.explainCategories).usage).toBe(sharedUsage);
 
+    // Same for the agent: one per run, so a session started in one phase resumes in another.
+    const sharedAgent = phaseRunnerDeps(deps.generateCategories).agent;
+    expect(sharedAgent?.backend.id).toBe("claude");
+    expect(phaseRunnerDeps(deps.reviewAndAmendCategories).agent).toBe(sharedAgent);
+    expect(phaseRunnerDeps(deps.splitLargeChanges).agent).toBe(sharedAgent);
+    expect(phaseRunnerDeps(deps.classifyChanges).agent).toBe(sharedAgent);
+    expect(phaseRunnerDeps(deps.explainCategories).agent).toBe(sharedAgent);
+
     const checkout = await deps.createCheckout.mock.results[0]?.value;
     expect(checkout.cleanup).toHaveBeenCalledTimes(1);
     expect(process.exitCode).toBeUndefined();
@@ -343,6 +369,41 @@ describe("run", () => {
     const summary = infoLines(deps).find((line) => line.startsWith("Token usage"));
     expect(summary).toBeDefined();
     expect(summary).toContain("sonnet");
+  });
+
+  it("prepares the workspace of the agent named by options.agent, in the checkout", async () => {
+    const deps = baseDeps();
+
+    await run(options({ agent: "codex" }), deps);
+
+    expect(deps.prepareWorkspace).toHaveBeenCalledWith(
+      "/tmp/tulip-checkout",
+      expect.objectContaining({ id: "codex" }),
+    );
+  });
+
+  it("says token usage wasn't reported when calls ran but none carried usage", async () => {
+    const deps = baseDeps();
+    deps.generateCategories = recordingGenerate(undefined);
+
+    await run(options(), deps);
+
+    expect(infoLines(deps)).toContain("1 claude call(s) didn't report token usage");
+    expect(infoLines(deps).find((line) => line.startsWith("Token usage"))).toBeUndefined();
+  });
+
+  it("notes calls that didn't report usage under a partial token-usage summary", async () => {
+    const deps = baseDeps();
+    deps.generateCategories = recordingGenerate(
+      { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 },
+      undefined,
+    );
+
+    await run(options(), deps);
+
+    const lines = infoLines(deps);
+    expect(lines.find((line) => line.startsWith("Token usage"))).toBeDefined();
+    expect(lines).toContain("1 claude call(s) didn't report token usage");
   });
 
   it("still prints the token-usage summary after a mid-run failure", async () => {
@@ -365,7 +426,7 @@ describe("run", () => {
 
     const lines = infoLines(deps);
     expect(lines[0]).toBe("Tulip 9.9.9 (test123, built now)");
-    expect(lines[1]).toBe("Processing PR https://github.com/octo/widgets/pull/42");
+    expect(lines[1]).toBe("Processing PR https://github.com/octo/widgets/pull/42 with claude");
     expect(lines[2]).toBe("fetching octo/widgets#42...");
   });
 
@@ -515,10 +576,10 @@ describe("run", () => {
     expect(lines.every((line) => !line.includes("at Object") && !line.includes(".ts:"))).toBe(true);
   });
 
-  it("reports a missing claude binary with its own actionable message, unwrapped", async () => {
+  it("reports a missing agent binary with its own actionable message, unwrapped", async () => {
     const deps = baseDeps();
     deps.generateCategories = vi.fn(async () => {
-      throw new ClaudeBinaryMissingError();
+      throw new AgentBinaryMissingError("claude", "install Claude Code");
     });
 
     await run(options(), deps);
@@ -531,13 +592,17 @@ describe("run", () => {
     const checkout = await deps.createCheckout.mock.results[0]?.value;
     expect(checkout.cleanup).toHaveBeenCalledTimes(1);
     const lines = infoLines(deps);
-    expect(lines.some((line) => line === new ClaudeBinaryMissingError().message)).toBe(true);
+    expect(
+      lines.some(
+        (line) => line === new AgentBinaryMissingError("claude", "install Claude Code").message,
+      ),
+    ).toBe(true);
   });
 
-  it("reports a ClaudeOutputError from phase 1, naming the phase, and cleans up the checkout", async () => {
+  it("reports an AgentOutputError from phase 1, naming the phase, and cleans up the checkout", async () => {
     const deps = baseDeps();
     deps.generateCategories = vi.fn(async () => {
-      throw new ClaudeOutputError("claude returned an empty category list");
+      throw new AgentOutputError("the agent returned an empty category list");
     });
 
     await run(options(), deps);
@@ -550,15 +615,15 @@ describe("run", () => {
       lines.some(
         (line) =>
           line.includes("phase 1 (generating categories) failed") &&
-          line.includes("claude returned an empty category list"),
+          line.includes("the agent returned an empty category list"),
       ),
     ).toBe(true);
   });
 
-  it("reports a ClaudeOutputError from the category review stage, naming the phase, and cleans up the checkout", async () => {
+  it("reports an AgentOutputError from the category review stage, naming the phase, and cleans up the checkout", async () => {
     const deps = baseDeps();
     deps.reviewAndAmendCategories = vi.fn(async () => {
-      throw new ClaudeOutputError("claude returned an empty amended category list");
+      throw new AgentOutputError("the agent returned an empty amended category list");
     });
 
     await run(options(), deps);
@@ -572,7 +637,7 @@ describe("run", () => {
       lines.some(
         (line) =>
           line.includes("phase 1 (reviewing categories) failed") &&
-          line.includes("claude returned an empty amended category list"),
+          line.includes("the agent returned an empty amended category list"),
       ),
     ).toBe(true);
   });
@@ -595,7 +660,7 @@ describe("run", () => {
         ],
         phase1SessionId: "s1-amended",
       }),
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
+      expectedRunnerDeps(deps),
     );
   });
 
@@ -613,16 +678,12 @@ describe("run", () => {
           { id: "c1", name: "Greeting", description: "Adds hello().", attention: "normal" },
         ],
       },
-      expect.objectContaining({
-        logger: deps.logger,
-        cwd: "/tmp/tulip-checkout",
-        usage: expect.any(Object),
-      }),
+      expectedRunnerDeps(deps),
     );
     // Only classification gets the split diff.
     expect(deps.classifyChanges).toHaveBeenCalledWith(
       expect.objectContaining({ diff: splitDiff }),
-      { cwd: "/tmp/tulip-checkout", usage: expect.any(Object), logger: deps.logger },
+      expectedRunnerDeps(deps),
     );
   });
 
@@ -731,6 +792,28 @@ describe("run", () => {
         (line) =>
           line.includes("materializing change artifacts failed") &&
           line.includes("ENOSPC: no space left on device"),
+      ),
+    ).toBe(true);
+  });
+
+  it("on a prepareWorkspace failure, names the phase, sets exit code 1, and still cleans up the checkout", async () => {
+    const deps = baseDeps();
+    deps.prepareWorkspace = vi.fn(async (): Promise<void> => {
+      throw new Error("EACCES: permission denied");
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.generateCategories).not.toHaveBeenCalled();
+    const checkout = await deps.createCheckout.mock.results[0]?.value;
+    expect(checkout.cleanup).toHaveBeenCalledTimes(1);
+    const lines = infoLines(deps);
+    expect(
+      lines.some(
+        (line) =>
+          line.includes("preparing agent workspace failed") &&
+          line.includes("EACCES: permission denied"),
       ),
     ).toBe(true);
   });
@@ -921,7 +1004,9 @@ describe("run", () => {
     await run(options({ pr }), deps);
 
     const lines = infoLines(deps);
-    expect(lines[1]).toBe("Processing PR https://git.example.com/group/project/-/merge_requests/7");
+    expect(lines[1]).toBe(
+      "Processing PR https://git.example.com/group/project/-/merge_requests/7 with claude",
+    );
     expect(lines[2]).toBe("fetching group/project!7...");
     expect(deps.renderExplanations).toHaveBeenCalledWith(
       expect.objectContaining({

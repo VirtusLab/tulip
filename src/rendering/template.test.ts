@@ -36,6 +36,21 @@ describe("renderPage", () => {
     );
   });
 
+  it("loads nothing but the page's own assets and data: images", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "",
+      prUrl: "https://github.com/acme/widgets/pull/7",
+      fileDiffs: new Map(),
+      explanations: [],
+    });
+    const csp = parse(html).querySelector('meta[http-equiv="Content-Security-Policy"]');
+    expect(csp?.getAttribute("content")).toBe(
+      "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+        "font-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'",
+    );
+  });
+
   it("renders the PR's original description as its own labeled section, before the analysis, with a TOC entry", () => {
     const html = renderPage({
       prTitle: "t",

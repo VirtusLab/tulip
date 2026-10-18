@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentProcessResult } from "../agent/exec.js";
 import type { ClassifiableChange } from "../classification/types.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
 import { createLogger } from "../logging/logger.js";
 import {
   findUnreferencedChanges,
@@ -20,7 +20,7 @@ function change(overrides: Partial<ClassifiableChange> = {}): ClassifiableChange
   };
 }
 
-function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessResult {
+function envelope(structuredOutput: unknown, sessionId: string): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -128,18 +128,18 @@ describe("verifySnippetCoverage", () => {
       head: { start: 10, end: 14 },
       unfold: true,
     });
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
 
     const result = await verifySnippetCoverage(ref, "session-1", [change()], "Retry logic", {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(result).toEqual({ markdown: ref, sessionId: "session-1" });
-    expect(runClaudeProcess).not.toHaveBeenCalled();
+    expect(runAgentProcess).not.toHaveBeenCalled();
   });
 
   it("resumes the session listing missing changes and returns the amended markdown", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], input: string) => {
       expect(input).toContain("src/fetch.ts");
       expect(input).toContain("head");
       expect(input).toContain("10-14");
@@ -157,35 +157,35 @@ describe("verifySnippetCoverage", () => {
       [change()],
       "Retry logic",
       {
-        runClaudeProcess,
+        runAgentProcess,
       },
     );
 
     expect(result.sessionId).toBe("session-2");
     expect(result.markdown).toContain("amended");
-    expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+    expect(runAgentProcess).toHaveBeenCalledTimes(1);
   });
 
   it("throws SnippetCoverageError listing missing changes after 3 amend attempts", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "still no refs" }, "session-2"),
     );
 
     await expect(
       verifySnippetCoverage("no refs", "session-1", [change()], "Retry logic", {
-        runClaudeProcess,
+        runAgentProcess,
       }),
     ).rejects.toThrow(SnippetCoverageError);
-    expect(runClaudeProcess).toHaveBeenCalledTimes(3);
+    expect(runAgentProcess).toHaveBeenCalledTimes(3);
   });
 
   it("logs each amend attempt, naming the category and the number of uncovered changes", async () => {
-    const runClaudeProcess = vi.fn(async () => envelope({ markdown: "still no refs" }, "s"));
+    const runAgentProcess = vi.fn(async () => envelope({ markdown: "still no refs" }, "s"));
     const write = vi.fn();
 
     await expect(
       verifySnippetCoverage("no refs", "session-1", [change()], "Retry logic", {
-        runClaudeProcess,
+        runAgentProcess,
         logger: createLogger({ write }),
       }),
     ).rejects.toThrow(SnippetCoverageError);
@@ -200,11 +200,11 @@ describe("verifySnippetCoverage", () => {
   });
 
   it("includes the missing change's location in the thrown error", async () => {
-    const runClaudeProcess = vi.fn(async () => envelope({ markdown: "no refs" }, "s"));
+    const runAgentProcess = vi.fn(async () => envelope({ markdown: "no refs" }, "s"));
 
     await expect(
       verifySnippetCoverage("no refs", "session-1", [change()], "Retry logic", {
-        runClaudeProcess,
+        runAgentProcess,
       }),
     ).rejects.toThrow(/src\/fetch\.ts.*head 10-14/);
   });

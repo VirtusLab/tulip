@@ -1,6 +1,6 @@
+import type { RunnerDeps } from "../agent/runner.js";
+import { resumeSession, runSession } from "../agent/session.js";
 import { isPrimary } from "../classification/group.js";
-import type { RunnerDeps } from "../claude/runner.js";
-import { resumeSession, runSession } from "../claude/session.js";
 import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { verifySnippetCoverage } from "./coverage.js";
@@ -33,7 +33,7 @@ export interface ReviewLoopResult {
 }
 
 /**
- * Task 6.4: reviews `input.markdown` once with a fresh sonnet session (clarity, conciseness,
+ * Task 6.4: reviews `input.markdown` once with a fresh balanced-tier session (clarity, conciseness,
  * correctness/groundedness). If it raises issues, resumes the explaining session to amend and
  * re-verifies snippet coverage (task 6.3) on the amendment. The amended version is kept as-is,
  * without a second review (docs/adr/0025).

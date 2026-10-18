@@ -38,7 +38,7 @@ export function createConcurrencyLimiter(limit: number): ConcurrencyLimiter {
   return { run };
 }
 
-/** Shared by every `claude` invocation the tool spawns — see runner.ts's `execute`. */
-export const claudeConcurrencyLimiter: ConcurrencyLimiter = createConcurrencyLimiter(
-  config.limits.maxConcurrentClaudeProcesses,
+/** Shared by every agent invocation the tool spawns — see runner.ts's `execute`. */
+export const agentConcurrencyLimiter: ConcurrencyLimiter = createConcurrencyLimiter(
+  config.limits.maxConcurrentAgentProcesses,
 );

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ClaudeOutputError } from "../claude/errors.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
+import { AgentOutputError } from "../agent/errors.js";
+import type { AgentProcessResult } from "../agent/exec.js";
 import { type ConsultCategoryInput, consultOnCategory } from "./consult.js";
 
 const INPUT: ConsultCategoryInput = {
@@ -13,7 +13,7 @@ const INPUT: ConsultCategoryInput = {
   },
 };
 
-function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudeProcessResult {
+function envelope(structuredOutput: unknown, sessionId = "session-1"): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -26,13 +26,13 @@ function envelope(structuredOutput: unknown, sessionId = "session-1"): ClaudePro
 
 describe("consultOnCategory", () => {
   it("requests a schema shaped as { accept, category? }", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ accept: false }),
     );
 
-    await consultOnCategory(INPUT, { runClaudeProcess });
+    await consultOnCategory(INPUT, { runAgentProcess });
 
-    const args = runClaudeProcess.mock.calls[0]?.[0] as string[];
+    const args = runAgentProcess.mock.calls[0]?.[0] as string[];
     const schema = JSON.parse(args[args.indexOf("--json-schema") + 1] ?? "{}");
     expect(schema).toEqual({
       type: "object",
@@ -53,13 +53,13 @@ describe("consultOnCategory", () => {
   });
 
   it("resumes the phase-1 session with the proposed name and change context", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ accept: false }),
     );
 
-    await consultOnCategory(INPUT, { runClaudeProcess });
+    await consultOnCategory(INPUT, { runAgentProcess });
 
-    const [args, prompt] = runClaudeProcess.mock.calls[0] ?? [];
+    const [args, prompt] = runAgentProcess.mock.calls[0] ?? [];
     expect(prompt).toContain(INPUT.proposedName);
     expect(prompt).toContain(INPUT.change.path);
     expect(prompt).toContain("10-24");
@@ -74,17 +74,17 @@ describe("consultOnCategory", () => {
       description: "Parses the config file.",
       attention: "normal",
     };
-    const runClaudeProcess = vi.fn(async () => envelope({ accept: true, category }, "session-1"));
+    const runAgentProcess = vi.fn(async () => envelope({ accept: true, category }, "session-1"));
 
-    const result = await consultOnCategory(INPUT, { runClaudeProcess });
+    const result = await consultOnCategory(INPUT, { runAgentProcess });
 
     expect(result).toEqual({ accept: true, category, sessionId: "session-1" });
   });
 
   it("returns accept: false without a category on rejection", async () => {
-    const runClaudeProcess = vi.fn(async () => envelope({ accept: false }, "session-1"));
+    const runAgentProcess = vi.fn(async () => envelope({ accept: false }, "session-1"));
 
-    const result = await consultOnCategory(INPUT, { runClaudeProcess });
+    const result = await consultOnCategory(INPUT, { runAgentProcess });
 
     expect(result).toEqual({ accept: false, sessionId: "session-1" });
   });
@@ -92,29 +92,29 @@ describe("consultOnCategory", () => {
   it("returns the session id from resumeSession's response, not the input session id", async () => {
     // Each consultation may advance the phase-1 session; callers must resume the *next*
     // consultation from this returned id so it's aware of categories accepted so far.
-    const runClaudeProcess = vi.fn(async () => envelope({ accept: false }, "session-2"));
+    const runAgentProcess = vi.fn(async () => envelope({ accept: false }, "session-2"));
 
-    const result = await consultOnCategory(INPUT, { runClaudeProcess });
+    const result = await consultOnCategory(INPUT, { runAgentProcess });
 
     expect(INPUT.sessionId).toBe("session-1");
     expect(result.sessionId).toBe("session-2");
   });
 
   it("renders byte-identical prompt output (regression guard for wording changes)", async () => {
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ accept: false }),
     );
 
-    await consultOnCategory(INPUT, { runClaudeProcess });
+    await consultOnCategory(INPUT, { runAgentProcess });
 
-    await expect(runClaudeProcess.mock.calls[0]?.[1]).toMatchFileSnapshot(
+    await expect(runAgentProcess.mock.calls[0]?.[1]).toMatchFileSnapshot(
       "__snapshots__/consult.default.txt",
     );
   });
 
   it("rejects an accept: true response that omits the category", async () => {
-    const runClaudeProcess = vi.fn(async () => envelope({ accept: true }));
+    const runAgentProcess = vi.fn(async () => envelope({ accept: true }));
 
-    await expect(consultOnCategory(INPUT, { runClaudeProcess })).rejects.toThrow(ClaudeOutputError);
+    await expect(consultOnCategory(INPUT, { runAgentProcess })).rejects.toThrow(AgentOutputError);
   });
 });

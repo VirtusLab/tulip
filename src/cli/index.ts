@@ -2,6 +2,7 @@
 
 import { run } from "../pipeline/run.js";
 import { formatVersion } from "../version.js";
+import { resolveAgent } from "./agent-choice.js";
 import {
   CliUsageError,
   HelpRequestedError,
@@ -9,6 +10,7 @@ import {
   usage,
   VersionRequestedError,
 } from "./args.js";
+import { userSettingsPath } from "./settings.js";
 
 async function main(): Promise<void> {
   let options: ReturnType<typeof parseCliArgs>;
@@ -34,7 +36,11 @@ async function main(): Promise<void> {
     throw error;
   }
 
-  await run(options);
+  const agent = await resolveAgent(options.agent, {
+    settingsPath: userSettingsPath(),
+    log: (line) => console.log(line),
+  });
+  await run({ ...options, agent });
 }
 
 main().catch((error: unknown) => {

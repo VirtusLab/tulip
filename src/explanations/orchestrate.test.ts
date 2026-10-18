@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentProcessResult } from "../agent/exec.js";
 import type { Category } from "../categories/types.js";
 import type { CategoryChangeSet, ChangeOwner } from "../classification/group.js";
 import type { ClassifiableChange } from "../classification/types.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
 import { serializeSnippetRef } from "./markup.js";
 import {
   CategoryExplanationError,
@@ -11,7 +11,7 @@ import {
   explainCategories,
 } from "./orchestrate.js";
 
-function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessResult {
+function envelope(structuredOutput: unknown, sessionId: string): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -86,7 +86,7 @@ describe("explainCategories", () => {
       categorySets,
     };
 
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       // Distinguish explain calls (contain the category description) from reviews
       // (contain "Reply with approved") by the prompt content.
       if (promptText.includes("Reply with approved")) {
@@ -99,7 +99,7 @@ describe("explainCategories", () => {
       );
     });
 
-    const results = await explainCategories(input, { runClaudeProcess });
+    const results = await explainCategories(input, { runAgentProcess });
 
     expect(results).toHaveLength(2);
     expect(results[0]?.category).toBe(categoryA);
@@ -129,7 +129,7 @@ describe("explainCategories", () => {
     };
 
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       call++;
       if (call === 1) {
         // Initial explanation: references only the production change, not the test one.
@@ -153,9 +153,9 @@ describe("explainCategories", () => {
       return envelope({ approved: true, issues: [] }, "review-1");
     });
 
-    const results = await explainCategories(input, { runClaudeProcess });
+    const results = await explainCategories(input, { runAgentProcess });
 
-    expect(runClaudeProcess).toHaveBeenCalledTimes(3);
+    expect(runAgentProcess).toHaveBeenCalledTimes(3);
     expect(results[0]?.markdown).toContain("src/fetch.ts");
     expect(results[0]?.markdown).toContain("src/fetch.test.ts");
   });
@@ -186,7 +186,7 @@ describe("explainCategories", () => {
       categorySets: [{ category, production: [primary, secondary], test: [] }],
     };
 
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("Reply with approved")) {
         return envelope({ approved: true, issues: [] }, "review-session");
       }
@@ -194,13 +194,13 @@ describe("explainCategories", () => {
       return envelope({ markdown: `explanation\n\n${refFor(primary)}` }, "explain-session");
     });
 
-    const results = await explainCategories(input, { runClaudeProcess });
+    const results = await explainCategories(input, { runAgentProcess });
 
     expect(results).toHaveLength(1);
     expect(results[0]?.markdown).toContain("src/owned.ts");
     // Exactly explain + review, with no coverage-repair round in between: a broken relaxation
     // would force a snippet for the un-referenced secondary and add (or throw on) a repair call.
-    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+    expect(runAgentProcess).toHaveBeenCalledTimes(2);
   });
 
   it("populates files from primary changes only, marking test-only paths", async () => {
@@ -227,7 +227,7 @@ describe("explainCategories", () => {
       categorySets: [{ category, production: [primary, secondary], test: [primaryTest] }],
     };
 
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("Reply with approved")) {
         return envelope({ approved: true, issues: [] }, "review-session");
       }
@@ -237,7 +237,7 @@ describe("explainCategories", () => {
       );
     });
 
-    const results = await explainCategories(input, { runClaudeProcess });
+    const results = await explainCategories(input, { runAgentProcess });
 
     // The secondary change's file (src/shared.ts) is excluded; the test change is marked.
     expect(results[0]?.files).toEqual([
@@ -267,7 +267,7 @@ describe("explainCategories", () => {
     };
 
     const info = vi.fn();
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("Reply with approved")) {
         throw new Error("review must be skipped for an all-secondary category");
       }
@@ -275,14 +275,14 @@ describe("explainCategories", () => {
     });
 
     const results = await explainCategories(input, {
-      runClaudeProcess,
+      runAgentProcess,
       logger: { info, debug: vi.fn() },
     });
 
     expect(results).toHaveLength(1);
     expect(results[0]?.markdown).toContain("catref");
     // Only the explain call ran — no review.
-    expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+    expect(runAgentProcess).toHaveBeenCalledTimes(1);
     const lines = info.mock.calls.map((call) => String(call[0]));
     expect(
       lines.some((line) => line.includes("All secondary") && /skipping review/.test(line)),
@@ -317,7 +317,7 @@ describe("explainCategories", () => {
       categorySets,
     };
 
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("Reply with approved")) {
         return envelope({ approved: true, issues: [] }, "review-session");
       }
@@ -335,7 +335,7 @@ describe("explainCategories", () => {
       );
     });
 
-    const results = await explainCategories(input, { runClaudeProcess });
+    const results = await explainCategories(input, { runAgentProcess });
 
     expect(results[0]?.markdown).toContain(FIXED_DIAGRAM);
     expect(results[0]?.markdown).not.toContain(INVALID_DIAGRAM);
@@ -360,7 +360,7 @@ describe("explainCategories", () => {
       categorySets,
     };
 
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("Reply with approved")) {
         return envelope({ approved: true, issues: [] }, "review-session");
       }
@@ -378,14 +378,14 @@ describe("explainCategories", () => {
       );
     });
 
-    const results = await explainCategories(input, { runClaudeProcess });
+    const results = await explainCategories(input, { runAgentProcess });
 
     expect(results[0]?.markdown).not.toContain("```mermaid");
     expect(results[0]?.markdown).not.toContain(INVALID_DIAGRAM);
     expect(results[0]?.markdown).toContain("omitted");
   });
 
-  it("processes categories concurrently, capped by the shared claude process limiter", async () => {
+  it("processes categories concurrently, capped by the shared agent process limiter", async () => {
     const categories: CategoryChangeSet[] = Array.from({ length: 5 }, (_, i) =>
       categorySet(
         { id: "c1", name: `Category ${i}`, description: `Description ${i}`, attention: "normal" },
@@ -405,7 +405,7 @@ describe("explainCategories", () => {
 
     let inFlight = 0;
     let peak = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       inFlight++;
       peak = Math.max(peak, inFlight);
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -423,7 +423,7 @@ describe("explainCategories", () => {
       return envelope({ markdown: `explanation\n\n${ref}` }, "explain-session");
     });
 
-    const results = await explainCategories(input, { runClaudeProcess });
+    const results = await explainCategories(input, { runAgentProcess });
 
     expect(results).toHaveLength(5);
     expect(peak).toBeLessThanOrEqual(3);
@@ -456,7 +456,7 @@ describe("explainCategories", () => {
       changeOwners: ownersFor(categorySets),
       categorySets,
     };
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("Reply with approved")) {
         return envelope({ approved: true, issues: [] }, "review-session");
       }
@@ -470,7 +470,7 @@ describe("explainCategories", () => {
     });
     const info = vi.fn();
 
-    await explainCategories(input, { runClaudeProcess, logger: { info, debug: vi.fn() } });
+    await explainCategories(input, { runAgentProcess, logger: { info, debug: vi.fn() } });
 
     const lines = info.mock.calls.map((call) => String(call[0]));
     expect(lines).toContain('explaining category "A" (1 change(s))...');
@@ -509,7 +509,7 @@ describe("explainCategories", () => {
       changeOwners: ownersFor(categorySets),
       categorySets,
     };
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("First category.")) {
         throw new Error("boom A");
       }
@@ -519,7 +519,7 @@ describe("explainCategories", () => {
       return envelope({ approved: true, issues: [] }, "review-session");
     });
 
-    const error = await explainCategories(input, { runClaudeProcess }).catch((e: unknown) => e);
+    const error = await explainCategories(input, { runAgentProcess }).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ExplainCategoriesError);
     const explainError = error as ExplainCategoriesError;
@@ -559,7 +559,7 @@ describe("explainCategories", () => {
       changeOwners: ownersFor(categorySets),
       categorySets,
     };
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("Reply with approved")) {
         return envelope({ approved: true, issues: [] }, "review-session");
       }
@@ -571,7 +571,7 @@ describe("explainCategories", () => {
     const info = vi.fn();
 
     const results = await explainCategories(input, {
-      runClaudeProcess,
+      runAgentProcess,
       logger: { info, debug: vi.fn() },
     });
 
@@ -610,7 +610,7 @@ describe("explainCategories", () => {
       changeOwners: ownersFor(categorySets),
       categorySets,
     };
-    const runClaudeProcess = vi.fn(async (_args: string[], promptText: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], promptText: string) => {
       if (promptText.includes("First category.")) {
         throw new Error("boom A");
       }
@@ -623,7 +623,7 @@ describe("explainCategories", () => {
       );
     });
 
-    const error = (await explainCategories(input, { runClaudeProcess }).catch(
+    const error = (await explainCategories(input, { runAgentProcess }).catch(
       (e: unknown) => e,
     )) as ExplainCategoriesError;
 

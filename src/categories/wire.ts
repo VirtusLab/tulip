@@ -1,4 +1,4 @@
-import type { JsonSchema } from "../claude/schema.js";
+import type { JsonSchema } from "../agent/schema.js";
 
 /**
  * Raw wire types and JSON schemas for talking to the category-reviewing session (see

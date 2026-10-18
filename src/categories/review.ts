@@ -1,6 +1,6 @@
-import { ClaudeOutputError } from "../claude/errors.js";
-import type { RunnerDeps } from "../claude/runner.js";
-import { resumeSession, runSession } from "../claude/session.js";
+import { AgentOutputError } from "../agent/errors.js";
+import type { RunnerDeps } from "../agent/runner.js";
+import { resumeSession, runSession } from "../agent/session.js";
 import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { type CategoryInputFile, GENERATE_CATEGORIES_SCHEMA } from "./generate.js";
@@ -34,7 +34,7 @@ export interface CategoryReviewLoopResult {
 
 /**
  * Mirrors src/explanations/review.ts's reviewAndAmend for phase 1: reviews `input.categories`
- * once with a fresh sonnet session (self-containment, granularity, no standalone tests/docs
+ * once with a fresh balanced-tier session (self-containment, granularity, no standalone tests/docs
  * category, sensible attention ratings — docs/adr/0003/0010). If it raises issues, resumes the
  * category-generating session for a full revised list and reassigns ids (docs/adr/0005 — ids are
  * always code-assigned, in presentation order, never authored by the model). The amended list is
@@ -82,7 +82,7 @@ export async function reviewAndAmendCategories(
   );
 
   if (amended.result.categories.length === 0) {
-    throw new ClaudeOutputError("claude returned an empty amended category list");
+    throw new AgentOutputError("the agent returned an empty amended category list");
   }
 
   return { categories: assignCategoryIds(amended.result.categories), sessionId: amended.sessionId };

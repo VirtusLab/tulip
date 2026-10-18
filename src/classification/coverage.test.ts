@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentProcessResult } from "../agent/exec.js";
 import type { Category } from "../categories/types.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
 import { createLogger } from "../logging/logger.js";
 import type { ResolvedChange } from "./classify.js";
 import {
@@ -25,7 +25,7 @@ function change(id: string): ClassifiableChange {
   };
 }
 
-function envelope(structuredOutput: unknown, sessionId: string): ClaudeProcessResult {
+function envelope(structuredOutput: unknown, sessionId: string): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -137,14 +137,14 @@ describe("verifyAndRepairCoverage", () => {
     const resolved = new Map<string, ResolvedChange>([
       ["c1", { kind: "categorized", assignments: [{ category: "c1", codeType: "production" }] }],
     ]);
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => envelope({}, "x"));
 
     const result = await verifyAndRepairCoverage(changes, changesById, resolved, baseState(), {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(result).toBe(resolved);
-    expect(runClaudeProcess).not.toHaveBeenCalled();
+    expect(runAgentProcess).not.toHaveBeenCalled();
   });
 
   it("re-asks the classifier for just the missing changes and repairs coverage", async () => {
@@ -154,7 +154,7 @@ describe("verifyAndRepairCoverage", () => {
       ["c1", { kind: "categorized", assignments: [{ category: "c1", codeType: "production" }] }],
       // c2 missing
     ]);
-    const runClaudeProcess = vi.fn(async (_args: string[], input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], input: string) => {
       expect(input).toContain("c2");
       expect(input).not.toContain("id: c1");
       return envelope(
@@ -169,14 +169,14 @@ describe("verifyAndRepairCoverage", () => {
 
     const state = baseState();
     const result = await verifyAndRepairCoverage(changes, changesById, resolved, state, {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(result.get("c2")).toEqual({
       kind: "categorized",
       assignments: [{ category: "c1", codeType: "test" }],
     });
-    expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+    expect(runAgentProcess).toHaveBeenCalledTimes(1);
     expect(state.classifierSessionId).toBe("classifier-session-2");
   });
 
@@ -184,7 +184,7 @@ describe("verifyAndRepairCoverage", () => {
     const changes = [change("c1"), change("c2")];
     const changesById = new Map(changes.map((c) => [c.id, c]));
     let call = 0;
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) => {
       call++;
       // First repair covers only c1; the second covers c2.
       const changeId = call === 1 ? "c1" : "c2";
@@ -200,7 +200,7 @@ describe("verifyAndRepairCoverage", () => {
     const write = vi.fn();
 
     await verifyAndRepairCoverage(changes, changesById, new Map(), baseState(), {
-      runClaudeProcess,
+      runAgentProcess,
       logger: createLogger({ write }),
     });
 
@@ -216,7 +216,7 @@ describe("verifyAndRepairCoverage", () => {
     const resolved = new Map<string, ResolvedChange>([
       ["c1", { kind: "categorized", assignments: [{ category: "c99", codeType: "production" }] }],
     ]);
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope(
         {
           classifications: [
@@ -228,37 +228,37 @@ describe("verifyAndRepairCoverage", () => {
     );
 
     const result = await verifyAndRepairCoverage(changes, changesById, resolved, baseState(), {
-      runClaudeProcess,
+      runAgentProcess,
     });
 
     expect(result.get("c1")).toEqual({
       kind: "categorized",
       assignments: [{ category: "c1", codeType: "production" }],
     });
-    expect(runClaudeProcess).toHaveBeenCalledTimes(1);
+    expect(runAgentProcess).toHaveBeenCalledTimes(1);
   });
 
   it("throws IncompleteCoverageError listing uncovered changes after 3 repair attempts", async () => {
     const changes = [change("c1")];
     const changesById = new Map(changes.map((c) => [c.id, c]));
     const resolved = new Map<string, ResolvedChange>();
-    const runClaudeProcess = vi.fn(async (_args: string[], _input: string) =>
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ classifications: [] }, "s"),
     );
 
     await expect(
-      verifyAndRepairCoverage(changes, changesById, resolved, baseState(), { runClaudeProcess }),
+      verifyAndRepairCoverage(changes, changesById, resolved, baseState(), { runAgentProcess }),
     ).rejects.toThrow(IncompleteCoverageError);
-    expect(runClaudeProcess).toHaveBeenCalledTimes(3);
+    expect(runAgentProcess).toHaveBeenCalledTimes(3);
   });
 
   it("includes uncovered change ranges in the thrown error", async () => {
     const changes = [change("c1")];
     const changesById = new Map(changes.map((c) => [c.id, c]));
-    const runClaudeProcess = vi.fn(async () => envelope({ classifications: [] }, "s"));
+    const runAgentProcess = vi.fn(async () => envelope({ classifications: [] }, "s"));
 
     await expect(
-      verifyAndRepairCoverage(changes, changesById, new Map(), baseState(), { runClaudeProcess }),
+      verifyAndRepairCoverage(changes, changesById, new Map(), baseState(), { runAgentProcess }),
     ).rejects.toThrow(/src\/fetch\.ts.*head 1-1/);
   });
 });

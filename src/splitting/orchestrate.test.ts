@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentProcessResult } from "../agent/exec.js";
+import { createUsageLedger } from "../agent/usage.js";
 import type { Category } from "../categories/types.js";
-import type { ClaudeProcessResult } from "../claude/exec.js";
-import { createUsageLedger } from "../claude/usage.js";
 import type { Change, DiffSide, FileDiff, ParsedDiff } from "../diff/change.js";
 import type { Logger } from "../logging/logger.js";
 import { splitLargeChanges } from "./orchestrate.js";
@@ -35,7 +35,7 @@ function file(changes: Change[], overrides: Partial<FileDiff> = {}): FileDiff {
   };
 }
 
-function envelope(output: SplitResponse): ClaudeProcessResult {
+function envelope(output: SplitResponse): AgentProcessResult {
   return {
     stdout: JSON.stringify({
       result: "done",
@@ -53,22 +53,22 @@ function mockProcess(output: SplitResponse) {
 
 describe("splitLargeChanges", () => {
   it("returns the diff untouched when there are no candidates", async () => {
-    const runClaudeProcess = vi.fn();
+    const runAgentProcess = vi.fn();
     const diff: ParsedDiff = { files: [file([change("src/a.ts", "head", 1, 3)])] };
-    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
+    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess });
     expect(result).toBe(diff);
-    expect(runClaudeProcess).not.toHaveBeenCalled();
+    expect(runAgentProcess).not.toHaveBeenCalled();
   });
 
   it("splits a candidate into segments and leaves non-candidates and order intact", async () => {
     const big = change("src/a.ts", "head", 1, 130);
     const small = change("src/a.ts", "head", 200, 2);
     const diff: ParsedDiff = { files: [file([big, small])] };
-    const runClaudeProcess = mockProcess({
+    const runAgentProcess = mockProcess({
       splits: [{ changeId: big.id, boundaries: [{ side: "head", line: 50 }] }],
     });
 
-    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
+    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess });
 
     expect(result.files[0]?.changes.map((c) => c.id)).toEqual([
       "src/a.ts:head:1-49",
@@ -80,9 +80,9 @@ describe("splitLargeChanges", () => {
   it("passes a candidate through whole for an empty split list", async () => {
     const big = change("src/a.ts", "head", 1, 130);
     const diff: ParsedDiff = { files: [file([big])] };
-    const runClaudeProcess = mockProcess({ splits: [{ changeId: big.id, boundaries: [] }] });
+    const runAgentProcess = mockProcess({ splits: [{ changeId: big.id, boundaries: [] }] });
 
-    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
+    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess });
 
     expect(result.files[0]?.changes.map((c) => c.id)).toEqual([big.id]);
   });
@@ -90,14 +90,14 @@ describe("splitLargeChanges", () => {
   it("ignores an unknown changeId in the response", async () => {
     const big = change("src/a.ts", "head", 1, 130);
     const diff: ParsedDiff = { files: [file([big])] };
-    const runClaudeProcess = mockProcess({
+    const runAgentProcess = mockProcess({
       splits: [
         { changeId: "src/nope.ts:head:1-2", boundaries: [{ side: "head", line: 99 }] },
         { changeId: big.id, boundaries: [{ side: "head", line: 70 }] },
       ],
     });
 
-    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
+    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess });
 
     expect(result.files[0]?.changes.map((c) => c.id)).toEqual([
       "src/a.ts:head:1-69",
@@ -112,7 +112,7 @@ describe("splitLargeChanges", () => {
     const changes = Array.from({ length: 21 }, (_, i) => change(`src/f${i}.ts`, "head", 1, 130));
     const diff: ParsedDiff = { files: changes.map((c) => file([c])) };
     let call = 0;
-    const runClaudeProcess = vi.fn(async () => {
+    const runAgentProcess = vi.fn(async () => {
       call++;
       if (call === 1) {
         return envelope({
@@ -126,7 +126,7 @@ describe("splitLargeChanges", () => {
 
     const result = await splitLargeChanges(
       { diff, categories: CATEGORIES },
-      { runClaudeProcess, logger },
+      { runAgentProcess, logger },
     );
 
     // Batch A's first change was split...
@@ -136,7 +136,7 @@ describe("splitLargeChanges", () => {
     ]);
     // ...and batch B's change (the 21st file) is left whole despite the failure.
     expect(result.files[20]?.changes.map((c) => c.id)).toEqual(["src/f20.ts:head:1-130"]);
-    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+    expect(runAgentProcess).toHaveBeenCalledTimes(2);
     expect(messages.some((m) => m.includes("failed") && m.includes("boom"))).toBe(true);
   });
 
@@ -152,14 +152,14 @@ describe("splitLargeChanges", () => {
         }),
       ],
     };
-    const runClaudeProcess = mockProcess({
+    const runAgentProcess = mockProcess({
       splits: [
         { changeId: baseSide.id, boundaries: [{ side: "base", line: 40 }] },
         { changeId: headSide.id, boundaries: [{ side: "head", line: 60 }] },
       ],
     });
 
-    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
+    const result = await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess });
     const rebuilt = result.files[0];
 
     expect(rebuilt?.previousPath).toBe("src/old.ts");
@@ -180,11 +180,11 @@ describe("splitLargeChanges", () => {
       head: { range: { start: 1, end: 70 }, lines: Array.from({ length: 70 }, () => "+y") },
     };
     const diff: ParsedDiff = { files: [file([modification])] };
-    const runClaudeProcess = mockProcess({
+    const runAgentProcess = mockProcess({
       splits: [{ changeId: modification.id, boundaries: [{ side: "head", line: 30 }] }],
     });
 
-    return splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess }).then(
+    return splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess }).then(
       (result) => {
         // Head cut before line 30: the deletions stay with head 1-29 (a modification), head 30-70
         // becomes a pure addition.
@@ -199,12 +199,12 @@ describe("splitLargeChanges", () => {
   it("records the split session's usage under the threaded ledger", async () => {
     const big = change("src/a.ts", "head", 1, 130);
     const diff: ParsedDiff = { files: [file([big])] };
-    const runClaudeProcess = mockProcess({
+    const runAgentProcess = mockProcess({
       splits: [{ changeId: big.id, boundaries: [{ side: "head", line: 50 }] }],
     });
     const usage = createUsageLedger();
 
-    await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess, usage });
+    await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess, usage });
 
     expect(usage.rows()).toEqual([
       { model: "sonnet", tokens: { input: 10, output: 5, cacheWrite: 0, cacheRead: 0 } },
@@ -216,10 +216,7 @@ describe("splitLargeChanges", () => {
     const messages: string[] = [];
     const logger: Logger = { info: (m) => messages.push(m), debug: () => {} };
 
-    await splitLargeChanges(
-      { diff, categories: CATEGORIES },
-      { runClaudeProcess: vi.fn(), logger },
-    );
+    await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess: vi.fn(), logger });
 
     expect(messages).toEqual(["no changes above the split threshold (120 lines)"]);
   });
@@ -229,7 +226,7 @@ describe("splitLargeChanges", () => {
     const first = change("src/a.ts", "head", 1, 130);
     const second = change("src/b.ts", "head", 1, 130);
     const diff: ParsedDiff = { files: [file([first]), file([second])] };
-    const runClaudeProcess = mockProcess({
+    const runAgentProcess = mockProcess({
       splits: [
         { changeId: first.id, boundaries: [{ side: "head", line: 50 }] },
         { changeId: second.id, boundaries: [] },
@@ -238,7 +235,7 @@ describe("splitLargeChanges", () => {
     const messages: string[] = [];
     const logger: Logger = { info: (m) => messages.push(m), debug: () => {} };
 
-    await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess, logger });
+    await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess, logger });
 
     expect(messages).toEqual([
       "splitting 2 large change(s) in 1 batch(es)...",
@@ -250,11 +247,11 @@ describe("splitLargeChanges", () => {
     // 25 candidates of ~1.2k chars each exceed the 20k char cap -> two batches -> two sessions.
     const changes = Array.from({ length: 25 }, (_, i) => change(`src/f${i}.ts`, "head", 1, 130));
     const diff: ParsedDiff = { files: changes.map((c) => file([c])) };
-    const runClaudeProcess = mockProcess({ splits: [] });
+    const runAgentProcess = mockProcess({ splits: [] });
 
-    await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
+    await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess });
 
-    expect(runClaudeProcess).toHaveBeenCalledTimes(2);
+    expect(runAgentProcess).toHaveBeenCalledTimes(2);
   });
 
   it("runs the batches concurrently", async () => {
@@ -267,7 +264,7 @@ describe("splitLargeChanges", () => {
     const allStarted = new Promise<void>((resolve) => {
       releaseAll = resolve;
     });
-    const runClaudeProcess = vi.fn(async () => {
+    const runAgentProcess = vi.fn(async () => {
       started++;
       if (started === 2) {
         releaseAll();
@@ -276,7 +273,7 @@ describe("splitLargeChanges", () => {
       return envelope({ splits: [] });
     });
 
-    await splitLargeChanges({ diff, categories: CATEGORIES }, { runClaudeProcess });
+    await splitLargeChanges({ diff, categories: CATEGORIES }, { runAgentProcess });
 
     expect(started).toBe(2);
   });

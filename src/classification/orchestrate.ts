@@ -1,5 +1,5 @@
+import type { RunnerDeps } from "../agent/runner.js";
 import { type Category, sortByAttention } from "../categories/types.js";
-import type { RunnerDeps } from "../claude/runner.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { type AfterBatchHook, classifyInBatches, type ResolvedChange } from "./classify.js";
 import { verifyAndRepairCoverage } from "./coverage.js";
@@ -37,7 +37,7 @@ export interface ClassifyChangesResult {
 }
 
 /**
- * Runs phase 2 end to end: classifies every change in `diff` in batches (via haiku, a fresh
+ * Runs phase 2 end to end: classifies every change in `diff` in batches (fast tier, a fresh
  * session per batch — docs/adr/0025), resolving
  * each batch's "none" replies through the phase-1 escape hatch (see ./escape-hatch.ts) *before*
  * the next batch is asked — so a category accepted while resolving batch N is already part of
