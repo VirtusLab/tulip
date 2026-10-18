@@ -1,6 +1,6 @@
 {
   "name": "@virtuslab/tulip",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Explains GitHub and GitLab pull requests in a human-friendly way, using LLMs.",
   "license": "Apache-2.0",
   "author": "Adam Warski",
