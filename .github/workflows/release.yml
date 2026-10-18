@@ -27,7 +27,9 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm lint
-      - run: npm publish
-      - run: gh release create "$GITHUB_REF_NAME" --generate-notes
+      # Before publishing, so a failed publish still leaves a release; skipped if one exists, so
+      # the run can be re-run.
+      - run: gh release view "$GITHUB_REF_NAME" || gh release create "$GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+      - run: npm publish

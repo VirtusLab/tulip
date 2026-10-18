@@ -27,7 +27,7 @@
     "node": ">=24"
   },
   "bin": {
-    "tulip": "./dist/cli/index.js"
+    "tulip": "dist/cli/index.js"
   },
   "files": [
     "dist"
