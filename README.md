@@ -2,8 +2,9 @@
 
 [![npm](https://img.shields.io/npm/v/@virtuslab/tulip)](https://www.npmjs.com/package/@virtuslab/tulip)
 
-Tulip explains GitHub PRs - categorizing and prioritizing the changes - and
-presenting them on a web page as prose, diagrams, and code.
+Tulip explains GitHub pull requests and GitLab merge requests - categorizing and
+prioritizing the changes - and presenting them on a web page as prose, diagrams,
+and code.
 
 Every code change appears *somewhere* in the explanation, so nothing slips past
 you. Yet you don't have to wade through it all: instead of digging through piles
@@ -35,9 +36,9 @@ Tulip fetches the PR and runs it through a few LLM passes, each using a model
 sized to the job (Haiku, Sonnet, or Opus):
 
 1. **Fetch & check out.** Get the PR (title, description, diff) via `gh` (or the
-   GitHub API), check out its head revision, and write the full diff plus the
-   before-versions of changed files into the checkout, so later passes can read
-   the real code.
+   GitHub API) — or, for a GitLab merge request, via the GitLab API — check out
+   its head revision, and write the full diff plus the before-versions of changed
+   files into the checkout, so later passes can read the real code.
 2. **Categorize** (Sonnet). Split the changes into a few self-contained groups by
    concern — tests and docs ride along with the code they belong to. Each group
    gets an *attention* rating (Read closely / Read through / Skim); groups are
@@ -77,19 +78,33 @@ to open.
 - Optionally, the [`gh`](https://cli.github.com/) CLI, logged in — used to fetch
   PR data when available; Tulip falls back to the GitHub REST API otherwise
   (set `GITHUB_TOKEN` to raise the unauthenticated rate limit)
+- For a private GitLab project, a `GITLAB_TOKEN` environment variable holding a
+  personal access token with the `read_api` and `read_repository` scopes
 
 **Private repositories** also need credentials for `git fetch`. If your git
 config rewrites the host to SSH (`insteadOf`), git uses your SSH key and nothing
 else applies. Otherwise git uses the first credential helper that answers: your
 own setup first (such as the OS keychain or `gh auth setup-git`), then a
-logged-in `gh`, then `GITHUB_TOKEN`. If your own helper answers with a
-credential the host rejects, fix or clear that credential. Tulip fails with a
+logged-in `gh`, then `GITHUB_TOKEN`; for GitLab, `GITLAB_TOKEN` instead of `gh`
+and `GITHUB_TOKEN`. After a successful fetch, git may store that token with your
+own credential helper (such as the OS keychain). If your own helper answers with
+a credential the host rejects, fix or clear that credential. Tulip fails with a
 hint instead of asking for a username and password on the terminal.
 
 Self-hosted **GitHub Enterprise Server** URLs (e.g.
 `https://git.example.com/owner/repo/pull/7`) work too. Authenticate that host
 once with `gh auth login --hostname git.example.com`; the REST fallback uses the
 host's `/api/v3` endpoint with `GITHUB_TOKEN`.
+
+**GitLab merge requests** work on gitlab.com and self-hosted GitLab, nested groups
+included (e.g. `https://git.example.com/group/sub/project/-/merge_requests/7`).
+Use the merge request's own URL: one copied from a tab such as `.../diffs`, or one
+with a `?query` or `#fragment`, is not accepted. Tulip reads merge requests
+through the GitLab REST API (no `glab` needed), sending `GITLAB_TOKEN` when it is
+set (only to the merge request's host); public projects work without it. If
+GitLab truncated a very large merge request's diff at its diff limits, Tulip
+stops with an error rather than explaining part of it. `--serve` is GitHub-only
+for now.
 
 ## Install
 
@@ -111,6 +126,7 @@ Example:
 
 ```sh
 tulip https://github.com/owner/repo/pull/123
+tulip https://gitlab.com/group/project/-/merge_requests/45
 ```
 
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`. Run `tulip
@@ -129,6 +145,9 @@ tulip <PR URL> --serve
 `--no-open`), adding a box under each category. Type a note and click **Post to
 GitHub** to post it as a PR comment, prefixed with the category name. Each box
 posts its own comment. Ctrl+C stops the server.
+
+Serve mode supports GitHub PRs only; with a GitLab merge request URL, Tulip
+stops with an error before fetching anything.
 
 This needs an authenticated `gh` CLI for the PR's host (self-hosted included) —
 `gh auth login --hostname <host>`; Tulip checks this before starting. Comments

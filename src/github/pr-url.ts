@@ -1,18 +1,9 @@
-/** A GitHub PR, identified by its host, repository and PR number. `host` is the URL's hostname
- * (`github.com`, or a self-hosted GitHub Enterprise host like `git.xyz.com`), used to fetch and
- * clone against the right server. */
-export interface PrRef {
-  host: string;
-  owner: string;
-  repo: string;
-  number: number;
-}
+import type { PrRef } from "../forge/types.js";
+import { HOST_PATTERN, isValidRepoPath, NUMBER_PATTERN } from "../forge/url-parts.js";
 
-// The host is a bare hostname with an optional port. Userinfo (`user@host`) is refused: it would
-// let `https://github.com@evil.example.com/...` read as a github.com link while every request,
-// with the operator's credentials, went to evil.example.com.
-const GITHUB_PR_URL_PATTERN =
-  /^https:\/\/(?<host>[A-Za-z0-9.-]+(?::\d+)?)\/(?<owner>[^/\s]+)\/(?<repo>[^/\s]+)\/pull\/(?<number>\d+)\/?$/;
+const GITHUB_PR_URL_PATTERN = new RegExp(
+  `^https://(?<host>${HOST_PATTERN})/(?<repoPath>[^/]+/[^/]+)/pull/(?<number>${NUMBER_PATTERN})/?$`,
+);
 
 /**
  * Parses a GitHub PR URL into its parts. Accepts any host with the GitHub `/pull/<n>` shape — both
@@ -20,15 +11,25 @@ const GITHUB_PR_URL_PATTERN =
  * `https://git.xyz.com/owner/repo/pull/7`. The host isn't verified to be GitHub (nothing in the
  * URL distinguishes a self-hosted GitHub from another forge with the same path shape).
  */
-export function parsePrUrl(url: string): PrRef | undefined {
+export function parseGitHubPrUrl(url: string): PrRef | undefined {
   const groups = GITHUB_PR_URL_PATTERN.exec(url)?.groups;
-  if (!groups) {
+  if (!groups?.host || !groups.repoPath || !isValidRepoPath(groups.repoPath)) {
     return undefined;
   }
   return {
-    host: groups.host ?? "",
-    owner: groups.owner ?? "",
-    repo: groups.repo ?? "",
+    forge: "github",
+    host: groups.host,
+    repoPath: groups.repoPath,
     number: Number(groups.number),
   };
+}
+
+/** The PR's web page, e.g. `https://github.com/owner/repo/pull/7`. */
+export function githubPrUrl(pr: PrRef): string {
+  return `https://${pr.host}/${pr.repoPath}/pull/${pr.number}`;
+}
+
+/** A short reference to the PR, e.g. `owner/repo#7`. */
+export function githubPrLabel(pr: PrRef): string {
+  return `${pr.repoPath}#${pr.number}`;
 }

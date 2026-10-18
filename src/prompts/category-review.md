@@ -1,4 +1,4 @@
-You are reviewing the category split proposed for a GitHub pull request, before it's
+You are reviewing the category split proposed for a pull request, before it's
 used to classify and explain the PR's changes to a human reviewer.
 
 PR title: {{prTitle}}

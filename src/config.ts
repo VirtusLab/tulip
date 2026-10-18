@@ -17,7 +17,7 @@ export const config = {
      * malicious PR's own commit message) to an arbitrary path — `claude`'s prefix-based
      * `--allowedTools`/`--disallowedTools` matching can't block a flag that may appear at any
      * argv position (see docs/adr/0002). Sessions instead rely on their default Read/Grep/Glob
-     * access to the checked-out working tree (see src/github/checkout.ts) — no Bash grant, no
+     * access to the checked-out working tree (see src/checkout/checkout.ts) — no Bash grant, no
      * vector. Kept as a list (not removed) so it stays the one place to configure this, and
      * `buildArgs` (src/claude/runner.ts) omits `--allowedTools` entirely when it's empty. */
     allowedTools: [],
@@ -43,10 +43,10 @@ export const config = {
   timeouts: {
     /** Single `claude -p` invocation — see src/claude/exec.ts. */
     claudeProcessMs: 10 * 60 * 1000,
-    /** Single `gh`/`git` subcommand — see src/github/exec.ts. */
-    githubCommandMs: 2 * 60 * 1000,
-    /** Single GitHub REST API request (the `gh`-unavailable fallback) — see src/github/pr-fetcher.ts. */
-    githubFetchMs: 60 * 1000,
+    /** Single `gh`/`git` subcommand — see src/process/exec.ts. */
+    forgeCommandMs: 2 * 60 * 1000,
+    /** Single forge REST API request — see src/forge/http.ts. */
+    forgeApiFetchMs: 60 * 1000,
   },
 
   /** Retry/cap counts and size limits that bound otherwise-unbounded loops or prompt sizes. */
@@ -88,12 +88,15 @@ export const config = {
     /** Per-side file size above which a referenced file's content isn't embedded for
      * client-side context expansion — see src/rendering/file-diffs.ts. */
     embedSizeCapBytes: 200 * 1024,
-    /** Safety net against an unbounded pagination loop when fetching a PR's file list over the
-     * GitHub REST API — see src/github/pr-fetcher.ts. */
+    /** Safety net against an unbounded pagination loop when fetching a PR's file list — see
+     * `getAllPages` in src/forge/http.ts. */
     maxPrFilesSafetyNet: 3000,
+    /** Attempts at fetching a PR's metadata while pushes keep changing its revisions — see
+     * src/forge/pr-source.ts. */
+    maxPrFetchAttempts: 3,
     /** Commit depth fetched for each of the checkout's base/head revisions — enough for `git
      * log`/`git blame` in a claude session to see real history, not just the tip commit — see
-     * src/github/checkout.ts. */
+     * src/checkout/checkout.ts. */
     checkoutFetchDepth: 50,
   },
 

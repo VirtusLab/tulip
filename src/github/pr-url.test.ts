@@ -1,34 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { parsePrUrl } from "./pr-url.js";
+import { parseGitHubPrUrl } from "./pr-url.js";
 
-describe("parsePrUrl", () => {
-  it("parses host, owner, repo and number from a github.com URL", () => {
-    expect(parsePrUrl("https://github.com/owner/repo/pull/123")).toEqual({
+describe("parseGitHubPrUrl", () => {
+  it("parses host, repo path and number from a github.com URL", () => {
+    expect(parseGitHubPrUrl("https://github.com/owner/repo/pull/123")).toEqual({
+      forge: "github",
       host: "github.com",
-      owner: "owner",
-      repo: "repo",
+      repoPath: "owner/repo",
       number: 123,
     });
   });
 
   it("parses a self-hosted GitHub Enterprise URL", () => {
-    expect(parsePrUrl("https://git.xyz.com/owner/repo/pull/7")).toEqual({
+    expect(parseGitHubPrUrl("https://git.xyz.com/owner/repo/pull/7")).toEqual({
+      forge: "github",
       host: "git.xyz.com",
-      owner: "owner",
-      repo: "repo",
+      repoPath: "owner/repo",
       number: 7,
     });
   });
 
   it("accepts a port in a self-hosted host", () => {
-    expect(parsePrUrl("https://git.xyz.com:8443/owner/repo/pull/7")?.host).toBe("git.xyz.com:8443");
+    expect(parseGitHubPrUrl("https://git.xyz.com:8443/owner/repo/pull/7")?.host).toBe(
+      "git.xyz.com:8443",
+    );
   });
 
   it("accepts a trailing slash", () => {
-    expect(parsePrUrl("https://github.com/owner/repo/pull/123/")).toEqual({
+    expect(parseGitHubPrUrl("https://github.com/owner/repo/pull/123/")).toEqual({
+      forge: "github",
       host: "github.com",
-      owner: "owner",
-      repo: "repo",
+      repoPath: "owner/repo",
       number: 123,
     });
   });
@@ -38,8 +40,13 @@ describe("parsePrUrl", () => {
     // Looks like github.com but `github.com` is userinfo; the real host is evil.example.com.
     "https://github.com@evil.example.com/owner/repo/pull/1",
     "https://github.com/owner/repo",
+    "https://github.com/owner/repo/pull/0",
+    "https://github.com/a/b?x=1/pull/1",
+    "https://host/../repo/pull/1",
+    "https://github.com/a/%2e%2e/pull/1",
+    "https://gitlab.com/group/project/-/merge_requests/1",
     "not-a-url",
   ])("returns undefined for an invalid URL: %s", (url) => {
-    expect(parsePrUrl(url)).toBeUndefined();
+    expect(parseGitHubPrUrl(url)).toBeUndefined();
   });
 });
