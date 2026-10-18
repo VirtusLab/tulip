@@ -1,8 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { type AgentId, isAgentId } from "../agent/backend.js";
-import { isPlainObject } from "../agent/schema.js";
+import { type AgentId, isAgentId } from "../agent/types.js";
 
 /** Choices tulip remembers between runs. */
 export interface UserSettings {
@@ -26,7 +25,7 @@ export function userSettingsPath(
 }
 
 /** The saved settings; a missing, unreadable, or malformed file — or an unknown agent id —
- * reads as "nothing saved", so the user is simply asked again. */
+ * reads as "nothing saved". */
 export async function readUserSettings(path: string): Promise<UserSettings> {
   const { agent } = await readSettingsObject(path);
   return typeof agent === "string" && isAgentId(agent) ? { agent } : {};
@@ -43,7 +42,9 @@ export async function saveUserSettings(path: string, settings: UserSettings): Pr
 async function readSettingsObject(path: string): Promise<Record<string, unknown>> {
   try {
     const raw: unknown = JSON.parse(await readFile(path, "utf8"));
-    return isPlainObject(raw) ? raw : {};
+    return typeof raw === "object" && raw !== null && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
   } catch {
     return {};
   }

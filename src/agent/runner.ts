@@ -1,20 +1,14 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { rm, writeFile } from "node:fs/promises";
 import { formatDuration } from "../logging/duration.js";
 import type { Logger } from "../logging/logger.js";
-import {
-  type Agent,
-  type AgentReply,
-  type AgentSpawnPlan,
-  createAgent,
-  type ModelTier,
-} from "./backend.js";
+import { createAgent } from "./agent.js";
+import { claudeBackend } from "./backends/claude.js";
 import { agentConcurrencyLimiter } from "./concurrency.js";
-import { AgentOutputError } from "./errors.js";
+import { AgentOutputError, truncate } from "./errors.js";
 import type { AgentProcessRunner } from "./exec.js";
 import { type JsonSchema, validateAgainstSchema } from "./schema.js";
+import type { Agent, AgentReply, AgentSpawnPlan, ModelTier, ModelTokens } from "./types.js";
 import type { UsageCall, UsageLedger } from "./usage.js";
-import { truncate } from "./util.js";
 
 /** One agent invocation: either a fresh run (`model` set) or a resume (`resumeSessionId` set). */
 export interface AgentInvocation {
@@ -50,10 +44,6 @@ export interface RunnerDeps {
 
 const RETRY_PREFIX = "Your previous reply did not parse as JSON matching the required schema";
 
-/** Only for callers that pass no `deps.agent` — phase unit tests, whose mocked process output is
- * claude-shaped. Not a user-facing default: the pipeline always passes the chosen agent. */
-const fallbackAgent = createAgent("claude");
-
 /**
  * Runs one agent invocation (fresh or resumed) with structured output, and validates the result
  * against `invocation.schema`. If the model's output is missing, unparseable, or doesn't
@@ -64,7 +54,9 @@ export async function invokeAgent<T = unknown>(
   invocation: AgentInvocation,
   deps: RunnerDeps = {},
 ): Promise<AgentRunResult<T>> {
-  const agent = deps.agent ?? fallbackAgent;
+  // Only callers that pass no agent (phase unit tests) get here; a fresh one per call keeps their
+  // session state apart. The pipeline always passes the run's agent.
+  const agent = deps.agent ?? createAgent(claudeBackend);
 
   const first = await execute(invocation, agent, deps);
   const firstAttempt = extractStructuredOutput<T>(first, invocation.schema, agent.backend.id);
@@ -90,8 +82,7 @@ export async function invokeAgent<T = unknown>(
 
 /**
  * Spawns one agent process under the shared concurrency cap (see ./concurrency.ts), then records
- * the session's tier and the call's usage. The prompt itself is sent over stdin (see ./exec.ts's
- * `AgentProcessRunner` doc comment) — argv carries only fixed flags, no variable-length content.
+ * the session's tier and the call's usage. The prompt goes on stdin (see ./exec.ts).
  */
 async function execute(
   invocation: AgentInvocation,
@@ -103,9 +94,9 @@ async function execute(
     invocation.model ??
     (invocation.resumeSessionId ? agent.sessionTiers.get(invocation.resumeSessionId) : undefined);
   const call: UsageCall | undefined =
-    tier === undefined ? undefined : { tier, model: backend.modelFor(tier) };
+    tier === undefined ? undefined : { tier, model: agent.modelFor(tier) };
 
-  const planned = backend.planSpawn({
+  const planned = await backend.planSpawn({
     prompt: invocation.prompt,
     schema: invocation.schema,
     ...(call === undefined ? {} : { model: call.model }),
@@ -119,21 +110,48 @@ async function execute(
       runProcess(planned.args, planned.prompt, deps.cwd === undefined ? {} : { cwd: deps.cwd }),
     ),
   );
-  const reply = backend.parseReply(stdout);
+  const reply = backend.parseReply(stdout, invocation.schema);
 
   if (call !== undefined) {
     agent.sessionTiers.set(reply.sessionId, call.tier);
   }
-  deps.usage?.record(call, reply.usage);
+  deps.usage?.record(call, callUsage(agent, invocation, reply));
   if (deps.logger) {
     // `--verbose` trace. Turn count and duration aren't reported by every CLI, so a missing one
     // prints as `?` rather than being assumed.
-    const label = invocation.model === undefined ? "resume" : backend.modelFor(invocation.model);
+    const label = invocation.model === undefined || call === undefined ? "resume" : call.model;
     const turns = reply.numTurns ?? "?";
     const duration = reply.durationMs === undefined ? "?" : formatDuration(reply.durationMs);
     deps.logger.debug(`${backend.id} ${label}: ${turns} turn(s), ${duration}`);
   }
   return reply;
+}
+
+/** The call's own tokens. For a backend reporting session totals, that's the difference from the
+ * total last seen for the resumed session. */
+function callUsage(
+  agent: Agent,
+  invocation: AgentInvocation,
+  reply: AgentReply,
+): ModelTokens | undefined {
+  const { usage } = reply;
+  if (!agent.backend.usageIsSessionTotal || usage === undefined) {
+    return usage;
+  }
+  const previous =
+    invocation.resumeSessionId === undefined
+      ? undefined
+      : agent.sessionUsage.get(invocation.resumeSessionId);
+  agent.sessionUsage.set(reply.sessionId, usage);
+  if (previous === undefined) {
+    return usage;
+  }
+  return {
+    input: Math.max(0, usage.input - previous.input),
+    output: Math.max(0, usage.output - previous.output),
+    cacheWrite: Math.max(0, usage.cacheWrite - previous.cacheWrite),
+    cacheRead: Math.max(0, usage.cacheRead - previous.cacheRead),
+  };
 }
 
 /** Writes `files` (a backend's schema file, say), runs `run`, then removes them — including when
@@ -144,7 +162,6 @@ async function withSpawnFiles<T>(
 ): Promise<T> {
   try {
     for (const file of files) {
-      await mkdir(dirname(file.path), { recursive: true });
       await writeFile(file.path, file.contents, "utf8");
     }
     return await run();

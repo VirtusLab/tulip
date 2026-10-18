@@ -1,117 +1,44 @@
-import { createInterface } from "node:readline";
-import { AGENT_IDS, type AgentId, backendFor, isAgentId } from "../agent/backend.js";
-import { CliUsageError } from "./args.js";
+import type { AgentId } from "../agent/types.js";
 import { readUserSettings, saveUserSettings } from "./settings.js";
 
-/** The terminal the agent menu talks to; injectable for tests. */
-export interface AgentChoiceIo {
-  /** Whether a human can answer: stdin and stdout are both TTYs. */
-  interactive: boolean;
-  /** Prints `question` and resolves with the typed line, or `undefined` on EOF/Ctrl+C. */
-  ask(question: string): Promise<string | undefined>;
-  write(line: string): void;
-}
+/** Used when neither `--agent` nor a saved choice names one. */
+export const DEFAULT_AGENT: AgentId = "claude";
 
 export interface ResolveAgentOptions {
   /** Where the choice is remembered — see ./settings.ts's `userSettingsPath`. */
   settingsPath: string;
-  io: AgentChoiceIo;
+  log: (line: string) => void;
 }
 
 /**
- * Decides which agent this run uses. There is no default: an explicit `--agent` wins (and is
- * remembered if it changes the saved choice); otherwise the saved choice; otherwise the user is
- * asked, before any other work, and the answer is saved. Throws {@link CliUsageError} if no
- * agent is known and nobody can be asked (non-interactive run) or the user gives up.
+ * Decides which agent this run uses: `--agent` wins (and is remembered if it changes the saved
+ * choice); otherwise the saved choice; otherwise {@link DEFAULT_AGENT}.
  */
 export async function resolveAgent(
   flag: AgentId | undefined,
-  { settingsPath, io }: ResolveAgentOptions,
+  { settingsPath, log }: ResolveAgentOptions,
 ): Promise<AgentId> {
   const saved = (await readUserSettings(settingsPath)).agent;
-
-  if (flag !== undefined) {
-    if (flag !== saved) {
-      await remember(flag, settingsPath, io);
-    }
-    return flag;
+  if (flag === undefined) {
+    return saved ?? DEFAULT_AGENT;
   }
-  if (saved !== undefined) {
-    return saved;
+  if (flag !== saved) {
+    await remember(flag, settingsPath, log);
   }
-
-  if (!io.interactive) {
-    throw new CliUsageError(
-      `No agent chosen yet. Run once with --agent <${AGENT_IDS.join("|")}>; Tulip remembers it.`,
-    );
-  }
-  const chosen = await askForAgent(io);
-  await remember(chosen, settingsPath, io);
-  return chosen;
+  return flag;
 }
 
-async function askForAgent(io: AgentChoiceIo): Promise<AgentId> {
-  io.write("Which agent CLI should Tulip use to analyze PRs?");
-  const idWidth = Math.max(...AGENT_IDS.map((id) => id.length)) + 2;
-  AGENT_IDS.forEach((id, index) => {
-    const backend = backendFor(id);
-    io.write(`  ${index + 1}) ${id.padEnd(idWidth)}${backend.label} (runs \`${backend.bin}\`)`);
-  });
-  const range = `1-${AGENT_IDS.length}`;
-  for (;;) {
-    const answer = await io.ask(`Enter ${range}: `);
-    if (answer === undefined) {
-      throw new CliUsageError(`No agent chosen. Pass --agent <${AGENT_IDS.join("|")}>.`);
-    }
-    const chosen = parseAnswer(answer.trim());
-    if (chosen !== undefined) {
-      return chosen;
-    }
-    io.write(`Please enter a number ${range} or an agent name (${AGENT_IDS.join(", ")}).`);
-  }
-}
-
-function parseAnswer(answer: string): AgentId | undefined {
-  const index = Number(answer);
-  if (Number.isInteger(index) && index >= 1 && index <= AGENT_IDS.length) {
-    return AGENT_IDS[index - 1];
-  }
-  const name = answer.toLowerCase();
-  return isAgentId(name) ? name : undefined;
-}
-
-/** A failed save never blocks the run: it only means the user is asked again next time. */
-async function remember(agent: AgentId, settingsPath: string, io: AgentChoiceIo): Promise<void> {
+/** A failed save never blocks the run: it only means the flag is needed again next time. */
+async function remember(
+  agent: AgentId,
+  settingsPath: string,
+  log: (line: string) => void,
+): Promise<void> {
   try {
     await saveUserSettings(settingsPath, { agent });
-    io.write(`Using ${agent} for this and future runs (saved in ${settingsPath}).`);
+    log(`Saved ${agent} as the agent for future runs (in ${settingsPath}).`);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    io.write(`Using ${agent}; couldn't save the choice to ${settingsPath}: ${reason}`);
+    log(`Couldn't save ${agent} as the agent for future runs to ${settingsPath}: ${reason}`);
   }
-}
-
-/** {@link AgentChoiceIo} over the process's own stdin/stdout. */
-export function terminalAgentChoiceIo(): AgentChoiceIo {
-  return {
-    interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
-    write: (line) => console.log(line),
-    ask: (question) =>
-      new Promise((resolve) => {
-        const rl = createInterface({ input: process.stdin, output: process.stdout });
-        let answered = false;
-        rl.on("close", () => {
-          if (!answered) {
-            process.stdout.write("\n");
-            resolve(undefined);
-          }
-        });
-        rl.on("SIGINT", () => rl.close());
-        rl.question(question, (answer) => {
-          answered = true;
-          rl.close();
-          resolve(answer);
-        });
-      }),
-  };
 }

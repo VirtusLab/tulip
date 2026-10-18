@@ -7,16 +7,17 @@ export class AgentBinaryMissingError extends Error {
   }
 }
 
-/** Thrown when the agent CLI runs but exits with a non-zero status. */
+/** Thrown when the agent CLI runs but exits with a non-zero status. `detail` is what the CLI
+ * said about the failure (see ./exec.ts), empty if nothing. */
 export class AgentProcessError extends Error {
   readonly exitCode: number | null;
-  readonly stderr: string;
+  readonly detail: string;
 
-  constructor(bin: string, exitCode: number | null, stderr: string) {
-    super(`\`${bin}\` exited with code ${exitCode}${stderr.trim() ? `: ${stderr.trim()}` : ""}`);
+  constructor(bin: string, exitCode: number | null, detail: string) {
+    super(`\`${bin}\` exited with code ${exitCode}${detail.trim() ? `: ${detail.trim()}` : ""}`);
     this.name = "AgentProcessError";
     this.exitCode = exitCode;
-    this.stderr = stderr;
+    this.detail = detail;
   }
 }
 
@@ -39,4 +40,9 @@ export class AgentTimeoutError extends Error {
     super(`\`${bin}\` timed out after ${timeoutMs}ms without exiting`);
     this.name = "AgentTimeoutError";
   }
+}
+
+/** Shortens agent output quoted in an error message. */
+export function truncate(text: string, max = 300): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }

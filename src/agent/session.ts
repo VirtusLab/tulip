@@ -1,7 +1,7 @@
-import type { ModelTier } from "./backend.js";
 import { withPreamble } from "./preamble.js";
 import { type AgentRunResult, invokeAgent, type RunnerDeps } from "./runner.js";
 import type { JsonSchema } from "./schema.js";
+import type { ModelTier } from "./types.js";
 
 export interface RunSessionOptions {
   model: ModelTier;

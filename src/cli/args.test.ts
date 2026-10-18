@@ -76,7 +76,7 @@ describe("parseCliArgs", () => {
     },
   );
 
-  it("leaves the agent unset when --agent isn't given (no default)", () => {
+  it("leaves the agent unset when --agent isn't given", () => {
     expect(parseCliArgs([VALID_URL])).not.toHaveProperty("agent");
   });
 

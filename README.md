@@ -16,9 +16,9 @@ And if you don't know the codebase at all, the prose and the generated diagrams
 may be enough on their own to understand the PR well enough to accept or reject
 it.
 
-Tulip uses a headless agent CLI to do the analysis: Claude Code's `claude`,
-Cursor's `agent`, or OpenAI's `codex`, whichever you use. No API key needed,
-just a logged-in CLI.
+Tulip uses a headless agent CLI to do the analysis: Claude Code's `claude` by
+default, or Cursor's `agent` or OpenAI's `codex`. No API key needed, just a
+logged-in CLI.
 
 <p align="center">
   <a href="screens/diagram.png"><img src="screens/diagram.png" alt="A generated explanation with a Mermaid diagram of the changed flow" width="380"></a>
@@ -75,8 +75,8 @@ to open.
 
 - [Node.js](https://nodejs.org/) LTS (>= 24) — its bundled `npm` installs Tulip;
   [pnpm](https://pnpm.io/) is only needed to build from source
-- A logged-in agent CLI on `PATH` — Tulip drives it to analyze the PR. One of
-  [`claude`](https://claude.com/product/claude-code), Cursor's
+- A logged-in agent CLI on `PATH` — Tulip drives it to analyze the PR:
+  [`claude`](https://claude.com/product/claude-code) (the default), Cursor's
   [`agent`](https://cursor.com/cli) (`agent login`), or OpenAI's
   [`codex`](https://developers.openai.com/codex) (`codex login`); see
   [Choosing the agent](#choosing-the-agent)
@@ -135,35 +135,24 @@ tulip https://gitlab.com/group/project/-/merge_requests/45
 ```
 
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
-`--agent <claude|cursor-anthropic|cursor-grok|codex>`. Run `tulip --help` for details,
-or `tulip --version` for the build.
+`--agent <id>`. Run `tulip --help` for details, or `tulip --version` for the
+build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser.
 
 ### Choosing the agent
 
-There is no default agent. On the first run, Tulip asks which one you use:
-
-```text
-Which agent CLI should Tulip use to analyze PRs?
-  1) claude            Claude Code (runs `claude`)
-  2) cursor-anthropic  Cursor + Anthropic (runs `agent`)
-  3) cursor-grok       Cursor + Grok (runs `agent`)
-  4) codex             Codex CLI (runs `codex`)
-Enter 1-4:
-```
-
-The answer is saved in `~/.config/tulip/config.json` (`$XDG_CONFIG_HOME/tulip/`
-if set; `%APPDATA%\tulip\` on Windows) and used from then on. To pick or switch
-without the prompt, pass `--agent`; that choice is saved too:
+Tulip uses `claude` unless you pass `--agent` with another id from the table
+below:
 
 ```sh
 tulip <PR URL> --agent cursor-anthropic
 ```
 
-A non-interactive run (no terminal to ask in, e.g. CI) with nothing saved fails
-straight away and asks for `--agent`.
+The choice is saved in `~/.config/tulip/config.json` (`$XDG_CONFIG_HOME/tulip/`
+if set; `%APPDATA%\tulip\` on Windows) and used on later runs until you pass
+another `--agent`.
 
 Each pass asks for a fast, balanced, or strong model, mapped per agent in
 `src/config.ts`:
@@ -181,12 +170,17 @@ differ only in the model ids above. Cursor's CLI has no structured-output flag,
 so the JSON schema goes into the prompt and the reply is parsed and validated by
 Tulip (with one retry), as for `claude`.
 
-With `codex`, Tulip runs `codex exec` in a read-only sandbox
-(`--sandbox read-only --ask-for-approval never`) and deletes the PR's `.codex/`
-dir from the checkout first. The schema is written to a temporary file and passed
-as `--output-schema`; the prompt goes on stdin (`codex exec -`). `--json` replies
-are a JSONL event stream, and Tulip validates the last agent message (with one
-retry), as for the other agents.
+With `codex`, Tulip runs `codex exec` with `--ignore-user-config` and deletes the
+PR's `.codex/` dir from the checkout first. The model's shell can read only the
+checkout and system dirs, has no network, and gets only core env vars (`PATH`,
+`HOME`, ...). Web search, apps, and plugins are off. The schema goes in a temporary
+file passed as `--output-schema` (made strict, as OpenAI requires); the prompt
+goes on stdin. Tulip validates the last agent message of the `--json` event
+stream (with one retry), as for the other agents.
+
+The page's Content Security Policy lets it load only its own assets, so
+model-written text can't make it fetch a URL on open. Remote images in the PR
+description don't show either.
 
 ### Reviewing on the page
 

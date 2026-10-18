@@ -22,10 +22,8 @@ export interface AgentProcessOptions {
  *
  * Prompt content is delivered via stdin rather than as an argv element: prompts embed full PR
  * diffs and can be arbitrarily large, while a single argv string is capped by the OS (e.g. Linux's
- * ~128KB `MAX_ARG_STRLEN`). `claude -p` and Cursor's `agent -p` read the prompt from piped stdin
- * (docs/adr/0027). Codex reads it when argv ends with `-` (`codex exec -`, docs/adr/0028); a
- * prompt string beside a pipe would make stdin extra context instead. Callers never pass the
- * prompt as an argv token.
+ * ~128KB `MAX_ARG_STRLEN`). Each backend's argv must make its CLI read the prompt from stdin;
+ * callers never pass the prompt as an argv token.
  */
 export type AgentProcessRunner = (
   args: string[],
@@ -33,12 +31,22 @@ export type AgentProcessRunner = (
   options?: AgentProcessOptions,
 ) => Promise<AgentProcessResult>;
 
+/** Forge credentials tulip itself reads (and `gh` honors). No agent CLI needs them, and a
+ * prompt-injected session with any shell could otherwise read them from its environment. */
+const FORGE_TOKEN_VARS = ["GITHUB_TOKEN", "GH_TOKEN", "GITLAB_TOKEN"];
+
+/** How much of stdout's end stands in for an empty stderr in {@link AgentProcessError}. */
+const STDOUT_TAIL_CHARS = 500;
+
 export interface AgentProcessRunnerOptions {
   /** Shown in {@link AgentBinaryMissingError} when `bin` isn't on PATH, e.g. "install Claude
    * Code". */
-  installHint?: string;
+  installHint: string;
   /** Defaults to {@link config}.timeouts.agentProcessMs. */
   timeoutMs?: number;
+  /** See `AgentBackend.describeFailure` (./types.ts); preferred over stderr when it returns a
+   * message. */
+  describeFailure?: (stdout: string) => string | undefined;
 }
 
 /**
@@ -48,13 +56,19 @@ export interface AgentProcessRunnerOptions {
  */
 export function createAgentProcessRunner(
   bin: string,
-  options: AgentProcessRunnerOptions = {},
+  options: AgentProcessRunnerOptions,
 ): AgentProcessRunner {
-  const installHint = options.installHint ?? `install \`${bin}\``;
+  const { installHint } = options;
   const timeoutMs = options.timeoutMs ?? config.timeouts.agentProcessMs;
   return (args, input, runOptions) =>
     new Promise((resolve, reject) => {
-      const child = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"], cwd: runOptions?.cwd });
+      const env = { ...process.env };
+      for (const name of FORGE_TOKEN_VARS) delete env[name];
+      const child = spawn(bin, args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd: runOptions?.cwd,
+        env,
+      });
       let stdout = "";
       let stderr = "";
       let settled = false;
@@ -102,8 +116,28 @@ export function createAgentProcessRunner(
         if (code === 0) {
           resolve({ stdout, stderr });
         } else {
-          reject(new AgentProcessError(bin, code, stderr));
+          reject(
+            new AgentProcessError(
+              bin,
+              code,
+              failureDetail(stdout, stderr, options.describeFailure),
+            ),
+          );
         }
       });
     });
+}
+
+/** What a failed call said about itself: the backend's reading of stdout, else stderr, else
+ * stdout's tail. */
+function failureDetail(
+  stdout: string,
+  stderr: string,
+  describeFailure: AgentProcessRunnerOptions["describeFailure"],
+): string {
+  const described = describeFailure?.(stdout);
+  if (described !== undefined) return described;
+  if (stderr.trim() !== "") return stderr;
+  const trimmed = stdout.trim();
+  return trimmed.length > STDOUT_TAIL_CHARS ? `…${trimmed.slice(-STDOUT_TAIL_CHARS)}` : trimmed;
 }

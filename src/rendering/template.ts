@@ -8,6 +8,19 @@ import { type MarkdownRenderContext, renderCategoryMarkdown } from "./markdown.j
 import { splitCategoryMarkdown } from "./sections.js";
 import { buildToc, renderTocHtml } from "./toc.js";
 
+/** Why: docs/adr/0028. The inline `<script type="application/json">` blocks are data, which
+ * `script-src` doesn't govern. */
+const CSP = [
+  "default-src 'none'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "form-action 'none'",
+  "base-uri 'none'",
+].join("; ");
+
 /** Everything the page template needs: PR context, the reviewed explanations in presentation
  * order (see src/explanations/orchestrate.ts, epic 6), and diff data for every file referenced
  * by a `{{snippet}}` marker anywhere in them (see ./file-diffs.ts). */
@@ -80,6 +93,7 @@ export function renderPage(input: PageInput): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.prTitle)} — Tulip</title>
 <link rel="stylesheet" href="assets/style.css">

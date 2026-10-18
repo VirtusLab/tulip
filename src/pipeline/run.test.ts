@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type Agent, createAgent } from "../agent/backend.js";
 import { AgentBinaryMissingError, AgentOutputError } from "../agent/errors.js";
-import type { ModelTokens, UsageLedger } from "../agent/usage.js";
+import type { Agent, AgentBackend, ModelTokens } from "../agent/types.js";
+import type { UsageLedger } from "../agent/usage.js";
 import type { GenerateCategoriesResult } from "../categories/generate.js";
 import type { CategoryReviewLoopResult } from "../categories/review.js";
 import type { PrCheckout } from "../checkout/checkout.js";
@@ -129,6 +129,9 @@ function baseDeps(order: string[] = []) {
     }),
     materializeChangeArtifacts: vi.fn(async (): Promise<void> => {
       order.push("materialize");
+    }),
+    prepareWorkspace: vi.fn(async (_dir: string, _backend: AgentBackend): Promise<void> => {
+      order.push("prepare-workspace");
     }),
     generateCategories: vi.fn(async (): Promise<GenerateCategoriesResult> => {
       order.push("phase1");
@@ -263,6 +266,7 @@ describe("run", () => {
       "fetch",
       "checkout",
       "materialize",
+      "prepare-workspace",
       "phase1",
       "phase1-review",
       "split",
@@ -367,29 +371,15 @@ describe("run", () => {
     expect(summary).toContain("sonnet");
   });
 
-  it("builds the agent named by options.agent", async () => {
+  it("prepares the workspace of the agent named by options.agent, in the checkout", async () => {
     const deps = baseDeps();
 
-    await run(options({ agent: "cursor-anthropic" }), deps);
+    await run(options({ agent: "codex" }), deps);
 
-    expect(phaseRunnerDeps(deps.generateCategories).agent?.backend.id).toBe("cursor-anthropic");
-  });
-
-  it("prepares the agent's workspace in the checkout after materializing, before phase 1", async () => {
-    const order: string[] = [];
-    const deps = baseDeps(order);
-    const agent = createAgent("claude");
-    const prepareWorkspace = vi.fn(async (_dir: string) => {
-      order.push("prepare-workspace");
-    });
-    await run(options(), {
-      ...deps,
-      agent: { ...agent, backend: { ...agent.backend, prepareWorkspace } },
-    });
-
-    expect(prepareWorkspace).toHaveBeenCalledWith("/tmp/tulip-checkout");
-    expect(order.indexOf("prepare-workspace")).toBe(order.indexOf("materialize") + 1);
-    expect(order.indexOf("prepare-workspace")).toBeLessThan(order.indexOf("phase1"));
+    expect(deps.prepareWorkspace).toHaveBeenCalledWith(
+      "/tmp/tulip-checkout",
+      expect.objectContaining({ id: "codex" }),
+    );
   });
 
   it("says token usage wasn't reported when calls ran but none carried usage", async () => {
@@ -398,7 +388,7 @@ describe("run", () => {
 
     await run(options(), deps);
 
-    expect(infoLines(deps)).toContain("token usage: not reported by claude");
+    expect(infoLines(deps)).toContain("1 claude call(s) didn't report token usage");
     expect(infoLines(deps).find((line) => line.startsWith("Token usage"))).toBeUndefined();
   });
 
@@ -413,7 +403,7 @@ describe("run", () => {
 
     const lines = infoLines(deps);
     expect(lines.find((line) => line.startsWith("Token usage"))).toBeDefined();
-    expect(lines).toContain("(1 call(s) didn't report token usage)");
+    expect(lines).toContain("1 claude call(s) didn't report token usage");
   });
 
   it("still prints the token-usage summary after a mid-run failure", async () => {
@@ -436,7 +426,7 @@ describe("run", () => {
 
     const lines = infoLines(deps);
     expect(lines[0]).toBe("Tulip 9.9.9 (test123, built now)");
-    expect(lines[1]).toBe("Processing PR https://github.com/octo/widgets/pull/42");
+    expect(lines[1]).toBe("Processing PR https://github.com/octo/widgets/pull/42 with claude");
     expect(lines[2]).toBe("fetching octo/widgets#42...");
   });
 
@@ -806,6 +796,28 @@ describe("run", () => {
     ).toBe(true);
   });
 
+  it("on a prepareWorkspace failure, names the phase, sets exit code 1, and still cleans up the checkout", async () => {
+    const deps = baseDeps();
+    deps.prepareWorkspace = vi.fn(async (): Promise<void> => {
+      throw new Error("EACCES: permission denied");
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.generateCategories).not.toHaveBeenCalled();
+    const checkout = await deps.createCheckout.mock.results[0]?.value;
+    expect(checkout.cleanup).toHaveBeenCalledTimes(1);
+    const lines = infoLines(deps);
+    expect(
+      lines.some(
+        (line) =>
+          line.includes("preparing agent workspace failed") &&
+          line.includes("EACCES: permission denied"),
+      ),
+    ).toBe(true);
+  });
+
   it("on a renderExplanations failure, names the phase and still cleans up the checkout", async () => {
     const deps = baseDeps();
     deps.renderExplanations = vi.fn(async () => {
@@ -992,7 +1004,9 @@ describe("run", () => {
     await run(options({ pr }), deps);
 
     const lines = infoLines(deps);
-    expect(lines[1]).toBe("Processing PR https://git.example.com/group/project/-/merge_requests/7");
+    expect(lines[1]).toBe(
+      "Processing PR https://git.example.com/group/project/-/merge_requests/7 with claude",
+    );
     expect(lines[2]).toBe("fetching group/project!7...");
     expect(deps.renderExplanations).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -1,12 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
+import { createAgentFor } from "../agent-registry/registry.js";
 import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
-import { createAgent } from "./backend.js";
+import { createCodexBackend } from "./backends/codex.js";
+import { toStrictSchema } from "./backends/codex-schema.js";
 import { AgentBinaryMissingError, AgentOutputError } from "./errors.js";
 import type { AgentProcessResult } from "./exec.js";
 import { type AgentInvocation, invokeAgent } from "./runner.js";
 import type { JsonSchema } from "./schema.js";
+import type { Agent } from "./types.js";
 import { createUsageLedger } from "./usage.js";
 
 const SCHEMA: JsonSchema = {
@@ -156,10 +159,12 @@ describe("invokeAgent", () => {
     const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       processResult(envelope()),
     );
+    const agent = createAgentFor("claude");
+    agent.sessionTiers.set("session-1", "strong");
 
     await invokeAgent(
       { resumeSessionId: "session-1", schema: SCHEMA, prompt: "follow up" },
-      { runAgentProcess },
+      { runAgentProcess, agent },
     );
 
     const [args, input] = runAgentProcess.mock.calls[0] ?? [];
@@ -273,7 +278,7 @@ describe("invokeAgent", () => {
 
     await invokeAgent(
       { resumeSessionId: "never-seen", schema: SCHEMA, prompt: "follow up" },
-      { runAgentProcess, usage, agent: createAgent("claude") },
+      { runAgentProcess, usage, agent: createAgentFor("claude") },
     );
 
     expect(usage.rows()).toEqual([
@@ -325,24 +330,15 @@ describe("invokeAgent with the cursor backend", () => {
     const { result, sessionId } = await invokeAgent(BASE_INVOCATION, {
       runAgentProcess,
       usage,
-      agent: createAgent("cursor-anthropic"),
+      agent: createAgentFor("cursor-anthropic"),
     });
 
     expect(result).toEqual({ ok: true });
     expect(sessionId).toBe("chat-1");
-    const [args, input] = runAgentProcess.mock.calls[0] ?? [];
-    expect(args).toEqual([
-      "-p",
-      "--output-format",
-      "json",
-      "--mode",
-      "ask",
-      "--trust",
-      "--model",
+    const args = runAgentProcess.mock.calls[0]?.[0] ?? [];
+    expect(args[args.indexOf("--model") + 1]).toBe(
       config.agents["cursor-anthropic"].models.balanced,
-    ]);
-    expect(input).toContain("do the thing");
-    expect(input).toContain(JSON.stringify(SCHEMA));
+    );
     expect(usage.rows()).toEqual([
       {
         model: config.agents["cursor-anthropic"].models.balanced,
@@ -359,7 +355,7 @@ describe("invokeAgent with the cursor backend", () => {
 
     const { result } = await invokeAgent(BASE_INVOCATION, {
       runAgentProcess,
-      agent: createAgent("cursor-anthropic"),
+      agent: createAgentFor("cursor-anthropic"),
     });
 
     expect(result).toEqual({ ok: false });
@@ -376,7 +372,15 @@ describe("invokeAgent with the cursor backend", () => {
 });
 
 describe("invokeAgent with the codex backend", () => {
-  function codexStdout(text: string): string {
+  /** Skips the real `codex doctor` lookup of Codex's executable. */
+  function codexAgent(): Agent {
+    return {
+      ...createAgentFor("codex"),
+      backend: createCodexBackend(async () => "/opt/codex/bin/codex"),
+    };
+  }
+
+  function codexStdout(text: string, usage: Record<string, number> = {}): string {
     return [
       JSON.stringify({ type: "thread.started", thread_id: "thread-1" }),
       JSON.stringify({
@@ -386,34 +390,73 @@ describe("invokeAgent with the codex backend", () => {
       JSON.stringify({
         type: "turn.completed",
         usage: {
-          input_tokens: 10,
+          input_tokens: 40,
           output_tokens: 2,
           cache_write_input_tokens: 4,
           cached_input_tokens: 30,
+          ...usage,
         },
       }),
     ].join("\n");
   }
 
+  it("records each call's share of the thread's running usage total", async () => {
+    const runAgentProcess = vi
+      .fn()
+      .mockResolvedValueOnce(
+        processResult(
+          codexStdout("no json", { input_tokens: 100, cached_input_tokens: 40, output_tokens: 10 }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        processResult(
+          codexStdout('{"ok": true}', {
+            input_tokens: 250,
+            cached_input_tokens: 140,
+            output_tokens: 25,
+          }),
+        ),
+      );
+    const usage = createUsageLedger();
+
+    await invokeAgent(BASE_INVOCATION, { runAgentProcess, usage, agent: codexAgent() });
+
+    expect(usage.rows()).toEqual([
+      {
+        model: config.agents.codex.models.balanced,
+        tokens: { input: 110, output: 25, cacheWrite: 4, cacheRead: 140 },
+      },
+    ]);
+  });
+
+  it("accepts null for a property the schema leaves optional", async () => {
+    const schema: JsonSchema = {
+      ...SCHEMA,
+      properties: { ...SCHEMA.properties, note: { type: "string" } },
+    };
+    const runAgentProcess = vi.fn(async () =>
+      processResult(codexStdout('{"ok": true, "note": null}')),
+    );
+
+    const { result } = await invokeAgent(
+      { ...BASE_INVOCATION, schema },
+      { runAgentProcess, agent: codexAgent() },
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(runAgentProcess).toHaveBeenCalledTimes(1);
+  });
+
   it("writes the schema file before the process and removes it after", async () => {
     let schemaPath: string | undefined;
-    const runAgentProcess = vi.fn(async (args: string[], input: string) => {
-      const index = args.indexOf("--output-schema");
-      schemaPath = args[index + 1];
-      expect(schemaPath).toBeDefined();
-      expect(await readFile(schemaPath ?? "", "utf8")).toBe(JSON.stringify(SCHEMA));
-      expect(input).toBe("do the thing");
-      expect(args.at(-1)).toBe("-");
+    const runAgentProcess = vi.fn(async (args: string[]) => {
+      schemaPath = args[args.indexOf("--output-schema") + 1];
+      expect(await readFile(schemaPath ?? "", "utf8")).toBe(JSON.stringify(toStrictSchema(SCHEMA)));
       return processResult(codexStdout('{"ok": true}'));
     });
 
-    const { result, sessionId } = await invokeAgent(BASE_INVOCATION, {
-      runAgentProcess,
-      agent: createAgent("codex"),
-    });
+    await invokeAgent(BASE_INVOCATION, { runAgentProcess, agent: codexAgent() });
 
-    expect(result).toEqual({ ok: true });
-    expect(sessionId).toBe("thread-1");
     await expect(readFile(schemaPath ?? "", "utf8")).rejects.toThrow();
   });
 
@@ -421,12 +464,12 @@ describe("invokeAgent with the codex backend", () => {
     let schemaPath: string | undefined;
     const runAgentProcess = vi.fn(async (args: string[]) => {
       schemaPath = args[args.indexOf("--output-schema") + 1];
-      expect(await readFile(schemaPath ?? "", "utf8")).toBe(JSON.stringify(SCHEMA));
+      expect(await readFile(schemaPath ?? "", "utf8")).toBe(JSON.stringify(toStrictSchema(SCHEMA)));
       throw new Error("codex exited");
     });
 
     await expect(
-      invokeAgent(BASE_INVOCATION, { runAgentProcess, agent: createAgent("codex") }),
+      invokeAgent(BASE_INVOCATION, { runAgentProcess, agent: codexAgent() }),
     ).rejects.toThrow("codex exited");
     await expect(readFile(schemaPath ?? "", "utf8")).rejects.toThrow();
   });

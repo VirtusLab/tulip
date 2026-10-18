@@ -1,9 +1,9 @@
 /**
  * Minimal JSON Schema subset: object/array/string/number/integer/boolean/null, nested
- * `properties`/`items`, `required`, `enum`. Handed to the agent as-is (`claude --json-schema`,
- * or appended to the prompt for Cursor — see src/agent/backends), and also used locally by
- * {@link validateAgainstSchema} for lightweight response validation —
- * not a full JSON Schema implementation, just enough to catch a model emitting the wrong shape.
+ * `properties`/`items`, `required`, `enum`. Handed to the agent (`claude --json-schema`, appended
+ * to the prompt for Cursor, made strict for Codex — see src/agent/backends), and also used
+ * locally by {@link validateAgainstSchema} for lightweight response validation — not a full
+ * JSON Schema implementation, just enough to catch a model emitting the wrong shape.
  */
 export interface JsonSchema {
   type?: "object" | "array" | "string" | "number" | "integer" | "boolean" | "null";

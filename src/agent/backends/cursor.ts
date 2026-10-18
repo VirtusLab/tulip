@@ -1,31 +1,17 @@
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
-import { config } from "../../config.js";
 import { renderPrompt } from "../../prompts/loader.js";
-import type {
-  AgentBackend,
-  AgentCallArgs,
-  AgentId,
-  AgentReply,
-  AgentSpawnPlan,
-} from "../backend.js";
-import { AgentOutputError } from "../errors.js";
-import { extractJson, parseEnvelope, replyFrom, truncate } from "../util.js";
+import type { AgentBackend, AgentCallArgs, AgentId, AgentReply, AgentSpawnPlan } from "../types.js";
+import { parseEnvelope, replyFrom } from "./envelope.js";
+import { extractJson } from "./extract-json.js";
 
 /**
- * Checkout-relative dirs Cursor's `agent` loads config from, removed by `prepareWorkspace`.
- * `--trust` (required headless) lets project config run unprompted, and both were verified to
- * execute a PR's hooks: `.cursor/hooks.json`, and Claude Code's `.claude/settings.json` hooks,
- * which Cursor also honors (docs/adr/0027).
+ * Checkout-relative dirs Cursor's `agent` loads config from. `--trust` (required headless) lets
+ * project config run unprompted, and both were verified to execute a PR's hooks:
+ * `.cursor/hooks.json`, and Claude Code's `.claude/settings.json` hooks, which Cursor also honors
+ * (docs/adr/0027).
  */
 const REPO_CONFIG_DIRS = [".cursor", ".claude"];
 
-const CURSOR_LABELS = {
-  "cursor-anthropic": "Cursor + Anthropic",
-  "cursor-grok": "Cursor + Grok",
-} as const;
-
-type CursorId = keyof typeof CURSOR_LABELS;
+type CursorId = Extract<AgentId, "cursor-anthropic" | "cursor-grok">;
 
 /**
  * Cursor's headless `agent -p`, shared by the Anthropic and Grok entries. They differ only in
@@ -40,23 +26,19 @@ type CursorId = keyof typeof CURSOR_LABELS;
  * checkout dir. `--force`/`--yolo`/`--approve-mcps` must never be added.
  */
 function createCursorBackend(id: CursorId): AgentBackend {
-  const settings = config.agents[id];
   return {
     id,
-    label: CURSOR_LABELS[id],
-    bin: settings.bin,
     installHint: "install the Cursor CLI (https://cursor.com/cli) and run `agent login`",
-    modelFor: (tier) => settings.models[tier],
+    repoConfigDirs: REPO_CONFIG_DIRS,
     planSpawn,
     parseReply: (stdout) => parseReply(stdout, id),
-    prepareWorkspace,
   };
 }
 
 export const cursorAnthropicBackend = createCursorBackend("cursor-anthropic");
 export const cursorGrokBackend = createCursorBackend("cursor-grok");
 
-function planSpawn(call: AgentCallArgs): AgentSpawnPlan {
+async function planSpawn(call: AgentCallArgs): Promise<AgentSpawnPlan> {
   const args = ["-p", "--output-format", "json", "--mode", "ask", "--trust"];
   // Passed on resumes too: unlike `claude --resume`, nothing guarantees the session's model is
   // kept, and each session's model is known (see `Agent.sessionTiers`).
@@ -72,21 +54,10 @@ function planSpawn(call: AgentCallArgs): AgentSpawnPlan {
 
 function parseReply(stdout: string, id: AgentId): AgentReply {
   const envelope = parseEnvelope(stdout, id);
-  if (envelope.fields.is_error === true) {
-    throw new AgentOutputError(`${id} reported an error: ${truncate(envelope.text)}`);
-  }
   return replyFrom(envelope, extractJson(envelope.text), {
     input: "inputTokens",
     output: "outputTokens",
     cacheWrite: "cacheWriteTokens",
     cacheRead: "cacheReadTokens",
   });
-}
-
-/** `rm` with `force` unlinks a symlinked dir without following it, so nothing outside the
- * checkout is touched. */
-async function prepareWorkspace(dir: string): Promise<void> {
-  await Promise.all(
-    REPO_CONFIG_DIRS.map((name) => rm(join(dir, name), { recursive: true, force: true })),
-  );
 }

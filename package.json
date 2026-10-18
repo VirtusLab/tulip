@@ -18,6 +18,7 @@
     "llm",
     "claude",
     "cursor",
+    "codex",
     "github",
     "gitlab",
     "cli"

@@ -1,8 +1,9 @@
 import { parseArgs } from "node:util";
-import { AGENT_IDS, type AgentId, isAgentId } from "../agent/backend.js";
+import { AGENT_IDS, type AgentId, isAgentId } from "../agent/types.js";
 import { config } from "../config.js";
 import type { PrRef } from "../forge/types.js";
 import { parsePrUrl } from "../forge-registry/pr-url.js";
+import { DEFAULT_AGENT } from "./agent-choice.js";
 
 /** Default `--diff-threshold`: max diff lines fed verbatim to the explaining LLM. */
 const DEFAULT_DIFF_THRESHOLD = config.limits.defaultDiffThreshold;
@@ -22,9 +23,8 @@ export interface RunOptions {
   /** Run a local review server that posts a per-category PR comment (docs/adr/0019). Only for
    * forges with a `commenter`. Defaults to false (render a static page and exit). */
   serve: boolean;
-  /** Which agent CLI runs the LLM passes (docs/adr/0027), when given as `--agent`. There is no
-   * default: when absent, the remembered choice is used, or the user is asked (see
-   * ./agent-choice.ts). */
+  /** Which agent CLI runs the LLM passes (docs/adr/0027), when given as `--agent`. When absent,
+   * the remembered choice or the default is used (see ./agent-choice.ts). */
   agent?: AgentId;
 }
 
@@ -57,8 +57,8 @@ export function usage(): string {
     "  --no-open             Don't automatically open the rendered page in your browser",
     "  --serve               Run a local review server; post a PR comment per category via gh",
     "                        (GitHub PRs only)",
-    `  --agent <name>        Agent CLI that runs the analysis: ${AGENT_IDS.join(" | ")}. Remembered`,
-    "                        for later runs; if never chosen, Tulip asks on its first run",
+    `  --agent <id>          Agent CLI that runs the analysis (default: ${DEFAULT_AGENT}). Remembered for`,
+    `                        later runs. One of: ${AGENT_IDS.join(" | ")}`,
     "  -h, --help            Show this help and exit",
     "  -v, --version         Show version information and exit",
   ].join("\n");

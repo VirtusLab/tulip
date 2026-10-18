@@ -23,6 +23,12 @@ describe("userSettingsPath", () => {
       join("C:/AppData", "tulip", "config.json"),
     );
   });
+
+  it("falls back to <home>/AppData/Roaming on Windows when %APPDATA% is unset", () => {
+    expect(userSettingsPath({}, "win32", "C:/Users/u")).toBe(
+      join("C:/Users/u", "AppData", "Roaming", "tulip", "config.json"),
+    );
+  });
 });
 
 describe("readUserSettings / saveUserSettings", () => {

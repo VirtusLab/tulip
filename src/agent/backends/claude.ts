@@ -1,6 +1,7 @@
 import { config } from "../../config.js";
-import type { AgentBackend, AgentCallArgs, AgentReply, AgentSpawnPlan } from "../backend.js";
-import { parseEnvelope, replyFrom } from "../util.js";
+import { isPlainObject } from "../schema.js";
+import type { AgentBackend, AgentCallArgs, AgentReply, AgentSpawnPlan } from "../types.js";
+import { parseEnvelope, replyFrom } from "./envelope.js";
 
 /**
  * Claude Code's headless `claude -p`, with native structured output via `--json-schema`. Its
@@ -10,15 +11,15 @@ import { parseEnvelope, replyFrom } from "../util.js";
  */
 export const claudeBackend: AgentBackend = {
   id: "claude",
-  label: "Claude Code",
-  bin: config.agents.claude.bin,
   installHint: "install Claude Code",
-  modelFor: (tier) => config.agents.claude.models[tier],
+  // Whether `claude -p` runs a PR's `.claude/settings.json` hooks is unchecked (TODO.md).
+  repoConfigDirs: [],
   planSpawn,
   parseReply,
+  describeFailure,
 };
 
-function planSpawn(call: AgentCallArgs): AgentSpawnPlan {
+async function planSpawn(call: AgentCallArgs): Promise<AgentSpawnPlan> {
   const args = ["-p", "--output-format", "json", "--json-schema", JSON.stringify(call.schema)];
   // Omitted entirely when empty (the default — see src/config.ts's `agents.claude.allowedTools`
   // doc comment for why no Bash grant is safe to add): an empty `--allowedTools` flag isn't the
@@ -33,6 +34,21 @@ function planSpawn(call: AgentCallArgs): AgentSpawnPlan {
     args.push("--model", call.model);
   }
   return { args, prompt: call.prompt, files: [] };
+}
+
+/** With `is_error`, `claude` exits 1 and its stderr is cryptic or empty; the envelope's `result`
+ * (or, when that's null, its `subtype`, e.g. `error_max_turns`) says what went wrong. */
+function describeFailure(stdout: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return undefined;
+  }
+  if (!isPlainObject(parsed)) return undefined;
+  const { result, subtype } = parsed;
+  if (typeof result === "string" && result.trim() !== "") return result;
+  return typeof subtype === "string" ? subtype : undefined;
 }
 
 function parseReply(stdout: string): AgentReply {

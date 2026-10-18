@@ -9,7 +9,7 @@
  */
 export const config = {
   /** Per-agent CLI settings (docs/adr/0027). Each agent maps the generic model tiers used by
-   * `models` below to its own `--model` ids — see src/agent/backends. */
+   * `models` below to its own `--model` ids — see src/agent/agent.ts. */
   agents: {
     claude: {
       bin: "claude",
@@ -27,7 +27,6 @@ export const config = {
        * empty. */
       allowedTools: [],
     },
-    /** Both Cursor entries run the same `agent` binary. They differ only in `--model` ids. */
     "cursor-anthropic": {
       bin: "agent",
       models: {
@@ -36,9 +35,7 @@ export const config = {
         strong: "claude-opus-5-5-high",
       },
     },
-    /** One Grok model, stepped by effort to mirror the Claude cursor tiers: `low` for fast
-     * (haiku-medium), `medium` for balanced (sonnet-medium), `high` for strong (opus-high).
-     * `xhigh` is a step past opus-high and was still reading the checkout at 9 minutes. */
+    /** `xhigh` is not used: in a test run it was still reading the checkout after 9 minutes. */
     "cursor-grok": {
       bin: "agent",
       models: {
@@ -47,8 +44,7 @@ export const config = {
         strong: "grok-4.7-high",
       },
     },
-    /** ChatGPT-signed-in Codex. `gpt-5.4` / `gpt-5.5` are retired on that path; `gpt-6-astra`
-     * is the strongest model but is not on every plan, so `strong` is `gpt-6.1-sol`. */
+    /** Model choice: docs/adr/0028. */
     codex: {
       bin: "codex",
       models: {
@@ -78,10 +74,8 @@ export const config = {
   /** Per-call ceilings for spawned subprocesses. Generous — high enough that they should only
    * ever fire on a genuinely hung process, not a slow-but-working one. */
   timeouts: {
-    /** Single agent CLI invocation (`claude -p`, `agent -p`, `codex exec`) — see src/agent/exec.ts.
-     * 30 minutes: a `grok-4.7-xhigh` explanation was still reading the checkout at 9 minutes when a
-     * 10 minute cap killed it. */
-    agentProcessMs: 30 * 60 * 1000,
+    /** Single agent CLI invocation — see src/agent/exec.ts. */
+    agentProcessMs: 10 * 60 * 1000,
     /** Single `gh`/`git` subcommand — see src/process/exec.ts. */
     forgeCommandMs: 2 * 60 * 1000,
     /** Single forge REST API request — see src/forge/http.ts. */

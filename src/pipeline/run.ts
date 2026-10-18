@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
-import { type Agent, type AgentId, createAgent } from "../agent/backend.js";
 import { AgentBinaryMissingError } from "../agent/errors.js";
+import type { Agent, AgentId } from "../agent/types.js";
 import { createUsageLedger, formatUsageSummary } from "../agent/usage.js";
+import { prepareWorkspace } from "../agent/workspace.js";
+import { createAgentFor } from "../agent-registry/registry.js";
 import { generateCategories } from "../categories/generate.js";
 import { reviewAndAmendCategories } from "../categories/review.js";
 import type { Category } from "../categories/types.js";
@@ -34,8 +36,7 @@ export interface PipelineOptions {
   /** Run a local review server that posts per-category PR comments (docs/adr/0019), instead of
    * rendering a static page and exiting. Fails when the PR's forge has no `commenter`. */
   serve: boolean;
-  /** Which agent CLI runs every LLM pass (docs/adr/0027); chosen by the user, no default (see
-   * src/cli/agent-choice.ts). */
+  /** Which agent CLI runs every LLM pass (docs/adr/0027); see src/cli/agent-choice.ts. */
   agent: AgentId;
 }
 
@@ -49,6 +50,7 @@ export interface PipelineDeps {
   forgeFor?: typeof forgeFor;
   createCheckout?: typeof createCheckout;
   materializeChangeArtifacts?: typeof materializeChangeArtifacts;
+  prepareWorkspace?: typeof prepareWorkspace;
   generateCategories?: typeof generateCategories;
   reviewAndAmendCategories?: typeof reviewAndAmendCategories;
   splitLargeChanges?: typeof splitLargeChanges;
@@ -87,6 +89,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doCreateCheckout = deps.createCheckout ?? createCheckout;
   const doMaterializeChangeArtifacts =
     deps.materializeChangeArtifacts ?? materializeChangeArtifacts;
+  const doPrepareWorkspace = deps.prepareWorkspace ?? prepareWorkspace;
   const doGenerateCategories = deps.generateCategories ?? generateCategories;
   const doReviewAndAmendCategories = deps.reviewAndAmendCategories ?? reviewAndAmendCategories;
   const doSplitLargeChanges = deps.splitLargeChanges ?? splitLargeChanges;
@@ -99,14 +102,15 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const adapter = (deps.forgeFor ?? forgeFor)(options.pr);
   const prUrl = adapter.webUrl(options.pr);
 
+  // One per run, so every phase's sessions (and their resumes) go through the same agent.
+  const agent = deps.agent ?? createAgentFor(options.agent);
+
   logger.info(formatVersion());
-  logger.info(`Processing PR ${prUrl}`);
+  logger.info(`Processing PR ${prUrl} with ${agent.backend.id}`);
   logger.debug(`options: ${JSON.stringify(options)}`);
 
   // Shared by every phase (threaded via each phase's RunnerDeps), summarized at the end.
   const usage = createUsageLedger();
-  // One per run, so every phase's sessions (and their resumes) go through the same agent.
-  const agent = deps.agent ?? createAgent(options.agent);
 
   let checkout: PrCheckout | undefined;
   try {
@@ -152,9 +156,9 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       doMaterializeChangeArtifacts(checkout as PrCheckout, diff, metadata.diff, { logger }),
     );
     // Before any agent call: strips repo-controlled config the agent CLI would load from its cwd
-    // (see each backend's `prepareWorkspace`).
-    await runPhase("preparing agent workspace", async () =>
-      agent.backend.prepareWorkspace?.(checkoutDir),
+    // (see `AgentBackend.repoConfigDirs`).
+    await runPhase("preparing agent workspace", () =>
+      doPrepareWorkspace(checkoutDir, agent.backend),
     );
 
     const changedFiles = diff.files.map((file) => ({ path: file.path, status: file.status }));
@@ -294,11 +298,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       logger.info(usageSummary);
     }
     if (unreported > 0) {
-      logger.info(
-        usageSummary
-          ? `(${unreported} call(s) didn't report token usage)`
-          : `token usage: not reported by ${agent.backend.id}`,
-      );
+      logger.info(`${unreported} ${agent.backend.id} call(s) didn't report token usage`);
     }
     if (checkout) {
       logger.debug("cleaning up checkout...");

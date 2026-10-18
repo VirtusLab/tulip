@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
-import type { AgentId } from "../agent/backend.js";
 import { run } from "../pipeline/run.js";
 import { formatVersion } from "../version.js";
-import { resolveAgent, terminalAgentChoiceIo } from "./agent-choice.js";
+import { resolveAgent } from "./agent-choice.js";
 import {
   CliUsageError,
   HelpRequestedError,
@@ -37,22 +36,10 @@ async function main(): Promise<void> {
     throw error;
   }
 
-  // First, before any fetch or LLM work: there is no default agent.
-  let agent: AgentId;
-  try {
-    agent = await resolveAgent(options.agent, {
-      settingsPath: userSettingsPath(),
-      io: terminalAgentChoiceIo(),
-    });
-  } catch (error) {
-    if (error instanceof CliUsageError) {
-      console.error(`tulip: ${error.message}`);
-      process.exitCode = 1;
-      return;
-    }
-    throw error;
-  }
-
+  const agent = await resolveAgent(options.agent, {
+    settingsPath: userSettingsPath(),
+    log: (line) => console.log(line),
+  });
   await run({ ...options, agent });
 }
 

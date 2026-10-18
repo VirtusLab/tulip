@@ -33,37 +33,34 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
 - **`src/claude/` becomes `src/agent/`** with generic names (`invokeAgent`,
   `AgentProcessRunner`, `Agent*Error`, `agentConcurrencyLimiter`, `RunnerDeps.runAgentProcess`).
   The generic retry, validation, concurrency, usage, and session code stays there.
-- **`AgentBackend`** (`src/agent/backend.ts`) holds what differs per CLI: `bin`, `installHint`,
-  `modelFor(tier)`, `planSpawn` (argv, the stdin prompt, and any files for one call),
+- **`AgentBackend`** (`src/agent/types.ts`) holds what differs per CLI: `installHint`,
+  `repoConfigDirs`, `planSpawn` (argv, the stdin prompt, and any files for one call),
   `parseReply` (stdout to a normalized `AgentReply` with `structured`, `usage`, turns,
-  duration), and an optional `prepareWorkspace(dir)`. Backends live in `src/agent/backends/`.
-  Adding a CLI means adding a backend, a config entry, and its id in `AGENT_IDS` and `BACKENDS`
-  (src/agent/backend.ts). Codex, added that way, is recorded in
-  [ADR 0028](0028-codex-backend.md).
+  duration). The binary and tier-to-model map come from `config.agents.<id>`. Backends live
+  in `src/agent/backends/`. Adding a CLI means adding a backend, a config entry, and its id in
+  `AGENT_IDS` (src/agent/types.ts) and `BACKENDS` (src/agent-registry/registry.ts). Codex,
+  added that way, is recorded in [ADR 0028](0028-codex-backend.md).
 - **Model tiers.** Phases ask for `fast`, `balanced`, or `strong` (`config.models`), and each
-  backend maps a tier to its own id (`config.agents.<id>.models`): Claude uses
-  `haiku`/`sonnet`/`opus`. Cursor is two ids that share one implementation:
-  `cursor-anthropic` uses `claude-haiku-5-5-medium`/`claude-sonnet-5-5-medium`/
-  `claude-opus-5-5-high`; `cursor-grok` uses `grok-4.7-low`/`grok-4.7-medium`/
-  `grok-4.7-high`, one effort step per tier. `xhigh` is not used.
-- **One `Agent` per run** (`createAgent(id)`) bundles the backend, its process runner, and a
+  backend maps a tier to its own id in `config.agents.<id>.models`. Cursor is two ids that share
+  one implementation: `cursor-anthropic` (Anthropic models) and `cursor-grok` (one Grok model,
+  one effort step per tier).
+- **One `Agent` per run** (`createAgentFor(id)`) bundles the backend, its process runner, and a
   map from each session to its tier. A resume therefore knows its model: Cursor passes
   `--model` on every resume, while Claude doesn't need it. The usage summary labels each row
   with the backend's model id. The pipeline builds the agent from `PipelineOptions.agent` and
   threads it to every phase via `RunnerDeps.agent`.
-- **No default agent; the choice is remembered.** Before any other work,
+- **Claude is the default; the choice is remembered.** Before any other work,
   `src/cli/agent-choice.ts` decides the agent:
-  - `--agent <claude|cursor-anthropic|cursor-grok|codex>` wins, and is saved if it differs from the saved choice.
+  - `--agent <id>` wins, and is saved if it differs from the saved choice.
   - Otherwise the saved choice is used: `agent` in `~/.config/tulip/config.json`
     (`$XDG_CONFIG_HOME/tulip/config.json` if set, `%APPDATA%\tulip\config.json` on Windows;
     `src/cli/settings.ts`).
-  - Otherwise, if stdin and stdout are a terminal, Tulip shows a numbered menu, re-asks on bad
-    input, and saves the answer. With no terminal it fails with a message asking for `--agent`.
+  - Otherwise `claude`, so a first run needs no setup.
 
-  A malformed settings file or unknown agent id reads as "nothing saved", so the user is asked
-  again. If the save itself fails, the run continues with a warning. Phase unit tests, which call
-  phases without an agent, still fall back to the Claude backend inside `invokeAgent`; the
-  pipeline always passes the chosen one.
+  A malformed settings file or unknown agent id reads as "nothing saved". If the save itself
+  fails, the run continues with a warning. Phase unit tests, which call phases without an agent,
+  fall back to the Claude backend inside `invokeAgent`; the pipeline always passes the chosen
+  one.
 - **Cursor backends.** `cursor-anthropic` and `cursor-grok` share argv, prompt preparation,
   reply parsing, and workspace cleanup. Only the `--model` id differs.
   - Argv: `-p --output-format json --mode ask --trust --model <id> [--resume <id>]`. Never
@@ -73,16 +70,15 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
   - `parseReply` takes the JSON from the whole text, else from the last fenced block, else from
     the leftmost balanced `{...}` that parses. If none parses, `structured` is `undefined` and
     the generic retry asks again. Validation is the same local check as for Claude.
-  - `prepareWorkspace` deletes `.cursor/` and `.claude/` from the checkout before any call; the
+  - `repoConfigDirs` is `.cursor` and `.claude`, deleted from the checkout before any call; the
     `rm` unlinks a symlinked dir without following it (cf. the `.tulip` fix in ADR 0002). The
-    pipeline calls it right after `materializeChangeArtifacts`.
+    pipeline does this right after `materializeChangeArtifacts`.
 
 ## Consequences
 
 - Cursor runs every pass with the same prompts, schemas, retry, and usage summary. The only
   prompt difference is the appended schema instruction.
-- A first run needs one answer (or `--agent`), and scripted/CI use must pass `--agent` once per
-  machine or pre-seed the settings file.
+- Using another agent needs `--agent` once per machine (or a pre-seeded settings file).
 - Structured output under Cursor relies on the model following the prompt, not on a CLI
   constraint. A malformed reply costs one retry turn, and a second failure fails the phase, as
   for Claude.
@@ -91,5 +87,5 @@ Cursor's output-format docs, and live `agent -p` runs (CLI version 2026.10.14):
 - `--trust` records the temp checkout as trusted in Cursor's own state. The directory is
   deleted after the run.
 - Whether `claude -p` likewise runs a PR's `.claude/settings.json` hooks wasn't checked here;
-  it's tracked in TODO.md. With `prepareWorkspace` in place, the fix would be a one-line
+  it's tracked in TODO.md. With `repoConfigDirs` in place, the fix would be a one-line
   addition to the Claude backend.

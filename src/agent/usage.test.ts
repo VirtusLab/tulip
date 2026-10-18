@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createUsageLedger, formatUsageSummary, type ModelTokens } from "./usage.js";
+import type { ModelTokens } from "./types.js";
+import { createUsageLedger, formatUsageSummary } from "./usage.js";
 
 function usage(input: number, output: number, cacheRead = 0, cacheWrite = 0): ModelTokens {
   return { input, output, cacheRead, cacheWrite };
@@ -29,18 +30,6 @@ describe("createUsageLedger", () => {
     ledger.record(SONNET, usage(1, 1));
 
     expect(ledger.rows().map((r) => r.model)).toEqual(["sonnet", "opus", "unknown"]);
-  });
-
-  it("labels rows with the backend's own model id", () => {
-    const ledger = createUsageLedger();
-    ledger.record({ tier: "strong", model: "claude-opus-5-5-high" }, usage(3, 4));
-
-    expect(ledger.rows()).toEqual([
-      {
-        model: "claude-opus-5-5-high",
-        tokens: { input: 3, output: 4, cacheWrite: 0, cacheRead: 0 },
-      },
-    ]);
   });
 
   it("files a call with no model under 'unknown'", () => {

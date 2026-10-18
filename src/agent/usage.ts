@@ -1,25 +1,11 @@
-import type { ModelTier } from "./backend.js";
-
-/**
- * One model's accumulated token counts. `cacheWrite`/`cacheRead` are the two prompt-cache
- * counts — both input-side (there is no cached output): `cacheWrite` is input written into the
- * cache, `cacheRead` input served from it. `input`/`output` are the ordinary (uncached) input
- * and output token counts. Each backend maps its CLI's own usage fields onto these (see
- * src/agent/backends).
- */
-export interface ModelTokens {
-  input: number;
-  output: number;
-  cacheWrite: number;
-  cacheRead: number;
-}
+import type { ModelTier, ModelTokens } from "./types.js";
 
 /** "unknown" is the summary label for a resume whose originating session was never recorded.
  * The real pipeline always records a session before resuming it, so it can't arise there; it
  * exists only so a partial/future caller can't silently drop token counts. */
 const UNKNOWN_MODEL = "unknown";
 
-/** One model's row in the summary, labelled with the backend's own model id (e.g. "sonnet"). */
+/** One model's row in the summary, labelled with the backend's own model id. */
 export interface ModelUsageRow {
   model: string;
   tokens: ModelTokens;
@@ -50,7 +36,7 @@ export interface UsageLedger {
   unreportedCalls(): number;
 }
 
-/** Fixed display order (sonnet, haiku, opus for claude); models never used are omitted. */
+/** Row order by tier; models never used are omitted. */
 const TIER_ORDER: ModelTier[] = ["balanced", "fast", "strong"];
 
 export function createUsageLedger(): UsageLedger {
@@ -87,8 +73,8 @@ export function createUsageLedger(): UsageLedger {
   return { record, rows, unreportedCalls: () => unreported };
 }
 
-// "Uncached in" is only the fresh input of a turn (Anthropic's `input_tokens`, Cursor's
-// `inputTokens`); the cached bulk of the input is in the Cache write/read columns, not here.
+// "Uncached in" is only the fresh input of a turn (see `ModelTokens`); the cached bulk of the
+// input is in the Cache write/read columns, not here.
 const COLUMNS = ["Model", "Uncached in", "Output", "Cache write", "Cache read"] as const;
 
 /** Two-space indent so rows sit under the flush-left "Token usage" title; three-space gap between

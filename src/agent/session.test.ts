@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createAgentFor } from "../agent-registry/registry.js";
 import type { AgentProcessResult } from "./exec.js";
 import { PREAMBLE } from "./preamble.js";
 import type { JsonSchema } from "./schema.js";
@@ -47,10 +48,12 @@ describe("runSession", () => {
 describe("resumeSession", () => {
   it("sends the prompt as-is (no preamble) via stdin, and resumes the given session id", async () => {
     const runAgentProcess = vi.fn(async (_args: string[], _input: string) => envelope("abc"));
+    const agent = createAgentFor("claude");
+    agent.sessionTiers.set("abc", "strong");
 
     await resumeSession(
       { sessionId: "abc", schema: SCHEMA, prompt: "follow up" },
-      { runAgentProcess },
+      { runAgentProcess, agent },
     );
 
     const [args, input] = runAgentProcess.mock.calls[0] ?? [];
