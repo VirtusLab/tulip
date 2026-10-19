@@ -4,6 +4,7 @@ import { serializeSnippetRef } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { buildAlignedDiff } from "./line-diff.js";
+import { PAGE_SCRIPTS, scriptHash } from "./standalone.js";
 import { renderPage } from "./template.js";
 
 function explanation(overrides: Partial<CategoryExplanation> = {}): CategoryExplanation {
@@ -49,6 +50,47 @@ describe("renderPage", () => {
       "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
         "font-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'",
     );
+  });
+
+  it("links the same scripts, in the same order, as a single-file page inlines", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "",
+      prUrl: "https://github.com/acme/widgets/pull/7",
+      fileDiffs: new Map(),
+      explanations: [],
+    });
+
+    expect(
+      parse(html)
+        .querySelectorAll("script[src]")
+        .map((script) => script.getAttribute("src")),
+    ).toEqual(PAGE_SCRIPTS.map((path) => `assets/${path}`));
+  });
+
+  it("inlines the given assets and allows exactly their scripts", () => {
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "",
+      prUrl: "https://github.com/acme/widgets/pull/7",
+      fileDiffs: new Map(),
+      explanations: [],
+      inlineAssets: { css: "body { color: red; }", scripts: ["var m = 1;", "var a = 2;"] },
+    });
+    const root = parse(html);
+
+    expect(
+      root.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content"),
+    ).toBe(
+      `default-src 'none'; script-src ${scriptHash("var m = 1;")} ${scriptHash("var a = 2;")}; ` +
+        "style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'",
+    );
+    expect(root.querySelector("style")?.text).toBe("body { color: red; }");
+    expect(root.querySelectorAll("script:not([type])").map((script) => script.text)).toEqual([
+      "var m = 1;",
+      "var a = 2;",
+    ]);
+    expect(html).not.toContain("assets/");
   });
 
   it("renders the PR's original description as its own labeled section, before the analysis, with a TOC entry", () => {
@@ -630,6 +672,23 @@ describe("renderPage", () => {
     };
     expect(renderPage(base)).not.toContain("review-box");
     expect(renderPage({ ...base, serve: false })).not.toContain("review-box");
+  });
+
+  it("renders the Share button in the header only when the server can share", () => {
+    const base = {
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [explanation()],
+    };
+    expect(
+      parse(renderPage({ ...base, serve: true, share: true })).querySelector(
+        "#pr-header .share-submit",
+      ),
+    ).not.toBeNull();
+    expect(renderPage({ ...base, serve: true })).not.toContain("share-submit");
+    expect(renderPage(base)).not.toContain("share-submit");
   });
 });
 

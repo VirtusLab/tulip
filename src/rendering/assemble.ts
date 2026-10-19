@@ -29,15 +29,17 @@ export interface AssembleResult {
   indexPath: string;
 }
 
-const DEFAULT_ASSETS_DIR = fileURLToPath(new URL("./assets", import.meta.url));
+export const STANDALONE_FILENAME = "standalone.html";
+
+export const DEFAULT_ASSETS_DIR = fileURLToPath(new URL("./assets", import.meta.url));
 
 /**
- * Writes the rendered `page` plus the bundled assets (CSS, JS, vendored mermaid — task 7.1) into
- * a fresh OS temp directory, and logs how to open it — the epic's "Result": a temp directory
- * with the ready HTML page and open-in-browser instructions.
+ * Writes the rendered `page` and its single-file copy (docs/adr/0029) plus the bundled assets (CSS,
+ * JS, vendored mermaid — task 7.1) into a fresh OS temp directory, and logs how to open it — the
+ * epic's "Result": a temp directory with the ready HTML page and open-in-browser instructions.
  */
 export async function assembleOutput(
-  page: string,
+  output: { page: string; standalonePage: string },
   deps: AssembleDeps = {},
 ): Promise<AssembleResult> {
   const logger = deps.logger ?? createLogger();
@@ -49,7 +51,8 @@ export async function assembleOutput(
   const dir = await makeTempDir();
   const indexPath = join(dir, "index.html");
 
-  await write(indexPath, page);
+  await write(indexPath, output.page);
+  await write(join(dir, STANDALONE_FILENAME), output.standalonePage);
   await copyDir(assetsDir, join(dir, "assets"));
 
   logger.info(`explanation page ready — open file://${indexPath} in your browser`);

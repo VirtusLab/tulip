@@ -21,6 +21,14 @@ import { startTimer } from "../logging/duration.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { renderExplanations } from "../rendering/render.js";
 import { serveForReview } from "../serve/server.js";
+import { readSharableRun, writeRunManifest } from "../share/run-manifest.js";
+import {
+  createShare,
+  memoizeUntilSuccess,
+  prepareAndLog,
+  shareCommand,
+  shareOrSuggestRetry,
+} from "../share/share.js";
 import { splitLargeChanges } from "../splitting/orchestrate.js";
 import { formatVersion } from "../version.js";
 
@@ -36,6 +44,11 @@ export interface PipelineOptions {
   /** Run a local review server that posts per-category PR comments (docs/adr/0019), instead of
    * rendering a static page and exiting. Fails when the PR's forge has no `commenter`. */
   serve: boolean;
+  /** Share the page on the PR once the run ends (docs/adr/0029). Fails when the PR's forge has no
+   * `previewPublisher`. */
+  attachPreviewAsComment: boolean;
+  /** Signs this run so `tulip share` can trust it later (see src/share/signing.ts). */
+  shareKeyPath: string;
   /** Which agent CLI runs every LLM pass (docs/adr/0027); see src/cli/agent-choice.ts. */
   agent: AgentId;
 }
@@ -58,6 +71,8 @@ export interface PipelineDeps {
   explainCategories?: typeof explainCategories;
   renderExplanations?: typeof renderExplanations;
   serveForReview?: typeof serveForReview;
+  writeRunManifest?: typeof writeRunManifest;
+  readSharableRun?: typeof readSharableRun;
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
    * never actually spawns a browser. */
   openInBrowser?: BrowserOpener;
@@ -97,6 +112,8 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doExplainCategories = deps.explainCategories ?? explainCategories;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
   const doServeForReview = deps.serveForReview ?? serveForReview;
+  const doWriteRunManifest = deps.writeRunManifest ?? writeRunManifest;
+  const doReadSharableRun = deps.readSharableRun ?? readSharableRun;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
   const adapter = (deps.forgeFor ?? forgeFor)(options.pr);
@@ -122,6 +139,17 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       throw new Error(`--serve isn't supported for ${options.pr.forge} URLs`);
     }
     await commenter?.checkAuth(options.pr.host);
+    const publisher = adapter.previewPublisher;
+    if (options.attachPreviewAsComment && !publisher) {
+      throw new Error(`--attach-preview-as-comment isn't supported for ${options.pr.forge} URLs`);
+    }
+    const prepare =
+      publisher && memoizeUntilSuccess(() => prepareAndLog(publisher, options.pr, logger));
+    // Serve mode alone prepares only when the Share button is clicked, so a sharing problem never
+    // blocks reviewing.
+    if (prepare && options.attachPreviewAsComment) {
+      await runPhase("preparing the preview", prepare);
+    }
 
     logger.info(`fetching ${adapter.label(options.pr)}...`);
     const metadata = await runPhase("fetching PR", () => adapter.fetchPrMetadata(options.pr));
@@ -245,11 +273,12 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.info("preparing output page...");
     const renamedFrom = buildRenamedFromMap(diff);
+    const generatedAt = new Date();
     // Safe: this phase only runs once "creating checkout" (above) has already succeeded, so
     // `checkout` is always assigned by this point — TypeScript just can't see that across the
     // try/finally.
-    const { dir, indexPath } = await runPhase("rendering", () =>
-      doRenderExplanations(
+    const { dir, indexPath } = await runPhase("rendering", async () => {
+      const rendered = await doRenderExplanations(
         {
           prTitle: metadata.title,
           prDescription: metadata.body,
@@ -257,33 +286,69 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           explanations,
           renamedFrom,
           serve: options.serve,
+          share: options.serve && publisher !== undefined,
         },
         { checkout: checkout as PrCheckout, logger },
-      ),
-    );
+      );
+      await doWriteRunManifest(
+        rendered.dir,
+        { prUrl, headSha: metadata.head.sha, generatedAt },
+        options.shareKeyPath,
+      );
+      return rendered;
+    });
     logger.debug(`rendered output at ${indexPath}`);
 
     const categoryNames = explanations.map((explanation) => explanation.category.name);
 
-    if (commenter) {
-      // Serves the rendered dir over http://, opens it (honoring --no-open), and blocks until
-      // Ctrl+C; on resolve the finally below cleans up the checkout, as in the static path.
-      await doServeForReview({
-        dir,
-        prUrl,
-        categoryNames,
-        postComment: commenter.postComment,
-        open: options.open,
-        logger,
-        openInBrowser: doOpenInBrowser,
-      });
-    } else if (options.open) {
+    if (!commenter && options.open) {
       try {
         await doOpenInBrowser(indexPath);
       } catch (error) {
         // Never fail the run over this — the file:// path logged by assembleOutput (above,
         // unconditional) is always there as a fallback.
         logger.debug(`could not auto-open the page: ${causeMessage(error)}`);
+      }
+    }
+
+    // Read back through the signature, so what's shared is what Tulip rendered.
+    const share =
+      prepare &&
+      createShare({
+        prepare,
+        loadPreview: async () => (await doReadSharableRun(dir, options.shareKeyPath)).preview,
+        logger,
+      });
+    const sharing =
+      share && options.attachPreviewAsComment ? shareOrSuggestRetry(share, dir, logger) : undefined;
+    if (prepare && !sharing) {
+      logger.info(
+        `to share it on the PR later: ${shareCommand(dir)} (a temp dir the OS removes eventually)`,
+      );
+    }
+
+    if (commenter) {
+      // Serves the rendered dir over http://, opens it (honoring --no-open), and blocks until
+      // Ctrl+C; on resolve the finally below cleans up the checkout, as in the static path. A
+      // share started above runs alongside, so the page isn't held back by the upload.
+      await doServeForReview({
+        dir,
+        prUrl,
+        categoryNames,
+        postComment: commenter.postComment,
+        ...(share && { share: async () => (await share()).commentUrl }),
+        open: options.open,
+        logger,
+        openInBrowser: doOpenInBrowser,
+      });
+      // The server only stops on Ctrl+C, which already ended any gh call in flight.
+      share?.stop();
+    }
+    // A failure the page's Share button later retried successfully doesn't count.
+    if (sharing) {
+      await sharing;
+      if (!share?.succeeded()) {
+        process.exitCode = 1;
       }
     }
   } catch (error) {

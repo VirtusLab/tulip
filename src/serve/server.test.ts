@@ -27,12 +27,15 @@ afterAll(async () => {
 /** Starts a server on an ephemeral 127.0.0.1 port and returns its base URL + a closer. */
 async function start(
   postComment: (prUrl: string, body: string) => Promise<string>,
+  share?: () => Promise<string>,
 ): Promise<{ base: string; port: number; server: http.Server; close: () => Promise<void> }> {
   const server = createReviewServer({
     dir,
     prUrl: PR_URL,
     categoryNames: CATEGORY_NAMES,
     postComment,
+    ...(share && { share }),
+    logger: { info: vi.fn(), debug: vi.fn() },
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -64,6 +67,17 @@ async function serve(
   const h = await start(postComment);
   closers.push(h.close);
   return { ...h, postComment };
+}
+
+const COMMENT_URL = "https://github.com/owner/repo/pull/42#issuecomment-2";
+
+async function serveWithShare(share = vi.fn(async () => COMMENT_URL)) {
+  const h = await start(
+    vi.fn(async () => "comment-url"),
+    share,
+  );
+  closers.push(h.close);
+  return { ...h, share };
 }
 
 /** Raw node:http request with fully caller-controlled headers (fetch can't override Host/omit Origin). */
@@ -330,5 +344,67 @@ describe("serveForReview lifecycle", () => {
     } finally {
       closeIdle.mockRestore();
     }
+  });
+});
+
+describe("POST /api/share", () => {
+  it("shares the page and returns the comment URL", async () => {
+    const { base, share } = await serveWithShare();
+    const res = await fetch(`${base}/api/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ url: COMMENT_URL });
+    expect(share).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a 404 when the server can't share", async () => {
+    const { base } = await serve();
+    const res = await fetch(`${base}/api/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects a cross-origin POST with 403 and shares nothing", async () => {
+    const { base, share } = await serveWithShare();
+    const res = await fetch(`${base}/api/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://evil.example" },
+      body: "{}",
+    });
+    expect(res.status).toBe(403);
+    expect(share).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-JSON POST with 415, as a cross-site form would send", async () => {
+    const { port, share } = await serveWithShare();
+    const res = await rawRequest(port, {
+      method: "POST",
+      path: "/api/share",
+      headers: { Host: `127.0.0.1:${port}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: "",
+    });
+    expect(res.status).toBe(415);
+    expect(share).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 {error} without detail when sharing fails", async () => {
+    const { base } = await serveWithShare(
+      vi.fn(async (): Promise<string> => {
+        throw new Error("secret detail");
+      }),
+    );
+    const res = await fetch(`${base}/api/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "failed to share the preview" });
   });
 });

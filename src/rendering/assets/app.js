@@ -633,6 +633,49 @@
     });
   }
 
+  // Serve mode only (docs/adr/0029): the server publishes at most once, so a second click just
+  // shows the same comment again.
+  function setupShareButton() {
+    var button = document.querySelector(".share-submit");
+    var status = document.querySelector(".share-status");
+    if (!button || !status) {
+      return;
+    }
+    button.addEventListener("click", () => {
+      status.classList.remove("error");
+      button.disabled = true;
+      status.textContent = "Sharing…";
+      fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("request failed");
+          }
+          return response.json();
+        })
+        .then((data) => {
+          status.textContent = "Shared ✓ ";
+          // Build the link element-wise — never assign untrusted text to innerHTML.
+          var link = document.createElement("a");
+          link.href = data.url;
+          link.textContent = "view comment";
+          link.target = "_blank";
+          link.rel = "noopener";
+          status.appendChild(link);
+        })
+        .catch(() => {
+          status.textContent = "Could not share the page; the terminal says why. Try again.";
+          status.classList.add("error");
+        })
+        .finally(() => {
+          button.disabled = false;
+        });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     setupThemeToggle();
     setupToc();
@@ -642,5 +685,6 @@
     setupSnippetExpansion();
     setupHighlighting();
     setupReviewBoxes();
+    setupShareButton();
   });
 })();
