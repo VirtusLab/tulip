@@ -4,6 +4,7 @@ import { checkGhAuth } from "./gh-auth.js";
 import { postPrComment } from "./pr-comment.js";
 import { fetchPrMetadata } from "./pr-fetcher.js";
 import { githubPrLabel, githubPrUrl } from "./pr-url.js";
+import { preparePreview } from "./preview.js";
 
 /** GitHub and GitHub Enterprise: `gh` first, then the REST API (see pr-fetcher.ts). */
 export const githubAdapter: ForgeAdapter = {
@@ -22,4 +23,5 @@ export const githubAdapter: ForgeAdapter = {
     checkAuth: (host) => checkGhAuth(host),
     postComment: (prUrl, body) => postPrComment(prUrl, body),
   },
+  previewPublisher: { prepare: (pr) => preparePreview(pr) },
 };

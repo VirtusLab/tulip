@@ -667,6 +667,23 @@ describe("renderPage", () => {
     expect(renderPage(base)).not.toContain("review-box");
     expect(renderPage({ ...base, serve: false })).not.toContain("review-box");
   });
+  it("renders the Share button in the header only when the server can share", () => {
+    const base = {
+      inlineAssets: NO_ASSETS,
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [explanation()],
+    };
+    expect(
+      parse(renderPage({ ...base, serve: true, share: true })).querySelector(
+        "#pr-header .share-submit",
+      ),
+    ).not.toBeNull();
+    expect(renderPage({ ...base, serve: true })).not.toContain("share-submit");
+    expect(renderPage(base)).not.toContain("share-submit");
+  });
 });
 
 describe("renderPage XSS safety", () => {

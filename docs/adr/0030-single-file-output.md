@@ -14,7 +14,7 @@ or host it. `index.html` alone showed an unstyled page with no diagrams.
   inside the stylesheet, the stylesheet goes in a `<style>` element, and each script goes in its
   own inline `<script>`, in page order: mermaid, highlight.js, app.js. The assets are read when a
   run starts, so a missing file (e.g. no `pnpm build`) fails the run before any LLM work.
-  `--serve` serves only `index.html`.
+  `--serve` serves only the page (from memory since ADR 0029).
 - **Script escaping.** Each script is escaped so the HTML parser can't end or swallow it early,
   without changing what the JS means, and converted to the exact text the browser hashes for the
   CSP. The rules and their reasons are on `inlineScriptText` in `src/rendering/inline-assets.ts`.

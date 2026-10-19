@@ -43,6 +43,8 @@ export interface PageInput {
    * per-category PR comment via the local server's `/api/comment` (see ./assets/app.js). Default
    * (false/omitted) renders the static page with no boxes — byte-for-byte unchanged. */
   serve?: boolean;
+  /** Adds the header's Share button, for a server that can share the page (docs/adr/0029). */
+  share?: boolean;
   /** The stylesheet and scripts embedded into the page (docs/adr/0030). */
   inlineAssets: InlineAssets;
 }
@@ -110,7 +112,7 @@ ${renderTocHtml(toc)}
 <header id="pr-header">
 <h1>${escapeHtml(input.prTitle)}</h1>
 <p class="pr-link"><a href="${escapeHtml(input.prUrl)}">${escapeHtml(input.prUrl)}</a></p>
-</header>
+${input.share ? SHARE_BOX : ""}</header>
 <section id="${PR_DESCRIPTION_ID}" class="page-section">
 <h2>Original PR description</h2>
 <p class="section-note">Written by the PR author — not part of Tulip's analysis below.</p>
@@ -176,6 +178,14 @@ function renderCategorySection(
   const head = tree === "" ? heading : `${heading}\n${tree}`;
   return `<section id="${categoryId(index)}" class="category page-section">\n${head}\n${bodyWithBox}\n</section>`;
 }
+
+/** Serve-mode Share button (docs/adr/0029); ./assets/app.js's `setupShareButton` wires it to the
+ * local server's `/api/share`. */
+const SHARE_BOX = `<div class="share-box">
+<button type="button" class="review-submit share-submit">Share on PR</button>
+<span class="review-status share-status">Posts a downloadable copy of this page as a PR comment.</span>
+</div>
+`;
 
 /** Serve-mode review box for one category (docs/adr/0019) — fully static markup, nothing
  * user-supplied to escape. `index` is the category's array position, matching `categoryId(index)`

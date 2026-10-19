@@ -3,7 +3,7 @@ import { type CommandRunner, defaultRunGh } from "./gh.js";
 /**
  * Preflight check that `gh` is installed and authenticated for `host`, via `gh auth status`.
  * Resolves when authenticated. Throws a user-actionable Error if `gh` is missing (ENOENT) or not
- * authenticated for the host — used before serve mode, which has no posting fallback.
+ * authenticated for the host — used before posting to the PR, which has no fallback.
  */
 export async function checkGhAuth(
   host: string,
@@ -13,7 +13,7 @@ export async function checkGhAuth(
     await runGh(["auth", "status", "--hostname", host]);
   } catch (error) {
     if ((error as { code?: unknown }).code === "ENOENT") {
-      throw new Error("gh CLI not found; install it or run without --serve");
+      throw new Error("gh CLI not found; install it from https://cli.github.com");
     }
     throw new Error(
       `gh is not authenticated for ${host}; run \`gh auth login --hostname ${host}\``,
