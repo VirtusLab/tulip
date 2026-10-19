@@ -3,21 +3,24 @@ import { describe, expect, it, vi } from "vitest";
 import { assembleOutput } from "./assemble.js";
 
 describe("assembleOutput", () => {
-  it("writes the page to index.html in a fresh temp dir and copies assets alongside it", async () => {
+  it("writes the page and its single-file copy to a fresh temp dir, with the assets", async () => {
     const written: { path: string; content: string }[] = [];
     const copied: { src: string; dest: string }[] = [];
 
-    const result = await assembleOutput("<html></html>", {
-      mkdtemp: async () => "/tmp/tulip-render-abc",
-      writeFile: async (path, content) => {
-        written.push({ path, content });
+    const result = await assembleOutput(
+      { page: "<html></html>", standalonePage: "<html>standalone</html>" },
+      {
+        mkdtemp: async () => "/tmp/tulip-render-abc",
+        writeFile: async (path, content) => {
+          written.push({ path, content });
+        },
+        copyDir: async (src, dest) => {
+          copied.push({ src, dest });
+        },
+        assetsDir: "/fake/assets",
+        logger: { info: vi.fn(), debug: vi.fn() },
       },
-      copyDir: async (src, dest) => {
-        copied.push({ src, dest });
-      },
-      assetsDir: "/fake/assets",
-      logger: { info: vi.fn(), debug: vi.fn() },
-    });
+    );
 
     expect(result).toEqual({
       dir: "/tmp/tulip-render-abc",
@@ -25,27 +28,34 @@ describe("assembleOutput", () => {
     });
     expect(written).toEqual([
       { path: "/tmp/tulip-render-abc/index.html", content: "<html></html>" },
+      { path: "/tmp/tulip-render-abc/standalone.html", content: "<html>standalone</html>" },
     ]);
     expect(copied).toEqual([{ src: "/fake/assets", dest: "/tmp/tulip-render-abc/assets" }]);
   });
 
   it("logs how to open the result", async () => {
     const info = vi.fn();
-    const result = await assembleOutput("<html></html>", {
-      mkdtemp: async () => "/tmp/tulip-render-xyz",
-      writeFile: async () => {},
-      copyDir: async () => {},
-      assetsDir: "/fake/assets",
-      logger: { info, debug: vi.fn() },
-    });
+    const result = await assembleOutput(
+      { page: "<html></html>", standalonePage: "<html>standalone</html>" },
+      {
+        mkdtemp: async () => "/tmp/tulip-render-xyz",
+        writeFile: async () => {},
+        copyDir: async () => {},
+        assetsDir: "/fake/assets",
+        logger: { info, debug: vi.fn() },
+      },
+    );
 
     expect(info).toHaveBeenCalledWith(expect.stringContaining(`file://${result.indexPath}`));
   });
 
   it("uses fresh defaults (real fs) when no deps are injected", async () => {
-    const result = await assembleOutput("<html>real</html>", {
-      logger: { info: vi.fn(), debug: vi.fn() },
-    });
+    const result = await assembleOutput(
+      { page: "<html>real</html>", standalonePage: "<html>standalone</html>" },
+      {
+        logger: { info: vi.fn(), debug: vi.fn() },
+      },
+    );
     expect(result.dir).toMatch(/tulip-render-/);
     await expect(readFile(result.indexPath, "utf8")).resolves.toBe("<html>real</html>");
     await expect(readFile(`${result.dir}/assets/style.css`, "utf8")).resolves.toContain("body");

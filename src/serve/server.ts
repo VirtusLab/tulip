@@ -18,6 +18,8 @@ export interface ReviewServerOptions {
   categoryNames: string[];
   /** Posts a comment, e.g. the PR's forge's {@link PrCommenter.postComment}. */
   postComment: PrCommenter["postComment"];
+  /** Shares the page on the PR (docs/adr/0029); resolves with the comment's URL. */
+  share?: () => Promise<string>;
   logger?: Logger;
 }
 
@@ -38,9 +40,10 @@ function sendJson(res: http.ServerResponse, status: number, payload: unknown): v
 }
 
 /**
- * Builds the localhost review server: serves the static render dir and posts per-category PR
- * comments via `POST /api/comment`. No signal handlers and no browser open — those live in
- * {@link serveForReview}, so request-behavior tests can drive this directly on an ephemeral port.
+ * Builds the localhost review server: serves the static render dir, posts per-category PR
+ * comments via `POST /api/comment`, and shares the page via `POST /api/share`. No signal handlers
+ * and no browser open — those live in {@link serveForReview}, so request-behavior tests can drive
+ * this directly on an ephemeral port.
  *
  * Security: every request must carry `Host: 127.0.0.1:<port>` (DNS-rebinding guard), POSTs with a
  * present-but-foreign `Origin` are rejected, static paths are confined to `dir` (traversal guard),
@@ -72,6 +75,15 @@ export function createReviewServer(opts: ReviewServerOptions): http.Server {
       (req.url === "/api/comment" || req.url?.startsWith("/api/comment?"))
     ) {
       void handleComment(req, res, opts, logger, expectedOrigin);
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      opts.share &&
+      (req.url === "/api/share" || req.url?.startsWith("/api/share?"))
+    ) {
+      void handleShare(req, res, opts.share, logger, expectedOrigin);
       return;
     }
 
@@ -193,6 +205,35 @@ async function handleComment(
       `failed to post PR comment: ${error instanceof Error ? error.message : String(error)}`,
     );
     sendJson(res, 500, { error: "failed to post comment" });
+  }
+}
+
+/** Handles `POST /api/share`. It takes no input: what's shared is fixed when the server starts. */
+async function handleShare(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  share: () => Promise<string>,
+  logger: Logger,
+  expectedOrigin: string,
+): Promise<void> {
+  const origin = req.headers.origin;
+  if (origin !== undefined && origin !== expectedOrigin) {
+    sendJson(res, 403, { error: "forbidden" });
+    return;
+  }
+  // With no body to validate, this is what stops a cross-site form: it can't send this type, and a
+  // cross-site fetch that does needs a CORS preflight, which this server never answers.
+  if (!req.headers["content-type"]?.startsWith("application/json")) {
+    sendJson(res, 415, { error: "expected application/json" });
+    return;
+  }
+  try {
+    sendJson(res, 200, { url: await share() });
+  } catch (error) {
+    logger.info(
+      `failed to share the preview: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    sendJson(res, 500, { error: "failed to share the preview" });
   }
 }
 

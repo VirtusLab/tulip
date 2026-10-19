@@ -4,6 +4,7 @@ import {
   CliUsageError,
   HelpRequestedError,
   parseCliArgs,
+  parseShareArgs,
   usage,
   VersionRequestedError,
 } from "./args.js";
@@ -21,6 +22,7 @@ describe("parseCliArgs", () => {
       verbose: false,
       open: true,
       serve: false,
+      attachPreviewAsComment: false,
     });
   });
 
@@ -32,6 +34,12 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs([VALID_URL, "--serve"]).serve).toBe(true);
   });
 
+  it("accepts --attach-preview-as-comment", () => {
+    expect(parseCliArgs([VALID_URL, "--attach-preview-as-comment"]).attachPreviewAsComment).toBe(
+      true,
+    );
+  });
+
   it("accepts --diff-threshold and parses it as an integer", () => {
     expect(parseCliArgs([VALID_URL, "--diff-threshold", "800"])).toEqual({
       prUrl: VALID_URL,
@@ -40,6 +48,7 @@ describe("parseCliArgs", () => {
       verbose: false,
       open: true,
       serve: false,
+      attachPreviewAsComment: false,
     });
   });
 
@@ -140,5 +149,25 @@ describe("parseCliArgs", () => {
   it("shows a GitHub and a GitLab URL example in the usage text", () => {
     expect(usage()).toContain("https://github.com/owner/repo/pull/123");
     expect(usage()).toContain("https://gitlab.com/group/project/-/merge_requests/45");
+  });
+});
+
+describe("parseShareArgs", () => {
+  it("takes the run location and an optional --verbose", () => {
+    expect(parseShareArgs(["/tmp/run"])).toEqual({ location: "/tmp/run", verbose: false });
+    expect(parseShareArgs(["/tmp/run", "--verbose"]).verbose).toBe(true);
+  });
+
+  it("requires exactly one location", () => {
+    expect(() => parseShareArgs([])).toThrow(CliUsageError);
+    expect(() => parseShareArgs(["a", "b"])).toThrow(CliUsageError);
+  });
+
+  it("rejects options that only apply to a run", () => {
+    expect(() => parseShareArgs(["/tmp/run", "--serve"])).toThrow(CliUsageError);
+  });
+
+  it("throws HelpRequestedError for --help", () => {
+    expect(() => parseShareArgs(["--help"])).toThrow(HelpRequestedError);
   });
 });

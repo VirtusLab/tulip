@@ -42,6 +42,8 @@ export interface ForgeAdapter {
   readonly checkoutAuth: CheckoutAuth;
   /** Posts PR comments for serve mode (docs/adr/0019); absent when the forge doesn't support it. */
   readonly commenter?: PrCommenter;
+  /** Shares the page on the PR (docs/adr/0029); absent when the forge doesn't support it. */
+  readonly previewPublisher?: PreviewPublisher;
 }
 
 /** Posts comments on a forge's PRs. */
@@ -51,4 +53,30 @@ export interface PrCommenter {
   checkAuth(host: string): Promise<void>;
   /** Posts `body` as a comment on the PR at `prUrl`; resolves with the comment's URL. */
   postComment(prUrl: string, body: string): Promise<string>;
+}
+
+export interface Preview {
+  /** The single-file page. */
+  page: string;
+  headSha: string;
+  generatedAt: Date;
+}
+
+export interface PreviewPublisher {
+  /** Read-only, so it can run before any LLM work and fail fast. */
+  prepare(pr: PrRef): Promise<PreparedPreview>;
+}
+
+export interface PreparedPreview {
+  /** Where the preview will go, when the user wouldn't expect it. */
+  notice?: string;
+  /** `signal` stops it between steps, e.g. on Ctrl+C. */
+  publish(preview: Preview, signal?: AbortSignal): Promise<PublishedPreview>;
+}
+
+export interface PublishedPreview {
+  commentUrl: string;
+  previewUrl: string;
+  /** Follow-up steps that failed after the comment was posted. */
+  warnings: string[];
 }

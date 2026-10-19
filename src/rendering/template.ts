@@ -6,6 +6,7 @@ import { renderFileTree } from "./file-tree.js";
 import { categoryId, PR_DESCRIPTION_ID, type SubsectionWithId, withSubsectionIds } from "./ids.js";
 import { type MarkdownRenderContext, renderCategoryMarkdown } from "./markdown.js";
 import { splitCategoryMarkdown } from "./sections.js";
+import { type InlineAssets, scriptHash } from "./standalone.js";
 import { buildToc, renderTocHtml } from "./toc.js";
 
 /** Why: docs/adr/0028. The inline `<script type="application/json">` blocks are data, which
@@ -20,6 +21,35 @@ const CSP = [
   "form-action 'none'",
   "base-uri 'none'",
 ].join("; ");
+
+/** The same policy for a single-file page (docs/adr/0029): the inlined scripts are allowed by
+ * hash, so model-written markup still can't run a script of its own. */
+function standaloneCsp(scripts: string[]): string {
+  return [
+    "default-src 'none'",
+    `script-src ${scripts.map(scriptHash).join(" ")}`,
+    "style-src 'unsafe-inline'",
+    "img-src data:",
+    "font-src data:",
+    "form-action 'none'",
+    "base-uri 'none'",
+  ].join("; ");
+}
+
+function assetMarkup(assets: InlineAssets | undefined): { style: string; scripts: string } {
+  if (assets === undefined) {
+    return {
+      style: '<link rel="stylesheet" href="assets/style.css">',
+      scripts: `<script src="assets/vendor/mermaid.min.js"></script>
+<script src="assets/vendor/highlight.min.js"></script>
+<script src="assets/app.js" defer></script>`,
+    };
+  }
+  return {
+    style: `<style>${assets.css}</style>`,
+    scripts: assets.scripts.map((script) => `<script>${script}</script>`).join("\n"),
+  };
+}
 
 /** Everything the page template needs: PR context, the reviewed explanations in presentation
  * order (see src/explanations/orchestrate.ts, epic 6), and diff data for every file referenced
@@ -40,6 +70,9 @@ export interface PageInput {
    * per-category PR comment via the local server's `/api/comment` (see ./assets/app.js). Default
    * (false/omitted) renders the static page with no boxes — byte-for-byte unchanged. */
   serve?: boolean;
+  /** Adds the header's Share button, for a server that can share the page (docs/adr/0029). */
+  share?: boolean;
+  inlineAssets?: InlineAssets;
 }
 
 /** Everything `renderCategorySection` needs for one category, computed once in `renderPage`: the
@@ -52,7 +85,8 @@ interface CategoryRenderInput {
 }
 
 /** Renders the full, self-contained HTML page (assumes `assets/style.css`, `assets/app.js` and
- * `assets/vendor/{mermaid,highlight}.min.js` sit alongside `index.html` — see ./assemble.ts). */
+ * `assets/vendor/{mermaid,highlight}.min.js` sit alongside `index.html` — see ./assemble.ts —
+ * unless `inlineAssets` is given). */
 export function renderPage(input: PageInput): string {
   // Split each category's markdown and attach each subsection's id exactly once — the TOC and
   // the section body both read from this same array (see ./ids.ts's `withSubsectionIds`).
@@ -88,15 +122,16 @@ export function renderPage(input: PageInput): string {
   const sections = categoryInputs
     .map((categoryInput) => renderCategorySection(categoryInput, ctx, input.serve ?? false))
     .join("\n");
+  const assets = assetMarkup(input.inlineAssets);
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${CSP}">
+<meta http-equiv="Content-Security-Policy" content="${input.inlineAssets ? standaloneCsp(input.inlineAssets.scripts) : CSP}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.prTitle)} — Tulip</title>
-<link rel="stylesheet" href="assets/style.css">
+${assets.style}
 </head>
 <body>
 <button id="theme-toggle" type="button" aria-label="Toggle light/dark theme">◐</button>
@@ -106,7 +141,7 @@ ${renderTocHtml(toc)}
 <header id="pr-header">
 <h1>${escapeHtml(input.prTitle)}</h1>
 <p class="pr-link"><a href="${escapeHtml(input.prUrl)}">${escapeHtml(input.prUrl)}</a></p>
-</header>
+${input.share ? SHARE_BOX : ""}</header>
 <section id="${PR_DESCRIPTION_ID}" class="page-section">
 <h2>Original PR description</h2>
 <p class="section-note">Written by the PR author — not part of Tulip's analysis below.</p>
@@ -119,9 +154,7 @@ ${sections}
 </main>
 <script type="application/json" id="tulip-mermaid-sources">${escapeInlineScript(JSON.stringify(ctx.mermaidSources))}</script>
 <script type="application/json" id="tulip-file-data">${escapeInlineScript(JSON.stringify(embeddableFileData(input.fileDiffs)))}</script>
-<script src="assets/vendor/mermaid.min.js"></script>
-<script src="assets/vendor/highlight.min.js"></script>
-<script src="assets/app.js" defer></script>
+${assets.scripts}
 </body>
 </html>
 `;
@@ -174,6 +207,14 @@ function renderCategorySection(
   const head = tree === "" ? heading : `${heading}\n${tree}`;
   return `<section id="${categoryId(index)}" class="category page-section">\n${head}\n${bodyWithBox}\n</section>`;
 }
+
+/** Serve-mode Share button (docs/adr/0029); ./assets/app.js's `setupShareButton` wires it to the
+ * local server's `/api/share`. */
+const SHARE_BOX = `<div class="share-box">
+<button type="button" class="review-submit share-submit">Share on PR</button>
+<span class="review-status share-status">Posts a downloadable copy of this page as a PR comment.</span>
+</div>
+`;
 
 /** Serve-mode review box for one category (docs/adr/0019) — fully static markup, nothing
  * user-supplied to escape. `index` is the category's array position, matching `categoryId(index)`

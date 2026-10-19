@@ -108,8 +108,8 @@ with a `?query` or `#fragment`, is not accepted. Tulip reads merge requests
 through the GitLab REST API (no `glab` needed), sending `GITLAB_TOKEN` when it is
 set (only to the merge request's host); public projects work without it. If
 GitLab truncated a very large merge request's diff at its diff limits, Tulip
-stops with an error rather than explaining part of it. `--serve` is GitHub-only
-for now.
+stops with an error rather than explaining part of it. `--serve` and
+`--attach-preview-as-comment` are GitHub-only for now.
 
 ## Install
 
@@ -135,8 +135,9 @@ tulip https://gitlab.com/group/project/-/merge_requests/45
 ```
 
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
-`--agent <id>`. Run `tulip --help` for details, or `tulip --version` for the
-build.
+`--attach-preview-as-comment`, `--agent <id>`. Run `tulip --help` for details,
+or `tulip --version` for the build. `tulip share <run dir>` shares an earlier
+run's page on its PR (see [Sharing the page on the PR](#sharing-the-page-on-the-pr)).
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser.
@@ -199,6 +200,37 @@ stops with an error before fetching anything.
 This needs an authenticated `gh` CLI for the PR's host (self-hosted included) —
 `gh auth login --hostname <host>`; Tulip checks this before starting. Comments
 are posted via `gh`, so they come from your GitHub account.
+
+### Sharing the page on the PR
+
+Every run also writes a single self-contained HTML copy of the page. Sharing it
+stores that file in the repository and comments on the PR with a link to it,
+the commit it explains and when it was generated. Other reviewers download the
+file and open it in a browser, without running Tulip themselves.
+
+There are three ways to share:
+
+```sh
+tulip <PR URL> --attach-preview-as-comment   # as soon as the run ends
+tulip share <run dir>                        # after reading the page, or to retry
+tulip <PR URL> --serve                       # click "Share on PR" on the page
+```
+
+`<run dir>` is the directory the run logged (a `file://...` path in it works
+too). It's a temp dir the OS eventually removes, so share within a few days.
+`tulip share` only accepts runs your own Tulip produced and nobody changed since:
+each run is signed with a key Tulip keeps next to its settings.
+
+Previews are stored on hidden refs (`refs/tulip/previews/pr-<n>/<commit>`), so
+they don't end up in clones or the branch list. They go into the PR's repository
+if you can push to it, otherwise into your fork, which Tulip creates if needed.
+Sharing again for the same commit updates your comment; sharing for a new commit
+posts a new comment, so reviewers are notified, and hides the old one.
+
+Sharing needs an authenticated `gh`, like `--serve`, and works with GitHub PRs
+only. Tulip doesn't delete old previews; see
+[ADR 0029](docs/adr/0029-preview-comment.md) for how to clean them up and for the
+details.
 
 ## Development
 

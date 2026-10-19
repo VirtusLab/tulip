@@ -143,4 +143,17 @@ export const config = {
      * units; 512 KB clears it. Tune together with `maxCommentChars`. */
     maxRequestBodyBytes: 512 * 1024,
   },
+
+  preview: {
+    /** Outside refs/heads, so clones don't fetch previews and branch rules don't apply. */
+    refPrefix: "refs/tulip/previews",
+    maxEarlierPreviews: 20,
+    /** Waits of 2, 4, 8, 16, then 30 s: about five minutes for a new fork to accept writes. */
+    forkWriteAttempts: 14,
+    forkWriteRetryDelayMs: 2000,
+    forkWriteMaxRetryDelayMs: 30_000,
+    /** A fork created this recently may not accept writes yet. */
+    newForkMs: 10 * 60 * 1000,
+    ghCommandTimeoutMs: 10 * 60 * 1000,
+  },
 } as const;
