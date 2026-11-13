@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { parse } from "node-html-parser";
 import { describe, expect, it } from "vitest";
 import { serializeSnippetRef } from "../explanations/markup.js";
@@ -542,6 +543,36 @@ describe("renderPage", () => {
     });
 
     expect(parse(html).querySelector(".snippet")?.getAttribute("data-lang")).toBe("typescript");
+  });
+
+  it("embeds inline assets instead of linking assets/, and allows exactly those scripts by hash", () => {
+    const scripts = ["var m=1;", "var h=2;", "var a=3;"];
+    const html = renderPage({
+      prTitle: "t",
+      prDescription: "d",
+      prUrl: "https://github.com/a/b/pull/1",
+      fileDiffs: new Map(),
+      explanations: [],
+      inlineAssets: { style: "body{color:red}", scripts },
+    });
+    const root = parse(html);
+
+    expect(html).not.toContain("assets/");
+    expect(root.querySelector("style")?.text).toBe("body{color:red}");
+    expect(
+      root
+        .querySelectorAll("script:not([type])")
+        .map((script) => [script.text, script.getAttribute("src")]),
+    ).toEqual(scripts.map((script) => [script, undefined]));
+    const hashes = scripts
+      .map((script) => ` 'sha256-${createHash("sha256").update(script).digest("base64")}'`)
+      .join("");
+    expect(
+      root.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content"),
+    ).toBe(
+      `default-src 'none'; script-src 'self'${hashes}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; ` +
+        "font-src 'self' data:; connect-src 'self'; form-action 'none'; base-uri 'none'",
+    );
   });
 
   it("carries the toggles and asset hooks with no network references", () => {

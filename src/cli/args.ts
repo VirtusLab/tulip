@@ -23,6 +23,8 @@ export interface RunOptions {
   /** Run a local review server that posts a per-category PR comment (docs/adr/0019). Only for
    * forges with a `commenter`. Defaults to false (render a static page and exit). */
   serve: boolean;
+  /** Write one `index.html` with every asset embedded, for sharing (docs/adr/0030). */
+  singleFile?: boolean;
   /** Which agent CLI runs the LLM passes (docs/adr/0027), when given as `--agent`. When absent,
    * the remembered choice or the default is used (see ./agent-choice.ts). */
   agent?: AgentId;
@@ -57,6 +59,8 @@ export function usage(): string {
     "  --no-open             Don't automatically open the rendered page in your browser",
     "  --serve               Run a local review server; post a PR comment per category via gh",
     "                        (GitHub PRs only)",
+    "  --single-file         Write one self-contained index.html (CSS, JS and fonts embedded),",
+    "                        easier to share than the page plus its assets/ directory",
     `  --agent <id>          Agent CLI that runs the analysis (default: ${DEFAULT_AGENT}). Remembered for`,
     `                        later runs. One of: ${AGENT_IDS.join(" | ")}`,
     "  -h, --help            Show this help and exit",
@@ -74,6 +78,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
     verbose?: boolean;
     "no-open"?: boolean;
     serve?: boolean;
+    "single-file"?: boolean;
     agent?: string;
     help?: boolean;
     version?: boolean;
@@ -87,6 +92,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
         verbose: { type: "boolean" },
         "no-open": { type: "boolean" },
         serve: { type: "boolean" },
+        "single-file": { type: "boolean" },
         agent: { type: "string" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
@@ -129,6 +135,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
     verbose: values.verbose ?? false,
     open: !values["no-open"],
     serve: values.serve ?? false,
+    ...(values["single-file"] ? { singleFile: true } : {}),
     ...(values.agent === undefined ? {} : { agent: parseAgent(values.agent) }),
   };
 }

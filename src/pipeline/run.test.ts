@@ -902,6 +902,17 @@ describe("run", () => {
     ).toBe(true);
   });
 
+  it("passes --single-file through to rendering", async () => {
+    const deps = baseDeps([]);
+
+    await run(options({ singleFile: true }), deps);
+
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({ singleFile: true }),
+      expect.anything(),
+    );
+  });
+
   it("in serve mode, preflights auth before fetching, renders with serve, and serves the dir", async () => {
     const order: string[] = [];
     const deps = baseDeps(order);

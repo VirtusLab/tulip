@@ -29,16 +29,18 @@ export interface AssembleResult {
   indexPath: string;
 }
 
-const DEFAULT_ASSETS_DIR = fileURLToPath(new URL("./assets", import.meta.url));
+export const DEFAULT_ASSETS_DIR = fileURLToPath(new URL("./assets", import.meta.url));
 
 /**
  * Writes the rendered `page` plus the bundled assets (CSS, JS, vendored mermaid — task 7.1) into
  * a fresh OS temp directory, and logs how to open it — the epic's "Result": a temp directory
- * with the ready HTML page and open-in-browser instructions.
+ * with the ready HTML page and open-in-browser instructions. A single-file page (docs/adr/0030)
+ * already embeds its assets, so none are copied.
  */
 export async function assembleOutput(
   page: string,
   deps: AssembleDeps = {},
+  options: { singleFile?: boolean } = {},
 ): Promise<AssembleResult> {
   const logger = deps.logger ?? createLogger();
   const makeTempDir = deps.mkdtemp ?? defaultMkdtemp;
@@ -50,7 +52,9 @@ export async function assembleOutput(
   const indexPath = join(dir, "index.html");
 
   await write(indexPath, page);
-  await copyDir(assetsDir, join(dir, "assets"));
+  if (!options.singleFile) {
+    await copyDir(assetsDir, join(dir, "assets"));
+  }
 
   logger.info(`explanation page ready — open file://${indexPath} in your browser`);
   return { dir, indexPath };

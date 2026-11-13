@@ -32,6 +32,10 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs([VALID_URL, "--serve"]).serve).toBe(true);
   });
 
+  it("accepts --single-file", () => {
+    expect(parseCliArgs([VALID_URL, "--single-file"]).singleFile).toBe(true);
+  });
+
   it("accepts --diff-threshold and parses it as an integer", () => {
     expect(parseCliArgs([VALID_URL, "--diff-threshold", "800"])).toEqual({
       prUrl: VALID_URL,
