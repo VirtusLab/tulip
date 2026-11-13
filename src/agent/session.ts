@@ -25,7 +25,11 @@ export function runSession<T = unknown>(
   deps: RunnerDeps = {},
 ): Promise<AgentRunResult<T>> {
   return invokeAgent<T>(
-    { model: options.model, schema: options.schema, prompt: withPreamble(options.prompt) },
+    {
+      model: options.model,
+      schema: options.schema,
+      prompt: withPreamble(options.prompt, deps.agent?.contextDirs),
+    },
     deps,
   );
 }

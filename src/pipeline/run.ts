@@ -38,6 +38,8 @@ export interface PipelineOptions {
   serve: boolean;
   /** Which agent CLI runs every LLM pass (docs/adr/0027); see src/cli/agent-choice.ts. */
   agent: AgentId;
+  /** Directories every session may read beyond the checkout (`--context-dir`). */
+  contextDirs?: string[];
 }
 
 /** Opens `path` (a local file) in the user's default browser. Rejects if the opener binary is
@@ -103,7 +105,10 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const prUrl = adapter.webUrl(options.pr);
 
   // One per run, so every phase's sessions (and their resumes) go through the same agent.
-  const agent = deps.agent ?? createAgentFor(options.agent);
+  const agent = deps.agent ?? createAgentFor(options.agent, options.contextDirs);
+  if (agent.contextDirs.length > 0 && !agent.backend.supportsContextDirs) {
+    throw new Error(`--context-dir is not supported with the ${agent.backend.id} agent.`);
+  }
 
   logger.info(formatVersion());
   logger.info(`Processing PR ${prUrl} with ${agent.backend.id}`);
