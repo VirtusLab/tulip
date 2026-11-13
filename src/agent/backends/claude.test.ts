@@ -5,6 +5,32 @@ import { claudeBackend } from "./claude.js";
 
 const SCHEMA: JsonSchema = { type: "object" };
 
+describe("claudeBackend.planSpawn", () => {
+  it("grants read access to context dirs with --add-dir", async () => {
+    const { args } = await claudeBackend.planSpawn({
+      prompt: "p",
+      schema: SCHEMA,
+      model: "sonnet",
+      contextDirs: ["/repos/protos", "/repos/product"],
+    });
+
+    expect(args).toEqual(
+      expect.arrayContaining(["--add-dir", "/repos/protos", "/repos/product", "--model"]),
+    );
+    expect(args.indexOf("--add-dir") + 3).toBe(args.indexOf("--model"));
+  });
+
+  it("passes no --add-dir without context dirs", async () => {
+    const { args } = await claudeBackend.planSpawn({
+      prompt: "p",
+      schema: SCHEMA,
+      model: "sonnet",
+    });
+
+    expect(args).not.toContain("--add-dir");
+  });
+});
+
 describe("claudeBackend.parseReply", () => {
   it("throws AgentOutputError when the envelope reports an error", () => {
     const stdout = JSON.stringify({ is_error: true, result: "boom", session_id: "s-1" });

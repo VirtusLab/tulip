@@ -382,6 +382,15 @@ describe("run", () => {
     );
   });
 
+  it("refuses --context-dir for an agent that can't grant read access to it", async () => {
+    const deps = baseDeps();
+
+    await expect(
+      run(options({ agent: "codex", contextDirs: ["/repos/protos"] }), deps),
+    ).rejects.toThrow("--context-dir is not supported with the codex agent.");
+    expect(deps.createCheckout).not.toHaveBeenCalled();
+  });
+
   it("says token usage wasn't reported when calls ran but none carried usage", async () => {
     const deps = baseDeps();
     deps.generateCategories = recordingGenerate(undefined);

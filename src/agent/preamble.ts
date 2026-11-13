@@ -8,7 +8,12 @@ import { renderPrompt } from "../prompts/loader.js";
  */
 export const PREAMBLE = renderPrompt("preamble", {});
 
-/** Prepends {@link PREAMBLE} to `prompt`, separated by a blank line. */
-export function withPreamble(prompt: string): string {
-  return `${PREAMBLE}\n\n${prompt}`;
+/** Prepends {@link PREAMBLE} to `prompt`, separated by a blank line, plus a note on any
+ * `--context-dir` directories the session can read. */
+export function withPreamble(prompt: string, contextDirs: readonly string[] = []): string {
+  if (contextDirs.length === 0) {
+    return `${PREAMBLE}\n\n${prompt}`;
+  }
+  const dirList = contextDirs.map((dir) => `- ${dir}`).join("\n");
+  return `${PREAMBLE}\n\n${renderPrompt("context-dirs", { dirList })}\n\n${prompt}`;
 }

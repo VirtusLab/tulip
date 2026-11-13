@@ -12,6 +12,6 @@ const BACKENDS: Record<AgentId, AgentBackend> = {
 };
 
 /** A fresh {@link Agent} for `id`; create one per run and thread it via `RunnerDeps.agent`. */
-export function createAgentFor(id: AgentId): Agent {
-  return createAgent(BACKENDS[id]);
+export function createAgentFor(id: AgentId, contextDirs: string[] = []): Agent {
+  return createAgent(BACKENDS[id], contextDirs);
 }

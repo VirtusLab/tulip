@@ -14,6 +14,7 @@ export const claudeBackend: AgentBackend = {
   installHint: "install Claude Code",
   // Whether `claude -p` runs a PR's `.claude/settings.json` hooks is unchecked (TODO.md).
   repoConfigDirs: [],
+  supportsContextDirs: true,
   planSpawn,
   parseReply,
   describeFailure,
@@ -26,6 +27,10 @@ async function planSpawn(call: AgentCallArgs): Promise<AgentSpawnPlan> {
   // same as not passing it, so this can't just always push the flag.
   if (config.agents.claude.allowedTools.length > 0) {
     args.push("--allowedTools", ...config.agents.claude.allowedTools);
+  }
+  // Read-only like the checkout: `--add-dir` widens Read/Grep/Glob, and no Bash is granted.
+  if (call.contextDirs !== undefined && call.contextDirs.length > 0) {
+    args.push("--add-dir", ...call.contextDirs);
   }
   // A resume continues with its session's model, so `--model` is only passed for a fresh call.
   if (call.resumeSessionId) {

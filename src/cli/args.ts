@@ -1,3 +1,5 @@
+import { statSync } from "node:fs";
+import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { AGENT_IDS, type AgentId, isAgentId } from "../agent/types.js";
 import { config } from "../config.js";
@@ -26,6 +28,9 @@ export interface RunOptions {
   /** Which agent CLI runs the LLM passes (docs/adr/0027), when given as `--agent`. When absent,
    * the remembered choice or the default is used (see ./agent-choice.ts). */
   agent?: AgentId;
+  /** Absolute paths of `--context-dir` directories every session may read, beyond the checkout.
+   * Absent when none were given. */
+  contextDirs?: string[];
 }
 
 /** Thrown for any invalid invocation; the message is shown to the user alongside usage info. */
@@ -59,6 +64,8 @@ export function usage(): string {
     "                        (GitHub PRs only)",
     `  --agent <id>          Agent CLI that runs the analysis (default: ${DEFAULT_AGENT}). Remembered for`,
     `                        later runs. One of: ${AGENT_IDS.join(" | ")}`,
+    "  --context-dir <path>  Extra directory the LLM may read, e.g. another repository the PR",
+    "                        depends on. Repeatable. Read-only; claude agent only",
     "  -h, --help            Show this help and exit",
     "  -v, --version         Show version information and exit",
   ].join("\n");
@@ -75,6 +82,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
     "no-open"?: boolean;
     serve?: boolean;
     agent?: string;
+    "context-dir"?: string[];
     help?: boolean;
     version?: boolean;
   };
@@ -88,6 +96,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
         "no-open": { type: "boolean" },
         serve: { type: "boolean" },
         agent: { type: "string" },
+        "context-dir": { type: "string", multiple: true },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },
       },
@@ -121,6 +130,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
   }
 
   const diffThreshold = parseDiffThreshold(values["diff-threshold"]);
+  const contextDirs = (values["context-dir"] ?? []).map(parseContextDir);
 
   return {
     prUrl,
@@ -130,6 +140,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
     open: !values["no-open"],
     serve: values.serve ?? false,
     ...(values.agent === undefined ? {} : { agent: parseAgent(values.agent) }),
+    ...(contextDirs.length === 0 ? {} : { contextDirs }),
   };
 }
 
@@ -138,6 +149,20 @@ function parseAgent(raw: string): AgentId {
     throw new CliUsageError(`Invalid --agent: "${raw}". Expected one of: ${AGENT_IDS.join(", ")}.`);
   }
   return raw;
+}
+
+function parseContextDir(raw: string): string {
+  const dir = resolve(raw);
+  let isDirectory = false;
+  try {
+    isDirectory = statSync(dir).isDirectory();
+  } catch {
+    // Missing or unreadable: reported below like a non-directory.
+  }
+  if (!isDirectory) {
+    throw new CliUsageError(`Invalid --context-dir: "${raw}" is not a directory.`);
+  }
+  return dir;
 }
 
 function parseDiffThreshold(raw: string | undefined): number {

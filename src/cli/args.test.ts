@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { config } from "../config.js";
 import {
@@ -26,6 +29,34 @@ describe("parseCliArgs", () => {
 
   it("accepts --no-open, disabling auto-open", () => {
     expect(parseCliArgs([VALID_URL, "--no-open"]).open).toBe(false);
+  });
+
+  it("resolves each repeated --context-dir to an absolute path", () => {
+    const first = mkdtempSync(join(tmpdir(), "tulip-ctx-"));
+    const second = mkdtempSync(join(tmpdir(), "tulip-ctx-"));
+
+    const parsed = parseCliArgs([
+      VALID_URL,
+      "--context-dir",
+      relative(process.cwd(), first),
+      "--context-dir",
+      second,
+    ]);
+
+    expect(parsed.contextDirs).toEqual([first, second]);
+  });
+
+  it.each([
+    ["a missing path", join(tmpdir(), "tulip-ctx-does-not-exist")],
+    ["a file", join(mkdtempSync(join(tmpdir(), "tulip-ctx-")), "file.txt")],
+  ])("rejects --context-dir pointing at %s", (_label, path) => {
+    if (path.endsWith("file.txt")) {
+      writeFileSync(path, "");
+    }
+
+    expect(() => parseCliArgs([VALID_URL, "--context-dir", path])).toThrow(
+      `Invalid --context-dir: "${path}" is not a directory.`,
+    );
   });
 
   it("accepts --serve", () => {
