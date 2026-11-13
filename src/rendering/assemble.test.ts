@@ -29,6 +29,24 @@ describe("assembleOutput", () => {
     expect(copied).toEqual([{ src: "/fake/assets", dest: "/tmp/tulip-render-abc/assets" }]);
   });
 
+  it("copies no assets for a single-file page", async () => {
+    const copyDir = vi.fn(async () => {});
+
+    await assembleOutput(
+      "<html></html>",
+      {
+        mkdtemp: async () => "/tmp/tulip-render-one",
+        writeFile: async () => {},
+        copyDir,
+        assetsDir: "/fake/assets",
+        logger: { info: vi.fn(), debug: vi.fn() },
+      },
+      { singleFile: true },
+    );
+
+    expect(copyDir).not.toHaveBeenCalled();
+  });
+
   it("logs how to open the result", async () => {
     const info = vi.fn();
     const result = await assembleOutput("<html></html>", {

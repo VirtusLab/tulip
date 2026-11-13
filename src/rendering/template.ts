@@ -1,25 +1,33 @@
+import { createHash } from "node:crypto";
 import type { CategoryExplanation } from "../explanations/types.js";
 import { renderAttentionBadge } from "./attention-badge.js";
 import { escapeHtml, escapeInlineScript } from "./escape.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { renderFileTree } from "./file-tree.js";
 import { categoryId, PR_DESCRIPTION_ID, type SubsectionWithId, withSubsectionIds } from "./ids.js";
+import type { InlineAssets } from "./inline-assets.js";
 import { type MarkdownRenderContext, renderCategoryMarkdown } from "./markdown.js";
 import { splitCategoryMarkdown } from "./sections.js";
 import { buildToc, renderTocHtml } from "./toc.js";
 
 /** Why: docs/adr/0028. The inline `<script type="application/json">` blocks are data, which
  * `script-src` doesn't govern. */
-const CSP = [
-  "default-src 'none'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "form-action 'none'",
-  "base-uri 'none'",
-].join("; ");
+function contentSecurityPolicy(inlineAssets: InlineAssets | undefined): string {
+  // A single-file page allows exactly its own inline scripts by hash, and its data-URI fonts.
+  const scriptHashes = (inlineAssets?.scripts ?? []).map(
+    (script) => ` 'sha256-${createHash("sha256").update(script).digest("base64")}'`,
+  );
+  return [
+    "default-src 'none'",
+    `script-src 'self'${scriptHashes.join("")}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    inlineAssets ? "font-src 'self' data:" : "font-src 'self'",
+    "connect-src 'self'",
+    "form-action 'none'",
+    "base-uri 'none'",
+  ].join("; ");
+}
 
 /** Everything the page template needs: PR context, the reviewed explanations in presentation
  * order (see src/explanations/orchestrate.ts, epic 6), and diff data for every file referenced
@@ -40,6 +48,8 @@ export interface PageInput {
    * per-category PR comment via the local server's `/api/comment` (see ./assets/app.js). Default
    * (false/omitted) renders the static page with no boxes — byte-for-byte unchanged. */
   serve?: boolean;
+  /** Single-file mode (docs/adr/0030): embeds these instead of linking `assets/`. */
+  inlineAssets?: InlineAssets;
 }
 
 /** Everything `renderCategorySection` needs for one category, computed once in `renderPage`: the
@@ -51,8 +61,9 @@ interface CategoryRenderInput {
   subsections: SubsectionWithId[];
 }
 
-/** Renders the full, self-contained HTML page (assumes `assets/style.css`, `assets/app.js` and
- * `assets/vendor/{mermaid,highlight}.min.js` sit alongside `index.html` — see ./assemble.ts). */
+/** Renders the full, self-contained HTML page. Without `inlineAssets` it assumes `assets/style.css`,
+ * `assets/app.js` and `assets/vendor/{mermaid,highlight}.min.js` sit alongside `index.html` — see
+ * ./assemble.ts. */
 export function renderPage(input: PageInput): string {
   // Split each category's markdown and attach each subsection's id exactly once — the TOC and
   // the section body both read from this same array (see ./ids.ts's `withSubsectionIds`).
@@ -93,10 +104,10 @@ export function renderPage(input: PageInput): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${CSP}">
+<meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy(input.inlineAssets)}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.prTitle)} — Tulip</title>
-<link rel="stylesheet" href="assets/style.css">
+${renderStyle(input.inlineAssets)}
 </head>
 <body>
 <button id="theme-toggle" type="button" aria-label="Toggle light/dark theme">◐</button>
@@ -119,12 +130,27 @@ ${sections}
 </main>
 <script type="application/json" id="tulip-mermaid-sources">${escapeInlineScript(JSON.stringify(ctx.mermaidSources))}</script>
 <script type="application/json" id="tulip-file-data">${escapeInlineScript(JSON.stringify(embeddableFileData(input.fileDiffs)))}</script>
-<script src="assets/vendor/mermaid.min.js"></script>
-<script src="assets/vendor/highlight.min.js"></script>
-<script src="assets/app.js" defer></script>
+${renderScripts(input.inlineAssets)}
 </body>
 </html>
 `;
+}
+
+function renderStyle(inlineAssets: InlineAssets | undefined): string {
+  return inlineAssets
+    ? `<style>${inlineAssets.style}</style>`
+    : '<link rel="stylesheet" href="assets/style.css">';
+}
+
+/** Inline scripts can't be deferred, but they sit after all content and app.js waits for
+ * DOMContentLoaded, so the order and timing match the linked scripts. */
+function renderScripts(inlineAssets: InlineAssets | undefined): string {
+  if (inlineAssets) {
+    return inlineAssets.scripts.map((script) => `<script>${script}</script>`).join("\n");
+  }
+  return `<script src="assets/vendor/mermaid.min.js"></script>
+<script src="assets/vendor/highlight.min.js"></script>
+<script src="assets/app.js" defer></script>`;
 }
 
 /** Rows for every path under the embed-size cap, keyed by path — lets ./assets/app.js reveal

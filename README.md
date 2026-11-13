@@ -135,7 +135,7 @@ tulip https://gitlab.com/group/project/-/merge_requests/45
 ```
 
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
-`--agent <id>`. Run `tulip --help` for details, or `tulip --version` for the
+`--single-file`, `--agent <id>`. Run `tulip --help` for details, or `tulip --version` for the
 build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
@@ -181,6 +181,17 @@ stream (with one retry), as for the other agents.
 The page's Content Security Policy lets it load only its own assets, so
 model-written text can't make it fetch a URL on open. Remote images in the PR
 description don't show either.
+
+### Sharing the page
+
+```sh
+tulip <PR URL> --single-file
+```
+
+By default the page loads its CSS, scripts and fonts from an `assets/` directory
+next to `index.html`. `--single-file` embeds them all into `index.html`, so the
+page can be sent or attached as one file. It's larger (about 3.7 MB, mostly the
+diagram library) and works the same.
 
 ### Reviewing on the page
 

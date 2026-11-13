@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { serializeSnippetRef } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
@@ -175,6 +178,45 @@ describe("renderExplanations", () => {
 
     expect(checkout.getFileAtBase).not.toHaveBeenCalled();
     expect(result.dir).toBe("/tmp/tulip-render-3");
+  });
+
+  it("in single-file mode, embeds the assets into the page and copies none", async () => {
+    const assetsDir = await mkdtemp(join(tmpdir(), "tulip-assets-"));
+    await mkdir(join(assetsDir, "vendor"));
+    await writeFile(join(assetsDir, "style.css"), "body{color:red}");
+    await writeFile(join(assetsDir, "vendor/mermaid.min.js"), "var m=1;");
+    await writeFile(join(assetsDir, "vendor/highlight.min.js"), "var h=2;");
+    await writeFile(join(assetsDir, "app.js"), "var a=3;");
+    const pages: string[] = [];
+    const copyDir = vi.fn(async () => {});
+
+    await renderExplanations(
+      {
+        prTitle: "t",
+        prDescription: "d",
+        prUrl: "https://github.com/a/b/pull/1",
+        explanations: [explanation("Just prose.")],
+        singleFile: true,
+      },
+      {
+        checkout: { getFileAtBase: vi.fn(), getFileAtHead: vi.fn() },
+        mkdtemp: async () => "/tmp/tulip-render-one",
+        writeFile: async (_, content) => {
+          pages.push(content);
+        },
+        copyDir,
+        assetsDir,
+        logger: { info: vi.fn(), debug: vi.fn() },
+      },
+    );
+    await rm(assetsDir, { recursive: true, force: true });
+
+    expect(copyDir).not.toHaveBeenCalled();
+    expect(pages[0]).toContain("<style>body{color:red}</style>");
+    expect(pages[0]).toContain(
+      "<script>var m=1;</script>\n<script>var h=2;</script>\n<script>var a=3;</script>",
+    );
+    expect(pages[0]).not.toContain("assets/");
   });
 
   it("renders the injected build info into the page footer, without touching the real dist/build-info.json", async () => {

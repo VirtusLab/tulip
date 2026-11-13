@@ -3,8 +3,14 @@ import { parseSnippetRefs } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { type BuildInfo, formatVersion, getBuildInfo } from "../version.js";
-import { type AssembleDeps, type AssembleResult, assembleOutput } from "./assemble.js";
+import {
+  type AssembleDeps,
+  type AssembleResult,
+  assembleOutput,
+  DEFAULT_ASSETS_DIR,
+} from "./assemble.js";
 import { loadFileDiffs } from "./file-diffs.js";
+import { loadInlineAssets } from "./inline-assets.js";
 import { renderPage } from "./template.js";
 
 /** What's needed to render the final page: PR context plus the reviewed, coverage-verified
@@ -20,6 +26,8 @@ export interface RenderInput {
   renamedFrom?: Map<string, string>;
   /** Serve mode (docs/adr/0019): renders a per-category review box. Default false (static page). */
   serve?: boolean;
+  /** Single-file mode (docs/adr/0030): one `index.html` with every asset embedded. */
+  singleFile?: boolean;
 }
 
 export interface RenderDeps extends AssembleDeps {
@@ -56,7 +64,10 @@ export async function renderExplanations(
     fileDiffs,
     generatedBy: formatVersion((deps.getBuildInfo ?? getBuildInfo)()),
     serve: input.serve ?? false,
+    ...(input.singleFile
+      ? { inlineAssets: await loadInlineAssets(deps.assetsDir ?? DEFAULT_ASSETS_DIR) }
+      : {}),
   });
 
-  return assembleOutput(page, { ...deps, logger });
+  return assembleOutput(page, { ...deps, logger }, { singleFile: input.singleFile ?? false });
 }

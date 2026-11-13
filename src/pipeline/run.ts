@@ -36,6 +36,8 @@ export interface PipelineOptions {
   /** Run a local review server that posts per-category PR comments (docs/adr/0019), instead of
    * rendering a static page and exiting. Fails when the PR's forge has no `commenter`. */
   serve: boolean;
+  /** Write one `index.html` with every asset embedded (docs/adr/0030). */
+  singleFile?: boolean;
   /** Which agent CLI runs every LLM pass (docs/adr/0027); see src/cli/agent-choice.ts. */
   agent: AgentId;
 }
@@ -257,6 +259,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           explanations,
           renamedFrom,
           serve: options.serve,
+          singleFile: options.singleFile ?? false,
         },
         { checkout: checkout as PrCheckout, logger },
       ),
