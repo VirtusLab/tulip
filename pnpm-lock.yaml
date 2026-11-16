@@ -44,7 +44,7 @@ importers:
         version: 11.12.0
       node-html-parser:
         specifier: ^9.0.1
-        version: 9.0.1
+        version: 9.0.7
       tsx:
         specifier: ^4.23.12
         version: 4.23.12
@@ -1161,8 +1161,8 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  node-html-parser@9.0.1:
-    resolution: {integrity: sha512-QrdiYYm1NnLRXsMXThUgVcF/syWfWIgHFmy8hylWMGFbHFtnRuXLBxxGQvIm3xaIJMUDJ0ayOmT/FGJYT3pZIw==}
+  node-html-parser@9.0.7:
+    resolution: {integrity: sha512-0Io6nKYNN2e+QSoJFxU991Z8kX4H2Ogy3l14Ow0XxR2Wonk9l5qBonx1dYO97UyVfYJ1U9H0WHZOIZW6q5KPrA==}
 
   nth-check@2.1.1:
     resolution: {integrity: sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==}
@@ -2379,7 +2379,7 @@ snapshots:
 
   nanoid@3.3.18: {}
 
-  node-html-parser@9.0.1:
+  node-html-parser@9.0.7:
     dependencies:
       css-select: 5.2.2
       entities: 8.0.0
