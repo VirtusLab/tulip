@@ -7,7 +7,7 @@ updates:
       time: "09:00"
       timezone: "UTC"
     labels:
-      - "dependency"
+      - "dependencies"
       - "automerge"
     open-pull-requests-limit: 10
     allow:
