@@ -3,7 +3,7 @@ import { createAgentProcessRunner } from "./exec.js";
 import type { Agent, AgentBackend } from "./types.js";
 
 /** A fresh {@link Agent} for `backend`; create one per run and thread it via `RunnerDeps.agent`. */
-export function createAgent(backend: AgentBackend): Agent {
+export function createAgent(backend: AgentBackend, contextDirs: string[] = []): Agent {
   const { bin, models } = config.agents[backend.id];
   return {
     backend,
@@ -16,5 +16,6 @@ export function createAgent(backend: AgentBackend): Agent {
     }),
     sessionTiers: new Map(),
     sessionUsage: new Map(),
+    contextDirs,
   };
 }

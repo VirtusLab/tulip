@@ -22,9 +22,10 @@ export const config = {
        * `--allowedTools`/`--disallowedTools` matching can't block a flag that may appear at any
        * argv position (see docs/adr/0002). Sessions instead rely on their default Read/Grep/Glob
        * access to the checked-out working tree (see src/checkout/checkout.ts) — no Bash grant, no
-       * vector. Kept as a list (not removed) so it stays the one place to configure this, and
-       * `planSpawn` (src/agent/backends/claude.ts) omits `--allowedTools` entirely when it's
-       * empty. */
+       * vector. Entries for Edit, Write, NotebookEdit or Bash have no effect: `planSpawn`
+       * (src/agent/backends/claude.ts) always denies those tools, and a deny wins over an allow.
+       * Kept as a list (not removed) so it stays the one place to configure this, and
+       * `planSpawn` omits `--allowedTools` entirely when it's empty. */
       allowedTools: [],
     },
     "cursor-anthropic": {

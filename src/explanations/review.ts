@@ -52,18 +52,21 @@ export async function reviewAndAmend(
     {
       model: config.models.review,
       schema: REVIEW_SCHEMA,
-      prompt: buildReviewPrompt({
-        prTitle: input.prTitle,
-        prDescription: input.prDescription,
-        category: input.category,
-        production: input.production,
-        test: input.test,
-        changeOwners: input.changeOwners,
-        diffThreshold: input.diffThreshold,
-        baseSha: input.baseSha,
-        headSha: input.headSha,
-        markdown: input.markdown,
-      }),
+      prompt: buildReviewPrompt(
+        {
+          prTitle: input.prTitle,
+          prDescription: input.prDescription,
+          category: input.category,
+          production: input.production,
+          test: input.test,
+          changeOwners: input.changeOwners,
+          diffThreshold: input.diffThreshold,
+          baseSha: input.baseSha,
+          headSha: input.headSha,
+          markdown: input.markdown,
+        },
+        deps.agent?.contextDirs,
+      ),
     },
     deps,
   );
