@@ -819,8 +819,8 @@ packages:
     resolution: {integrity: sha512-rzUyPU/S7rwUflMyLc1ETDeBj0NRuHKKAcvukozwhshr6g6c5d8zh4c2gQjY2bZ0dXeGLWc1PF174P2tVvKhfg==}
     engines: {node: '>=12'}
 
-  d3-drag@3.0.0:
-    resolution: {integrity: sha512-pWbUJLdETVA8lQNJecMxoXfH6x+mO2UQo8rSmZ+QqxcbyA3hfeprFgIT//HW2nlHChWeIIMwS2Fq+gEARkhTkg==}
+  d3-drag@3.0.1:
+    resolution: {integrity: sha512-OWeoayCq8J69hUIjvL+Mb6Q6Oaj/fyHV5XaXByEUAG+JUjIfTGDnk3qGpcXrD3VmQ3BSV96fcbM6fqq7C0tbPA==}
     engines: {node: '>=12'}
 
   d3-dsv@3.0.1:
@@ -1977,7 +1977,7 @@ snapshots:
   d3-brush@3.0.0:
     dependencies:
       d3-dispatch: 3.0.1
-      d3-drag: 3.0.0
+      d3-drag: 3.0.1
       d3-interpolate: 3.0.1
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
@@ -1998,7 +1998,7 @@ snapshots:
 
   d3-dispatch@3.0.1: {}
 
-  d3-drag@3.0.0:
+  d3-drag@3.0.1:
     dependencies:
       d3-dispatch: 3.0.1
       d3-selection: 3.0.0
@@ -2093,7 +2093,7 @@ snapshots:
   d3-zoom@3.0.0:
     dependencies:
       d3-dispatch: 3.0.1
-      d3-drag: 3.0.0
+      d3-drag: 3.0.1
       d3-interpolate: 3.0.1
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
@@ -2108,7 +2108,7 @@ snapshots:
       d3-contour: 4.0.2
       d3-delaunay: 6.0.4
       d3-dispatch: 3.0.1
-      d3-drag: 3.0.0
+      d3-drag: 3.0.1
       d3-dsv: 3.0.1
       d3-ease: 3.0.1
       d3-fetch: 3.0.1
