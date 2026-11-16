@@ -139,7 +139,9 @@ Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
 `tulip --version` for the build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
-in a browser.
+in a browser. The page is a single `index.html` with its CSS, scripts and fonts
+embedded, so you can send it as one file. Most of its few MB is the diagram
+library.
 
 ### Extra context from other repositories
 
@@ -194,9 +196,9 @@ file passed as `--output-schema` (made strict, as OpenAI requires); the prompt
 goes on stdin. Tulip validates the last agent message of the `--json` event
 stream (with one retry), as for the other agents.
 
-The page's Content Security Policy lets it load only its own assets, so
-model-written text can't make it fetch a URL on open. Remote images in the PR
-description don't show either.
+The page's Content Security Policy lets it load nothing but its own embedded
+assets, so model-written text can't make it fetch a URL on open. Remote images
+in the PR description don't show either.
 
 ### Reviewing on the page
 
