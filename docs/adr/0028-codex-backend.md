@@ -124,6 +124,7 @@ that its sandbox did not hold:
   scripts, styles, and fonts, `data:` images, and same-origin `fetch` (for `--serve`). Otherwise
   model-written markdown or mermaid labels (`<img>`, `<video>`, `<audio>` survive mermaid's
   sanitizer) could make the page fetch a URL on open. This applies to every backend.
+  [ADR 0030](0030-single-file-output.md) embeds the assets and tightens the policy to match.
 
 ### Consequences
 

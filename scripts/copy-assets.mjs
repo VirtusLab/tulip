@@ -1,6 +1,6 @@
 // tsc only compiles .ts files, so the static rendering assets (CSS/JS/vendored mermaid — see
 // src/rendering/assets) need a separate copy step to land next to the compiled JS in dist/,
-// where src/rendering/assemble.ts looks for them at runtime when running from a build.
+// where src/rendering/render.ts looks for them at runtime when running from a build.
 import { cp, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";

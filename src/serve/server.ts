@@ -10,7 +10,7 @@ import { createLogger, type Logger } from "../logging/logger.js";
 /** What {@link createReviewServer} needs: the render temp dir to serve, the PR to post to, the
  * ordered category names a `categoryIndex` is validated against, and injectable seams. */
 export interface ReviewServerOptions {
-  /** Absolute path of the already-rendered temp dir (`index.html` + `assets/`). */
+  /** Absolute path of the already-rendered temp dir, holding `index.html`. */
   dir: string;
   /** The PR every comment is posted to. Fixed here — a request can't name another repo/PR. */
   prUrl: string;
@@ -24,11 +24,6 @@ export interface ReviewServerOptions {
 /** Maps a file extension to a Content-Type. Unknown → `application/octet-stream`. */
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".json": "application/json",
-  ".woff2": "font/woff2",
 };
 
 function sendJson(res: http.ServerResponse, status: number, payload: unknown): void {
@@ -105,9 +100,7 @@ async function handleGet(
     try {
       content = await readFile(full);
     } catch (error) {
-      const code = (error as { code?: string }).code;
-      // EISDIR: GET /assets or /assets/vendor — real dirs in the render output.
-      if (code === "ENOENT" || code === "EISDIR") {
+      if ((error as { code?: string }).code === "ENOENT") {
         sendJson(res, 404, { error: "not found" });
       } else {
         sendJson(res, 500, { error: "internal error" });

@@ -251,7 +251,8 @@ page after `pnpm install && pnpm build`. Specifically:
   package's `LICENSE` file is copied alongside its woff2 into
   `assets/vendor/fonts/{inter,jetbrains-mono}-LICENSE.txt` — not referenced by the page
   (fonts aren't "sold... by themselves" here, bundled with the tool's own output), but
-  present in the shipped output directory per the license's terms.
+  present in the shipped output directory per the license's terms. Since
+  [ADR 0030](0030-single-file-output.md) they are a comment in the embedded stylesheet.
 
 ### Consequences
 

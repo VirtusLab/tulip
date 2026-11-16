@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { serializeSnippetRef } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import { renderExplanations } from "./render.js";
@@ -9,6 +9,21 @@ import { renderExplanations } from "./render.js";
 function explanation(markdown: string): CategoryExplanation {
   return { category: { id: "c1", name: "Auth", description: "", attention: "normal" }, markdown };
 }
+
+let assetsDir: string;
+
+beforeAll(async () => {
+  assetsDir = await mkdtemp(join(tmpdir(), "tulip-assets-"));
+  await mkdir(join(assetsDir, "vendor/fonts"), { recursive: true });
+  await writeFile(join(assetsDir, "style.css"), "body{color:red}");
+  await writeFile(join(assetsDir, "vendor/mermaid.min.js"), "var m=1;");
+  await writeFile(join(assetsDir, "vendor/highlight.min.js"), "var h=2;");
+  await writeFile(join(assetsDir, "app.js"), "var a=3;");
+});
+
+afterAll(async () => {
+  await rm(assetsDir, { recursive: true, force: true });
+});
 
 describe("renderExplanations", () => {
   it("resolves every referenced file via the checkout and renders it into the page", async () => {
@@ -36,8 +51,7 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
+        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -72,8 +86,7 @@ describe("renderExplanations", () => {
         checkout,
         mkdtemp: async () => "/tmp/tulip-render-rename",
         writeFile: async () => {},
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
+        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -107,8 +120,7 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
+        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -144,8 +156,7 @@ describe("renderExplanations", () => {
         checkout,
         mkdtemp: async () => "/tmp/tulip-render-2",
         writeFile: async () => {},
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
+        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -170,8 +181,7 @@ describe("renderExplanations", () => {
         checkout,
         mkdtemp: async () => "/tmp/tulip-render-3",
         writeFile: async () => {},
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
+        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -180,15 +190,8 @@ describe("renderExplanations", () => {
     expect(result.dir).toBe("/tmp/tulip-render-3");
   });
 
-  it("in single-file mode, embeds the assets into the page and copies none", async () => {
-    const assetsDir = await mkdtemp(join(tmpdir(), "tulip-assets-"));
-    await mkdir(join(assetsDir, "vendor"));
-    await writeFile(join(assetsDir, "style.css"), "body{color:red}");
-    await writeFile(join(assetsDir, "vendor/mermaid.min.js"), "var m=1;");
-    await writeFile(join(assetsDir, "vendor/highlight.min.js"), "var h=2;");
-    await writeFile(join(assetsDir, "app.js"), "var a=3;");
-    const pages: string[] = [];
-    const copyDir = vi.fn(async () => {});
+  it("embeds the assets into the page", async () => {
+    let capturedPage = "";
 
     await renderExplanations(
       {
@@ -196,27 +199,22 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         explanations: [explanation("Just prose.")],
-        singleFile: true,
       },
       {
         checkout: { getFileAtBase: vi.fn(), getFileAtHead: vi.fn() },
         mkdtemp: async () => "/tmp/tulip-render-one",
         writeFile: async (_, content) => {
-          pages.push(content);
+          capturedPage = content;
         },
-        copyDir,
         assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
-    await rm(assetsDir, { recursive: true, force: true });
 
-    expect(copyDir).not.toHaveBeenCalled();
-    expect(pages[0]).toContain("<style>body{color:red}</style>");
-    expect(pages[0]).toContain(
+    expect(capturedPage).toContain("<style>body{color:red}</style>");
+    expect(capturedPage).toContain(
       "<script>var m=1;</script>\n<script>var h=2;</script>\n<script>var a=3;</script>",
     );
-    expect(pages[0]).not.toContain("assets/");
   });
 
   it("renders the injected build info into the page footer, without touching the real dist/build-info.json", async () => {
@@ -244,8 +242,7 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
+        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
         getBuildInfo,
       },
@@ -277,8 +274,7 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
+        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );

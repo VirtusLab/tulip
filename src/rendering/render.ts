@@ -1,14 +1,10 @@
+import { fileURLToPath } from "node:url";
 import type { PrCheckout } from "../checkout/checkout.js";
 import { parseSnippetRefs } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { type BuildInfo, formatVersion, getBuildInfo } from "../version.js";
-import {
-  type AssembleDeps,
-  type AssembleResult,
-  assembleOutput,
-  DEFAULT_ASSETS_DIR,
-} from "./assemble.js";
+import { type AssembleDeps, type AssembleResult, assembleOutput } from "./assemble.js";
 import { loadFileDiffs } from "./file-diffs.js";
 import { loadInlineAssets } from "./inline-assets.js";
 import { renderPage } from "./template.js";
@@ -26,8 +22,6 @@ export interface RenderInput {
   renamedFrom?: Map<string, string>;
   /** Serve mode (docs/adr/0019): renders a per-category review box. Default false (static page). */
   serve?: boolean;
-  /** Single-file mode (docs/adr/0030): one `index.html` with every asset embedded. */
-  singleFile?: boolean;
 }
 
 export interface RenderDeps extends AssembleDeps {
@@ -37,7 +31,13 @@ export interface RenderDeps extends AssembleDeps {
   /** Supplies the build info shown in the page footer (see src/version.ts). Defaults to the
    * real `getBuildInfo`; overridable so tests don't depend on a real dist/build-info.json. */
   getBuildInfo?: () => BuildInfo;
+  /** Directory with the stylesheet, scripts and fonts to embed into the page. Defaults to the real bundled
+   * assets alongside this module (src/rendering/assets in dev, dist/rendering/assets once built —
+   * see scripts/copy-assets.mjs). */
+  assetsDir?: string;
 }
+
+const DEFAULT_ASSETS_DIR = fileURLToPath(new URL("./assets", import.meta.url));
 
 /**
  * The rendering epic's entry point (Epic 8 calls this after phases 1-3 produce
@@ -64,10 +64,8 @@ export async function renderExplanations(
     fileDiffs,
     generatedBy: formatVersion((deps.getBuildInfo ?? getBuildInfo)()),
     serve: input.serve ?? false,
-    ...(input.singleFile
-      ? { inlineAssets: await loadInlineAssets(deps.assetsDir ?? DEFAULT_ASSETS_DIR) }
-      : {}),
+    inlineAssets: await loadInlineAssets(deps.assetsDir ?? DEFAULT_ASSETS_DIR),
   });
 
-  return assembleOutput(page, { ...deps, logger }, { singleFile: input.singleFile ?? false });
+  return assembleOutput(page, { ...deps, logger });
 }

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import * as http from "node:http";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
@@ -15,9 +15,6 @@ let dir: string;
 beforeAll(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "tulip-serve-test-"));
   await writeFile(path.join(dir, "index.html"), "<!doctype html><title>page</title>");
-  const assets = path.join(dir, "assets");
-  await mkdir(assets, { recursive: true });
-  await writeFile(path.join(assets, "style.css"), "body{color:red}");
 });
 
 afterAll(async () => {
@@ -231,13 +228,6 @@ describe("createReviewServer request guards", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(await res.text()).toContain("<title>page</title>");
-  });
-
-  it("serves an asset with the right content-type", async () => {
-    const { base } = await serve();
-    const res = await fetch(`${base}/assets/style.css`);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("text/css; charset=utf-8");
   });
 
   it("blocks path traversal, literal and percent-encoded", async () => {

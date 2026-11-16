@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import type { FileDiffData } from "./file-diffs.js";
+import type { InlineAssets } from "./inline-assets.js";
 import { renderPage } from "./template.js";
 
 // `import.meta.dirname`, not `new URL(..., import.meta.url)` — see highlight-safety.test.ts.
 const APP_JS = readFileSync(`${import.meta.dirname}/assets/app.js`, "utf8");
+
+/** Empty page assets, for tests that don't need the real ones. */
+export const NO_ASSETS: InlineAssets = { style: "", scripts: [] };
 
 /** Renders the common one-category skeleton the app.js tests mount into jsdom. `extraCategory`
  * adds a second category (`#category-1`) with that markdown. */
@@ -26,6 +30,7 @@ export function renderFixturePage(input: {
     });
   }
   return renderPage({
+    inlineAssets: NO_ASSETS,
     prTitle: "t",
     prDescription: "d",
     prUrl: "https://github.com/a/b/pull/1",
@@ -35,8 +40,7 @@ export function renderFixturePage(input: {
 }
 
 /** Loads `html` into a fresh JSDOM window (one per test, so app.js's listeners never accumulate),
- * then evaluates the real app.js and fires DOMContentLoaded. No `<script src>` is fetched by
- * JSDOM. `hash` loads the page at that fragment. `prepare` runs after the HTML is parsed and
+ * then evaluates the real app.js and fires DOMContentLoaded. `hash` loads the page at that fragment. `prepare` runs after the HTML is parsed and
  * before app.js, for stubs app.js must see. */
 export function mountWithAppJs(
   html: string,
