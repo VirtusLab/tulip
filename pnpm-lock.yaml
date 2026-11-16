@@ -833,8 +833,8 @@ packages:
     resolution: {integrity: sha512-OWeoayCq8J69hUIjvL+Mb6Q6Oaj/fyHV5XaXByEUAG+JUjIfTGDnk3qGpcXrD3VmQ3BSV96fcbM6fqq7C0tbPA==}
     engines: {node: '>=12'}
 
-  d3-dsv@3.0.1:
-    resolution: {integrity: sha512-UG6OvdI5afDIFP9w4G0mNq50dSOsXHJaRE8arAS5o9ApWnIElp8GZw1Dun8vP8OyHOZ/QJUKUJwxiiCCnUwm+Q==}
+  d3-dsv@3.0.2:
+    resolution: {integrity: sha512-FUnXhX7I4/AXyRCZzwfZTDGSq8PGZ4oR0tiCBqNGOZMsDrQ+6sIWNQnBzcCGhzJKZ6uCvCezTwflUqI209RRiQ==}
     engines: {node: '>=12'}
     hasBin: true
 
@@ -2016,7 +2016,7 @@ snapshots:
       d3-dispatch: 3.0.2
       d3-selection: 3.0.1
 
-  d3-dsv@3.0.1:
+  d3-dsv@3.0.2:
     dependencies:
       commander: 7.2.0
       iconv-lite: 0.6.3
@@ -2026,7 +2026,7 @@ snapshots:
 
   d3-fetch@3.0.2:
     dependencies:
-      d3-dsv: 3.0.1
+      d3-dsv: 3.0.2
 
   d3-force@3.0.1:
     dependencies:
@@ -2123,7 +2123,7 @@ snapshots:
       d3-delaunay: 6.0.4
       d3-dispatch: 3.0.2
       d3-drag: 3.0.1
-      d3-dsv: 3.0.1
+      d3-dsv: 3.0.2
       d3-ease: 3.0.2
       d3-fetch: 3.0.2
       d3-force: 3.0.1
