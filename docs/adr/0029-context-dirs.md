@@ -15,16 +15,22 @@ leaves it undefined, even when the user has the defining repository on disk.
   is granted, so access stays read-only as for the checkout. Backends declare
   `supportsContextDirs`; the pipeline fails before the checkout for any backend without it,
   rather than silently ignoring the flag. Codex (sandbox read dirs) and Cursor can follow.
-- **The model is told.** Every fresh session's prompt carries `context-dirs.md` after the
-  preamble, listing the directories and asking it to look up what the PR uses from them and
-  explain it where that helps the reviewer. Resumes don't repeat it. A firmer, always-on
-  instruction in the explain checklist made the model define every such identifier, but it
-  also changed runs without `--context-dir`, so it was left out.
+- **Only the explanation passes are told.** The explain prompt lists the directories after the
+  checkout-access paragraph and asks the model to look up what the PR uses from them and explain
+  it where that helps the reviewer (`explain-context-dirs.md`). The explanation review prompt
+  lists them so claims about outside code can be checked, not flagged as unsupported
+  (`review-context-dirs.md`). Grouping, classification and splitting aren't told: their output
+  has no place for what they'd find, so lookups would only cost tokens. Every call still gets
+  `--add-dir`. A firmer, always-on instruction in the explain checklist made the model define
+  every such identifier, but it also changed runs without `--context-dir`, so it was left out.
 
 ## Consequences
 
 - Explanations can define identifiers that live outside the PR.
 - A prompt-injected PR can steer the model into reading the context directories, and quote
   them in the rendered page. They are user-chosen, so this is documented in the README rather
-  than prevented. Context directories' own `.claude/` config is not stripped. AFAIK `--add-dir`
-  doesn't load settings or hooks from added directories, but this hasn't been verified.
+  than prevented.
+- Context directories' own `.claude/` config is not stripped. Checked with Claude Code 2.1.325:
+  a context directory's `CLAUDE.md` is not loaded and its `.claude/settings.json` hooks don't
+  run. Its `.claude/skills/` are listed to the model (name and description), but invoking one is
+  denied, as no tool permissions are granted, so a skill's `allowed-tools` can't grant Bash.

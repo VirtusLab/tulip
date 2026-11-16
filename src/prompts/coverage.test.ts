@@ -14,7 +14,6 @@ import { renderPrompt, templatePlaceholders } from "./loader.js";
  */
 const CALL_SITE_VARS: Record<string, string[]> = {
   preamble: [],
-  "context-dirs": ["dirList"],
   "structured-output": ["schema"],
   "category-generation": ["title", "description", "fileList"],
   "category-review": ["prTitle", "prDescription", "fileList", "categoryList"],
@@ -36,6 +35,7 @@ const CALL_SITE_VARS: Record<string, string[]> = {
   "explain-production-checklist": [],
   "explain-test-checklist": [],
   "explain-checkout-access": ["headSha", "baseSha"],
+  "explain-context-dirs": ["dirList"],
   explain: [
     "prTitle",
     "prDescription",
@@ -46,6 +46,7 @@ const CALL_SITE_VARS: Record<string, string[]> = {
     "productionChanges",
     "testChanges",
     "checkoutAccess",
+    "contextDirs",
     "productionChecklist",
     "testChecklist",
   ],
@@ -61,8 +62,10 @@ const CALL_SITE_VARS: Record<string, string[]> = {
     "productionChanges",
     "testChanges",
     "checkoutAccess",
+    "contextDirs",
   ],
   "review-amend": ["issues"],
+  "review-context-dirs": ["dirList"],
   split: ["categoryList", "changes"],
 };
 

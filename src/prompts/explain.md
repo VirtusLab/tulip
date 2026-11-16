@@ -23,7 +23,7 @@ Test changes in this group:
 Doc files, comments, and doc-strings in the first list go under "## Documentation";
 everything else there goes in the main section.
 
-{{checkoutAccess}}
+{{checkoutAccess}}{{contextDirs}}
 
 First research the changes above — read through the actual files to understand what they do.
 Then analyze how they work; jotting down scratch notes for yourself is fine, but only

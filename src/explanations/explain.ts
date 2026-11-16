@@ -25,7 +25,7 @@ export async function explainCategory(
     {
       model: config.models.explanation,
       schema: EXPLANATION_SCHEMA,
-      prompt: buildExplainPrompt(input),
+      prompt: buildExplainPrompt(input, deps.agent?.contextDirs),
     },
     deps,
   );

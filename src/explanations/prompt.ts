@@ -67,6 +67,21 @@ function describeCheckoutAccess(input: { baseSha: string; headSha: string }): st
   });
 }
 
+/** Which prompt a {@link describeContextDirs} note goes into: the explain prompt asks the model to
+ * explain what the PR uses from the directories, the review prompt to check claims against them. */
+type ContextDirsUse = "explain" | "review";
+
+/** A paragraph listing the `--context-dir` directories the session can read, prefixed with a
+ * blank line so it follows the checkout-access paragraph; empty when there are none. Text lives in
+ * src/prompts/explain-context-dirs.md and src/prompts/review-context-dirs.md (docs/adr/0029). */
+function describeContextDirs(contextDirs: readonly string[], use: ContextDirsUse): string {
+  if (contextDirs.length === 0) {
+    return "";
+  }
+  const dirList = contextDirs.map((dir) => `- ${dir}`).join("\n");
+  return `\n\n${renderPrompt(`${use}-context-dirs`, { dirList })}`;
+}
+
 function formatChanges(
   changes: ClassifiableChange[],
   diffThreshold: number,
@@ -86,10 +101,14 @@ function formatChanges(
  * only, per `input.diffThreshold`, applied per change (not to the total). Instructs
  * research-then-analyze, then a markdown answer interleaving prose, Mermaid diagrams, and
  * snippet references, split into production/test sections, covering the spec's checklist where
- * relevant, and referencing every provided change at least once. Text lives in
- * src/prompts/explain.md (docs/adr/0006).
+ * relevant, and referencing every provided change at least once. `contextDirs` are the
+ * `--context-dir` directories the session can read. Text lives in src/prompts/explain.md
+ * (docs/adr/0006).
  */
-export function buildExplainPrompt(input: ExplainCategoryInput): string {
+export function buildExplainPrompt(
+  input: ExplainCategoryInput,
+  contextDirs: readonly string[] = [],
+): string {
   const secondary: SecondaryRefContext = {
     categoryId: input.category.id,
     owners: input.changeOwners,
@@ -104,6 +123,7 @@ export function buildExplainPrompt(input: ExplainCategoryInput): string {
     productionChanges: formatChanges(input.production, input.diffThreshold, secondary),
     testChanges: formatChanges(input.test, input.diffThreshold, secondary),
     checkoutAccess: describeCheckoutAccess(input),
+    contextDirs: describeContextDirs(contextDirs, "explain"),
     productionChecklist: PRODUCTION_CHECKLIST,
     testChecklist: TEST_CHECKLIST,
   });
@@ -131,10 +151,13 @@ export function buildCoverageAmendPrompt(missing: ClassifiableChange[]): string 
  * (docs/adr/0014, same `ATTENTION_LABEL` as ./buildExplainPrompt). Gives the reviewer the same
  * changes the explaining session got (same diff-vs-reference threshold logic as
  * ./buildExplainPrompt) — without them, "grounded in the changes" can't actually be checked,
- * only the explanation's internal consistency. Text lives in src/prompts/review.md
- * (docs/adr/0006).
+ * only the explanation's internal consistency. `contextDirs` are the `--context-dir` directories
+ * the session can read. Text lives in src/prompts/review.md (docs/adr/0006).
  */
-export function buildReviewPrompt(input: ReviewPromptInput): string {
+export function buildReviewPrompt(
+  input: ReviewPromptInput,
+  contextDirs: readonly string[] = [],
+): string {
   const secondary: SecondaryRefContext = {
     categoryId: input.category.id,
     owners: input.changeOwners,
@@ -149,6 +172,7 @@ export function buildReviewPrompt(input: ReviewPromptInput): string {
     productionChanges: formatChanges(input.production, input.diffThreshold, secondary),
     testChanges: formatChanges(input.test, input.diffThreshold, secondary),
     checkoutAccess: describeCheckoutAccess(input),
+    contextDirs: describeContextDirs(contextDirs, "review"),
   });
 }
 

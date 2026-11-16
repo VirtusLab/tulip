@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentProcessResult } from "../agent/exec.js";
+import { createAgentFor } from "../agent-registry/registry.js";
 import type { Category } from "../categories/types.js";
 import { buildExcerpt } from "../classification/excerpt.js";
 import type { ClassifiableChange } from "../classification/types.js";
@@ -146,6 +147,21 @@ describe("explainCategory", () => {
     // No Bash/git access is granted (see src/config.ts's agents.claude.allowedTools doc comment) — the
     // prompt must not imply the session can run git commands itself.
     expect(prompt).not.toMatch(/git diff|git log|git blame|git show/);
+  });
+
+  it("lists the agent's context dirs in the prompt and grants read access to them", async () => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ markdown: "# explanation" }),
+    );
+
+    await explainCategory(baseInput(), {
+      runAgentProcess,
+      agent: createAgentFor("claude", ["/repos/protos"]),
+    });
+
+    const [args, prompt] = runAgentProcess.mock.calls[0] ?? [];
+    expect(prompt).toContain("- /repos/protos");
+    expect(args).toEqual(expect.arrayContaining(["--add-dir", "/repos/protos"]));
   });
 
   it("includes the full diff for a change whose range is at or under the threshold", async () => {
