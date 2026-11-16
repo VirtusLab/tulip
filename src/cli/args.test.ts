@@ -1,7 +1,7 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { config } from "../config.js";
 import {
   CliUsageError,
@@ -31,32 +31,51 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs([VALID_URL, "--no-open"]).open).toBe(false);
   });
 
-  it("resolves each repeated --context-dir to an absolute path", () => {
-    const first = mkdtempSync(join(tmpdir(), "tulip-ctx-"));
-    const second = mkdtempSync(join(tmpdir(), "tulip-ctx-"));
+  describe("--context-dir", () => {
+    const tempDirs: string[] = [];
+    const makeTempDir = (): string => {
+      const dir = mkdtempSync(join(tmpdir(), "tulip-ctx-"));
+      tempDirs.push(dir);
+      return dir;
+    };
 
-    const parsed = parseCliArgs([
-      VALID_URL,
-      "--context-dir",
-      relative(process.cwd(), first),
-      "--context-dir",
-      second,
-    ]);
+    afterEach(() => {
+      for (const dir of tempDirs.splice(0)) {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
 
-    expect(parsed.contextDirs).toEqual([first, second]);
-  });
+    it("resolves each repeated --context-dir to an absolute path", () => {
+      const first = makeTempDir();
+      const second = makeTempDir();
 
-  it.each([
-    ["a missing path", join(tmpdir(), "tulip-ctx-does-not-exist")],
-    ["a file", join(mkdtempSync(join(tmpdir(), "tulip-ctx-")), "file.txt")],
-  ])("rejects --context-dir pointing at %s", (_label, path) => {
-    if (path.endsWith("file.txt")) {
+      const parsed = parseCliArgs([
+        VALID_URL,
+        "--context-dir",
+        relative(process.cwd(), first),
+        "--context-dir",
+        second,
+      ]);
+
+      expect(parsed.contextDirs).toEqual([first, second]);
+    });
+
+    it("rejects a missing path", () => {
+      const path = join(makeTempDir(), "missing");
+
+      expect(() => parseCliArgs([VALID_URL, "--context-dir", path])).toThrow(
+        `Invalid --context-dir: "${path}" is not a directory.`,
+      );
+    });
+
+    it("rejects a file", () => {
+      const path = join(makeTempDir(), "file.txt");
       writeFileSync(path, "");
-    }
 
-    expect(() => parseCliArgs([VALID_URL, "--context-dir", path])).toThrow(
-      `Invalid --context-dir: "${path}" is not a directory.`,
-    );
+      expect(() => parseCliArgs([VALID_URL, "--context-dir", path])).toThrow(
+        `Invalid --context-dir: "${path}" is not a directory.`,
+      );
+    });
   });
 
   it("accepts --serve", () => {

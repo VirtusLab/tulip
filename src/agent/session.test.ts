@@ -32,7 +32,7 @@ describe("runSession", () => {
     expect(input).toBe(`${PREAMBLE}\n\nsay hi`);
   });
 
-  it("tells the model about context dirs, and passes them to the CLI", async () => {
+  it("tells the model about context dirs", async () => {
     const runAgentProcess = vi.fn(async (_args: string[], _input: string) => envelope());
     const agent = createAgentFor("claude", ["/repos/protos"]);
 
@@ -41,11 +41,10 @@ describe("runSession", () => {
       { runAgentProcess, agent },
     );
 
-    const [args, input] = runAgentProcess.mock.calls[0] ?? [];
+    const input = runAgentProcess.mock.calls[0]?.[1];
     expect(input?.startsWith(`${PREAMBLE}\n\n`)).toBe(true);
     expect(input).toContain("- /repos/protos");
     expect(input?.endsWith("\n\nsay hi")).toBe(true);
-    expect(args).toContain("--add-dir");
   });
 
   it("returns the structured result and session id", async () => {

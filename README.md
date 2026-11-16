@@ -135,8 +135,8 @@ tulip https://gitlab.com/group/project/-/merge_requests/45
 ```
 
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
-`--agent <id>`, `--context-dir <path>`. Run `tulip --help` for details, or `tulip --version` for the
-build.
+`--agent <id>`, `--context-dir <path>`. Run `tulip --help` for details, or
+`tulip --version` for the build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser.
@@ -144,8 +144,8 @@ in a browser.
 ### Extra context from other repositories
 
 A PR often uses things defined elsewhere: a shared library, a type from another
-repository, the service that calls it. Pass `--context-dir` (repeatable) to let every pass read
-those directories as well as the PR checkout:
+repository, the service that calls it. Pass `--context-dir` (repeatable) to let
+every pass read those directories as well as the PR checkout:
 
 ```sh
 tulip <PR URL> --context-dir ../shared-lib --context-dir ../other-service
