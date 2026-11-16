@@ -805,8 +805,8 @@ packages:
     resolution: {integrity: sha512-E5QCXfaf/uJZEHHiqoWRq+bQEm2PzoVFv2rDC7CZ3wwI0MjfMW3w83J3ubobG4IJj3lShAI5eiPJhOu/8wHofA==}
     engines: {node: '>=12'}
 
-  d3-brush@3.0.0:
-    resolution: {integrity: sha512-ALnjWlVYkXsVIGlOsuWH1+3udkYFI48Ljihfnh8FZPF2QS9o+PzGLBslO0PjzVoHLZ2KCVgAM8NVkXPJB2aNnQ==}
+  d3-brush@3.0.1:
+    resolution: {integrity: sha512-L5Glqa/Gb7LU3ndIOMtA5mDzlJ0aXKp5ELP2X09ctWF23jO7+faIUVDbmaIi+D6k3EemXFWn1F3lkfguExoVhA==}
     engines: {node: '>=12'}
 
   d3-chord@3.0.2:
@@ -1987,7 +1987,7 @@ snapshots:
 
   d3-axis@3.0.1: {}
 
-  d3-brush@3.0.0:
+  d3-brush@3.0.1:
     dependencies:
       d3-dispatch: 3.0.2
       d3-drag: 3.0.1
@@ -2116,7 +2116,7 @@ snapshots:
     dependencies:
       d3-array: 3.2.4
       d3-axis: 3.0.1
-      d3-brush: 3.0.0
+      d3-brush: 3.0.1
       d3-chord: 3.0.2
       d3-color: 3.1.1
       d3-contour: 4.0.3
