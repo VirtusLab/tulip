@@ -844,8 +844,8 @@ packages:
     resolution: {integrity: sha512-AJDdYOdnyRDV5b6ArilzCPPwc1ejkHcoyFarqlPqT7zRYjhavcT3uSrqcMvsgh2CgoPbK3RCwyHaVyxYcP2Arg==}
     engines: {node: '>=12'}
 
-  d3-geo@3.1.1:
-    resolution: {integrity: sha512-637ln3gXKXOwhalDzinUgY83KzNWZRKbYubaG+fGVuc/dxO64RRljtCTnf5ecMyE1RIdtqpkVcq0IbtU2S8j2Q==}
+  d3-geo@3.1.2:
+    resolution: {integrity: sha512-5R8ZgDQorIxmauv7R6gpE/ndz+Z0qAZssigq0aXFdvPHdY41RqtW02jrRUQAL724NdPABYXo1+gQEGBBr7uKNg==}
     engines: {node: '>=12'}
 
   d3-hierarchy@3.1.2:
@@ -2027,7 +2027,7 @@ snapshots:
 
   d3-format@3.1.2: {}
 
-  d3-geo@3.1.1:
+  d3-geo@3.1.2:
     dependencies:
       d3-array: 3.2.4
 
@@ -2119,7 +2119,7 @@ snapshots:
       d3-fetch: 3.0.1
       d3-force: 3.0.1
       d3-format: 3.1.2
-      d3-geo: 3.1.1
+      d3-geo: 3.1.2
       d3-hierarchy: 3.1.2
       d3-interpolate: 3.0.1
       d3-path: 3.1.0
