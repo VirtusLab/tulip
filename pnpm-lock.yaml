@@ -832,8 +832,8 @@ packages:
     resolution: {integrity: sha512-B5znKqRmKROAN4oHWQ50W/qisVjA9GXh2WMsVKdFVp4DxWmcrOsweqgUOUVsv5th96kwaZlokU6SlV4J3gak1w==}
     engines: {node: '>=12'}
 
-  d3-fetch@3.0.1:
-    resolution: {integrity: sha512-kpkQIM20n3oLVBKGg6oHrUchHM3xODkTzjMoj7aWQFq5QEM+R6E4WkzT5+tojDY7yjez8KgCBRoj4aEr99Fdqw==}
+  d3-fetch@3.0.2:
+    resolution: {integrity: sha512-1wGF62bgjMRbF6mqbD+6rRWBL2hwWVYQjFO2UP3Wm1nIAvJZKaQxXM5caVY7athoCa8wIq9lCf7g44lPWFk50g==}
     engines: {node: '>=12'}
 
   d3-force@3.0.1:
@@ -2019,7 +2019,7 @@ snapshots:
 
   d3-ease@3.0.2: {}
 
-  d3-fetch@3.0.1:
+  d3-fetch@3.0.2:
     dependencies:
       d3-dsv: 3.0.1
 
@@ -2120,7 +2120,7 @@ snapshots:
       d3-drag: 3.0.1
       d3-dsv: 3.0.1
       d3-ease: 3.0.2
-      d3-fetch: 3.0.1
+      d3-fetch: 3.0.2
       d3-force: 3.0.1
       d3-format: 3.1.2
       d3-geo: 3.1.2
