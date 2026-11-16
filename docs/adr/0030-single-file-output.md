@@ -12,18 +12,15 @@ or host it. `index.html` alone showed an unstyled page with no diagrams.
   page can be sent as one file. There is no flag and no linked mode.
 - **Embedding.** `src/rendering/inline-assets.ts` reads the assets. Fonts become base64 data URIs
   inside the stylesheet, the stylesheet goes in a `<style>` element, and each script goes in its
-  own inline `<script>`, in page order: mermaid, highlight.js, app.js.
-- **Script escaping.** `</script` would close the element early. `<!--` can put the HTML
-  tokenizer into its script-escape states; with every `<!--` removed it never enters them, so
-  `<script` needs no escaping. `</script` becomes `<\/script` and `<!--` becomes `<\x21--`, which
-  read the same inside a JS string or regex literal. The escape goes after the `<`: an earlier
-  `\x3C` for the `<` broke when a backslash came before it (`"\<!--"`, `/\<!--/`). A test compiles
-  each escaped bundle: a match outside a literal would not compile.
-- **CR and NUL.** The HTML parser turns CRLF and CR into LF before the browser hashes a script,
-  so they are converted first. It turns NUL into U+FFFD, which would break the hash, so a NUL in a
-  script is an error.
+  own inline `<script>`, in page order: mermaid, highlight.js, app.js. The assets are read when a
+  run starts, so a missing file (e.g. no `pnpm build`) fails the run before any LLM work.
+  `--serve` serves only `index.html`.
+- **Script escaping.** Each script is escaped so the HTML parser can't end or swallow it early,
+  without changing what the JS means, and converted to the exact text the browser hashes for the
+  CSP. The rules and their reasons are on `inlineScriptText` in `src/rendering/inline-assets.ts`.
 - **Font licenses.** The OFL requires its text to travel with the fonts. A comment at the top of
-  the stylesheet holds each font's copyright line and each license text once.
+  the stylesheet holds each font's copyright line and each license text once. The build copies
+  each font's license as `<font>.LICENSE.txt`, so the inliner finds it from the font's name.
 - **CSP.** Nothing is linked, so there is no `'self'` except `connect-src` (`--serve` posts to the
   local server). `script-src` lists the SHA-256 hash of each inline script, `style-src` is
   `'unsafe-inline'`, and `img-src` and `font-src` are `data:`. The `'self'` in `img-src` went too:

@@ -230,30 +230,23 @@ describe("createReviewServer request guards", () => {
     expect(await res.text()).toContain("<title>page</title>");
   });
 
-  it("blocks path traversal, literal and percent-encoded", async () => {
-    const { port } = await serve();
-    // Percent-encoded `..` survives URL parsing, so the resolve+confine guard rejects it (403).
-    const encoded = await rawRequest(port, {
-      method: "GET",
-      path: "/%2e%2e%2f%2e%2e%2fetc%2fpasswd",
-      headers: { Host: `127.0.0.1:${port}` },
-    });
-    expect(encoded.status).toBe(403);
-    // Literal `..` is normalized away by the WHATWG URL parser to an in-dir path, so it can't
-    // escape either — it just 404s. The security property (never served) holds for both.
-    const literal = await rawRequest(port, {
-      method: "GET",
-      path: "/../../etc/passwd",
-      headers: { Host: `127.0.0.1:${port}` },
-    });
-    expect(literal.status).toBe(404);
-    expect(literal.body).not.toContain("root:");
+  it("serves the index page for GET /index.html", async () => {
+    const { base } = await serve();
+    const res = await fetch(`${base}/index.html?x=1`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("<title>page</title>");
   });
 
-  it("returns 404 for a missing file", async () => {
-    const { base } = await serve();
-    const res = await fetch(`${base}/nope.html`);
-    expect(res.status).toBe(404);
+  it("returns 404 for any other path, traversal included", async () => {
+    const { port } = await serve();
+    for (const requestPath of ["/nope.html", "//", "/../../etc/passwd", "/%2e%2e%2fetc%2fpasswd"]) {
+      const res = await rawRequest(port, {
+        method: "GET",
+        path: requestPath,
+        headers: { Host: `127.0.0.1:${port}` },
+      });
+      expect(res.status, requestPath).toBe(404);
+    }
   });
 });
 

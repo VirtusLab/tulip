@@ -249,7 +249,7 @@ page after `pnpm install && pnpm build`. Specifically:
   reasonable default for a code-reading tool; nothing here disables or forces them.
 - **Licensing.** OFL 1.1 requires the license text travel with the font. Each
   package's `LICENSE` file is copied alongside its woff2 into
-  `assets/vendor/fonts/{inter,jetbrains-mono}-LICENSE.txt` — not referenced by the page
+  `assets/vendor/fonts/<font>.LICENSE.txt` — not referenced by the page
   (fonts aren't "sold... by themselves" here, bundled with the tool's own output), but
   present in the shipped output directory per the license's terms. Since
   [ADR 0030](0030-single-file-output.md) they are a comment in the embedded stylesheet.
@@ -260,11 +260,12 @@ page after `pnpm install && pnpm build`. Specifically:
   `jetbrains-mono-latin-wght-normal.woff2` 40,404 bytes = 88,660 bytes), i.e. what a
   browser actually fetches to render the page — comfortably inside "a few hundred KB".
   The two `LICENSE.txt` files (~9KB combined) add to the shipped output directory but
-  are never fetched by the page itself.
+  are never fetched by the page itself. Since ADR 0030 the fonts are embedded in the page
+  and the license text appears once in it (~4.5KB).
 - New devDependencies: `@fontsource-variable/inter`, `@fontsource-variable/jetbrains-mono`.
 - `scripts/copy-assets.mjs` gains a font-copying step (mirrors the mermaid/highlight.js
   vendoring exactly: copy from `node_modules`, into `assets/vendor/fonts/`, gitignored).
-- Still zero network references: `@font-face src` is a relative local path, verified by
-  both a static content test (`assets.test.ts`) and a real generated page executed in
-  `jsdom` with `runScripts: "dangerously"` (no console/jsdom errors, `--font-sans`
-  resolves with `"Inter Variable"` first).
+- Still zero network references: `@font-face src` is a relative local path (a data URI
+  since ADR 0030), verified by both a static content test (`assets.test.ts`) and a real
+  generated page executed in `jsdom` with `runScripts: "dangerously"` (no console/jsdom
+  errors, `--font-sans` resolves with `"Inter Variable"` first).

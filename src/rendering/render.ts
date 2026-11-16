@@ -1,4 +1,3 @@
-import { fileURLToPath } from "node:url";
 import type { PrCheckout } from "../checkout/checkout.js";
 import { parseSnippetRefs } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
@@ -6,7 +5,7 @@ import { createLogger, type Logger } from "../logging/logger.js";
 import { type BuildInfo, formatVersion, getBuildInfo } from "../version.js";
 import { type AssembleDeps, type AssembleResult, assembleOutput } from "./assemble.js";
 import { loadFileDiffs } from "./file-diffs.js";
-import { loadInlineAssets } from "./inline-assets.js";
+import type { InlineAssets } from "./inline-assets.js";
 import { renderPage } from "./template.js";
 
 /** What's needed to render the final page: PR context plus the reviewed, coverage-verified
@@ -22,6 +21,9 @@ export interface RenderInput {
   renamedFrom?: Map<string, string>;
   /** Serve mode (docs/adr/0019): renders a per-category review box. Default false (static page). */
   serve?: boolean;
+  /** Embedded into the page (docs/adr/0030). Loaded by the caller, so missing assets fail a run
+   * before its LLM work rather than after. */
+  inlineAssets: InlineAssets;
 }
 
 export interface RenderDeps extends AssembleDeps {
@@ -31,13 +33,7 @@ export interface RenderDeps extends AssembleDeps {
   /** Supplies the build info shown in the page footer (see src/version.ts). Defaults to the
    * real `getBuildInfo`; overridable so tests don't depend on a real dist/build-info.json. */
   getBuildInfo?: () => BuildInfo;
-  /** Directory with the stylesheet, scripts and fonts to embed into the page. Defaults to the real bundled
-   * assets alongside this module (src/rendering/assets in dev, dist/rendering/assets once built —
-   * see scripts/copy-assets.mjs). */
-  assetsDir?: string;
 }
-
-const DEFAULT_ASSETS_DIR = fileURLToPath(new URL("./assets", import.meta.url));
 
 /**
  * The rendering epic's entry point (Epic 8 calls this after phases 1-3 produce
@@ -64,7 +60,7 @@ export async function renderExplanations(
     fileDiffs,
     generatedBy: formatVersion((deps.getBuildInfo ?? getBuildInfo)()),
     serve: input.serve ?? false,
-    inlineAssets: await loadInlineAssets(deps.assetsDir ?? DEFAULT_ASSETS_DIR),
+    inlineAssets: input.inlineAssets,
   });
 
   return assembleOutput(page, { ...deps, logger });

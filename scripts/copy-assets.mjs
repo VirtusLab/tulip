@@ -29,21 +29,19 @@ await buildHljsBundle(join(vendorDir, "highlight.min.js"));
 // in. Each @fontsource package ships every weight/style/subset as separate variable-font
 // woff2 files; only the "wght"-axis (no optical-size axis — smaller file), non-italic, latin
 // subset is copied, since that's all this page needs (docs/adr/0004). The OFL requires the
-// license file travel with the font, so it's copied alongside each woff2.
+// license to travel with the font: each is copied as `<font>.LICENSE.txt`, the name
+// src/rendering/inline-assets.ts derives from the font to embed it in the page.
 const fontsDir = join(vendorDir, "fonts");
 await mkdir(fontsDir, { recursive: true });
 const FONTS = [
-  { pkg: "@fontsource-variable/inter", woff2: "inter-latin-wght-normal.woff2", license: "inter" },
-  {
-    pkg: "@fontsource-variable/jetbrains-mono",
-    woff2: "jetbrains-mono-latin-wght-normal.woff2",
-    license: "jetbrains-mono",
-  },
+  { pkg: "@fontsource-variable/inter", woff2: "inter-latin-wght-normal.woff2" },
+  { pkg: "@fontsource-variable/jetbrains-mono", woff2: "jetbrains-mono-latin-wght-normal.woff2" },
 ];
 for (const font of FONTS) {
   const pkgDir = fileURLToPath(new URL(`../node_modules/${font.pkg}/`, import.meta.url));
   await cp(join(pkgDir, "files", font.woff2), join(fontsDir, font.woff2));
-  await cp(join(pkgDir, "LICENSE"), join(fontsDir, `${font.license}-LICENSE.txt`));
+  const license = font.woff2.replace(/\.woff2$/, ".LICENSE.txt");
+  await cp(join(pkgDir, "LICENSE"), join(fontsDir, license));
 }
 
 await cp(src, dest, { recursive: true });

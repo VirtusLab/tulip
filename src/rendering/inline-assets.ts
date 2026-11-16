@@ -1,24 +1,29 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** The page's stylesheet and scripts as text, embedded into `index.html` (docs/adr/0030). */
 export interface InlineAssets {
   /** `style.css` with each `vendor/fonts/*.woff2` reference replaced by a data URI, preceded by a
    * comment carrying the fonts' licenses. */
   style: string;
-  /** Script bodies in page order (mermaid, highlight.js, app.js), each already passed through
-   * {@link inlineScriptText}. */
+  /** Script bodies in page order, each already passed through {@link inlineScriptText}. */
   scripts: string[];
 }
 
 const SCRIPT_FILES = ["vendor/mermaid.min.js", "vendor/highlight.min.js", "app.js"];
-const FONTS_DIR = "vendor/fonts";
 const FONT_URL = /url\("(vendor\/fonts\/[\w.-]+\.woff2)"\)/g;
-const LICENSE_SUFFIX = "-LICENSE.txt";
 
-/** Loads `assetsDir`'s stylesheet, fonts, font licenses and scripts so the page can embed them. */
-export async function loadInlineAssets(assetsDir: string): Promise<InlineAssets> {
+/** Loads `assetsDir`'s stylesheet, the fonts it references with their licenses, and the scripts,
+ * so the page can embed them.
+ * `assetsDir` defaults to the bundled assets: src/rendering/assets in dev, dist/rendering/assets
+ * once built. Fails when a file is missing, e.g. before `pnpm build` creates the gitignored
+ * `vendor/` files (scripts/copy-assets.mjs). */
+export async function loadInlineAssets(
+  // Resolved on call, not at import: jsdom tests import this module without a file: URL.
+  assetsDir: string = fileURLToPath(new URL("./assets", import.meta.url)),
+): Promise<InlineAssets> {
   const read = (path: string) => readFile(join(assetsDir, path), "utf8");
 
   const css = await read("style.css");
@@ -28,10 +33,10 @@ export async function loadInlineAssets(assetsDir: string): Promise<InlineAssets>
     const font = await readFile(join(assetsDir, fontPath));
     fontUris.set(fontPath, `data:font/woff2;base64,${font.toString("base64")}`);
   }
-  const licenseFiles = (await readdir(join(assetsDir, FONTS_DIR)))
-    .filter((name) => name.endsWith(LICENSE_SUFFIX))
-    .sort();
-  const licenses = await Promise.all(licenseFiles.map((name) => read(`${FONTS_DIR}/${name}`)));
+  // scripts/copy-assets.mjs writes each font's license under this name.
+  const licenses = await Promise.all(
+    fontPaths.map((fontPath) => read(fontPath.replace(/\.woff2$/, ".LICENSE.txt"))),
+  );
   const style =
     fontLicenseComment(licenses) +
     css.replace(FONT_URL, (_, fontPath: string) => `url("${fontUris.get(fontPath)}")`);

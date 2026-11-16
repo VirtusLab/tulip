@@ -14,25 +14,38 @@ import {
 const FILES: Record<string, string> = {
   "style.css": 'body{} @font-face{src:url("vendor/fonts/inter.woff2") format("woff2")}',
   "vendor/fonts/inter.woff2": "FONT",
-  "vendor/fonts/inter-LICENSE.txt": "Copyright Inter\n\nOFL text\n",
+  "vendor/fonts/inter.LICENSE.txt": "Copyright Inter\n\nOFL text\n",
   "vendor/mermaid.min.js": "var m='<!-- x -->';",
   "vendor/highlight.min.js": "var h=1;",
   "app.js": "var a=2;",
 };
 
+const tempDirs: string[] = [];
+
+/** Writes `files` (path relative to the dir → content) into a fresh temp dir. */
+async function assetsDirWith(files: Record<string, string>): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "tulip-inline-assets-"));
+  tempDirs.push(dir);
+  for (const [path, content] of Object.entries(files)) {
+    await mkdir(join(dir, path, ".."), { recursive: true });
+    await writeFile(join(dir, path), content);
+  }
+  return dir;
+}
+
 let assetsDir: string;
 
 beforeAll(async () => {
-  assetsDir = await mkdtemp(join(tmpdir(), "tulip-inline-assets-"));
-  for (const [path, content] of Object.entries(FILES)) {
-    await mkdir(join(assetsDir, path, ".."), { recursive: true });
-    await writeFile(join(assetsDir, path), content);
-  }
+  assetsDir = await assetsDirWith(FILES);
 });
 
 afterAll(async () => {
-  await rm(assetsDir, { recursive: true, force: true });
+  await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
 });
+
+function withoutComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, "");
+}
 
 /** Evaluates `source` as a script and returns its completion value. */
 function run(source: string): unknown {
@@ -53,6 +66,35 @@ describe("loadInlineAssets", () => {
     const { style } = await loadInlineAssets(assetsDir);
 
     expect(style).toMatch(/^\/\*\nCopyright Inter\n\nOFL text\n\*\/\nbody\{\}/);
+  });
+
+  // The real fonts are only vendored by `pnpm build`, so stand-ins are written for whatever the
+  // real stylesheet references: this pins the stylesheet's `url()` form, which the CSP's
+  // `font-src data:` would block if it weren't embedded.
+  it("embeds every font the real stylesheet references", async () => {
+    const css = readFileSync(`${import.meta.dirname}/assets/style.css`, "utf8");
+    const fonts = [...new Set(withoutComments(css).match(/vendor\/fonts\/[^"')\s]+/g))];
+    const dir = await assetsDirWith({
+      ...FILES,
+      "style.css": css,
+      ...Object.fromEntries(
+        fonts.flatMap((font) => [
+          [font, "FONT"],
+          [font.replace(/\.woff2$/, ".LICENSE.txt"), `Copyright ${font}\n\nOFL\n`],
+        ]),
+      ),
+    });
+
+    const { style } = await loadInlineAssets(dir);
+
+    expect(fonts.length).toBeGreaterThan(0);
+    expect(withoutComments(style)).not.toContain("vendor/fonts");
+    expect(style.match(/data:font\/woff2;base64,/g)).toHaveLength(
+      css.match(/@font-face\s*\{/g)?.length ?? 0,
+    );
+    for (const font of fonts) {
+      expect(style).toContain(`Copyright ${font}`);
+    }
   });
 
   it("returns the scripts in page order, escaped for an inline <script>", async () => {

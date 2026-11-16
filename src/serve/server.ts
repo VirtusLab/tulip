@@ -21,11 +21,6 @@ export interface ReviewServerOptions {
   logger?: Logger;
 }
 
-/** Maps a file extension to a Content-Type. Unknown → `application/octet-stream`. */
-const CONTENT_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-};
-
 function sendJson(res: http.ServerResponse, status: number, payload: unknown): void {
   const body = JSON.stringify(payload);
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -33,17 +28,16 @@ function sendJson(res: http.ServerResponse, status: number, payload: unknown): v
 }
 
 /**
- * Builds the localhost review server: serves the static render dir and posts per-category PR
- * comments via `POST /api/comment`. No signal handlers and no browser open — those live in
+ * Builds the localhost review server: serves the rendered `index.html` at `/` and `/index.html`
+ * (anything else is a 404) and posts per-category PR comments via `POST /api/comment`. No signal handlers and no browser open — those live in
  * {@link serveForReview}, so request-behavior tests can drive this directly on an ephemeral port.
  *
  * Security: every request must carry `Host: 127.0.0.1:<port>` (DNS-rebinding guard), POSTs with a
- * present-but-foreign `Origin` are rejected, static paths are confined to `dir` (traversal guard),
- * and the request body is size-bounded.
+ * present-but-foreign `Origin` are rejected, and the request body is size-bounded.
  */
 export function createReviewServer(opts: ReviewServerOptions): http.Server {
   const logger = opts.logger ?? createLogger();
-  const dir = path.resolve(opts.dir);
+  const indexPath = path.join(opts.dir, "index.html");
 
   return http.createServer((req, res) => {
     // Per-request, so the guards need no pre-known port (works on an ephemeral port).
@@ -58,7 +52,7 @@ export function createReviewServer(opts: ReviewServerOptions): http.Server {
     }
 
     if (req.method === "GET") {
-      void handleGet(req, res, dir);
+      void handleGet(req, res, indexPath);
       return;
     }
 
@@ -79,41 +73,23 @@ export function createReviewServer(opts: ReviewServerOptions): http.Server {
   });
 }
 
-/** Serves a file from `dir`. The whole path (decode + resolve + read) is wrapped so a malformed
- * request can never crash the long-running server with an uncaught sync throw. */
+/** Serves the page. Only `index.html` exists: the page embeds everything (docs/adr/0030). */
 async function handleGet(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  dir: string,
+  indexPath: string,
 ): Promise<void> {
+  const pathname = (req.url ?? "/").split("?")[0];
+  if (pathname !== "/" && pathname !== "/index.html") {
+    sendJson(res, 404, { error: "not found" });
+    return;
+  }
   try {
-    const rawPathname = new URL(req.url ?? "/", "http://x").pathname;
-    const pathname = decodeURIComponent(rawPathname); // malformed `%` → URIError → 400 below
-    const requested = pathname === "/" ? "/index.html" : pathname;
-    const full = path.resolve(dir, `.${requested}`);
-    if (full !== dir && !full.startsWith(dir + path.sep)) {
-      sendJson(res, 403, { error: "forbidden" });
-      return;
-    }
-
-    let content: Buffer;
-    try {
-      content = await readFile(full);
-    } catch (error) {
-      if ((error as { code?: string }).code === "ENOENT") {
-        sendJson(res, 404, { error: "not found" });
-      } else {
-        sendJson(res, 500, { error: "internal error" });
-      }
-      return;
-    }
-
-    const type = CONTENT_TYPES[path.extname(full)] ?? "application/octet-stream";
-    res.writeHead(200, { "Content-Type": type });
+    const content = await readFile(indexPath);
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(content);
   } catch {
-    // URIError from decodeURIComponent, or any other sync throw building the path.
-    sendJson(res, 400, { error: "bad request" });
+    sendJson(res, 500, { error: "internal error" });
   }
 }
 

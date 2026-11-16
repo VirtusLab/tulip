@@ -1,7 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { serializeSnippetRef } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import { renderExplanations } from "./render.js";
@@ -10,20 +7,7 @@ function explanation(markdown: string): CategoryExplanation {
   return { category: { id: "c1", name: "Auth", description: "", attention: "normal" }, markdown };
 }
 
-let assetsDir: string;
-
-beforeAll(async () => {
-  assetsDir = await mkdtemp(join(tmpdir(), "tulip-assets-"));
-  await mkdir(join(assetsDir, "vendor/fonts"), { recursive: true });
-  await writeFile(join(assetsDir, "style.css"), "body{color:red}");
-  await writeFile(join(assetsDir, "vendor/mermaid.min.js"), "var m=1;");
-  await writeFile(join(assetsDir, "vendor/highlight.min.js"), "var h=2;");
-  await writeFile(join(assetsDir, "app.js"), "var a=3;");
-});
-
-afterAll(async () => {
-  await rm(assetsDir, { recursive: true, force: true });
-});
+const ASSETS = { style: "body{color:red}", scripts: ["var m=1;", "var h=2;", "var a=3;"] };
 
 describe("renderExplanations", () => {
   it("resolves every referenced file via the checkout and renders it into the page", async () => {
@@ -43,6 +27,7 @@ describe("renderExplanations", () => {
         prTitle: "Add feature",
         prDescription: "desc",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation(`## What changed\n\n${ref}\n`)],
       },
       {
@@ -51,7 +36,6 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -79,6 +63,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation(`## What changed\n\n${ref}\n`)],
         renamedFrom: new Map([["new/name.ts", "old/name.ts"]]),
       },
@@ -86,7 +71,6 @@ describe("renderExplanations", () => {
         checkout,
         mkdtemp: async () => "/tmp/tulip-render-rename",
         writeFile: async () => {},
-        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -112,6 +96,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation(`## What changed\n\n${ref}\n`)],
       },
       {
@@ -120,7 +105,6 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -150,13 +134,13 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation(`${refA}\n\n${refB}\n`)],
       },
       {
         checkout,
         mkdtemp: async () => "/tmp/tulip-render-2",
         writeFile: async () => {},
-        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -175,13 +159,13 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation("Just prose, no markers.")],
       },
       {
         checkout,
         mkdtemp: async () => "/tmp/tulip-render-3",
         writeFile: async () => {},
-        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -198,6 +182,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation("Just prose.")],
       },
       {
@@ -206,7 +191,6 @@ describe("renderExplanations", () => {
         writeFile: async (_, content) => {
           capturedPage = content;
         },
-        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -234,6 +218,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation("Just prose, no markers.")],
       },
       {
@@ -242,7 +227,6 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
         getBuildInfo,
       },
@@ -266,6 +250,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation("Just prose, no markers.")],
       },
       {
@@ -274,7 +259,6 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        assetsDir,
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
