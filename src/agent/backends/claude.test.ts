@@ -20,6 +20,30 @@ describe("claudeBackend.planSpawn", () => {
     expect(args.indexOf("--add-dir") + 3).toBe(args.indexOf("--model"));
   });
 
+  it("grants read access to context dirs on a resumed call", async () => {
+    const { args } = await claudeBackend.planSpawn({
+      prompt: "p",
+      schema: SCHEMA,
+      resumeSessionId: "s-1",
+      contextDirs: ["/repos/protos"],
+    });
+
+    expect(args).toEqual(expect.arrayContaining(["--add-dir", "/repos/protos"]));
+  });
+
+  it("always denies the tools that write files or run commands", async () => {
+    const { args } = await claudeBackend.planSpawn({ prompt: "p", schema: SCHEMA });
+
+    const denied = args.indexOf("--disallowedTools");
+    expect(args.slice(denied, denied + 5)).toEqual([
+      "--disallowedTools",
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "Bash",
+    ]);
+  });
+
   it("passes no --add-dir without context dirs", async () => {
     const { args } = await claudeBackend.planSpawn({
       prompt: "p",

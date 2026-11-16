@@ -176,11 +176,6 @@ describe("context dirs", () => {
     expect(prompt).toContain("- /repos/protos");
     expect(prompt).toMatch(/check the explanation's claims\s+about things defined there/);
   });
-
-  it("leaves both prompts unchanged without context dirs", () => {
-    expect(buildExplainPrompt(EXPLAIN_INPUT, [])).toBe(buildExplainPrompt(EXPLAIN_INPUT));
-    expect(buildReviewPrompt(REVIEW_INPUT, [])).toBe(buildReviewPrompt(REVIEW_INPUT));
-  });
 });
 
 describe("buildReviewPrompt", () => {

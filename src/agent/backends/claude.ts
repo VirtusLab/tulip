@@ -20,6 +20,9 @@ export const claudeBackend: AgentBackend = {
   describeFailure,
 };
 
+/** Built-in tools that write files or run commands. */
+const DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"];
+
 async function planSpawn(call: AgentCallArgs): Promise<AgentSpawnPlan> {
   const args = ["-p", "--output-format", "json", "--json-schema", JSON.stringify(call.schema)];
   // Omitted entirely when empty (the default — see src/config.ts's `agents.claude.allowedTools`
@@ -28,7 +31,9 @@ async function planSpawn(call: AgentCallArgs): Promise<AgentSpawnPlan> {
   if (config.agents.claude.allowedTools.length > 0) {
     args.push("--allowedTools", ...config.agents.claude.allowedTools);
   }
-  // Read-only like the checkout: `--add-dir` widens Read/Grep/Glob, and no Bash is granted.
+  // `claude -p` inherits the user's permission settings; this keeps sessions read-only even if
+  // the user pre-allowed these tools. Denying Bash also removes Monitor, which runs commands.
+  args.push("--disallowedTools", ...DENIED_TOOLS);
   if (call.contextDirs !== undefined && call.contextDirs.length > 0) {
     args.push("--add-dir", ...call.contextDirs);
   }

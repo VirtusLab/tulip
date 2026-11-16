@@ -55,7 +55,7 @@ export interface AgentCallArgs {
   model?: string;
   resumeSessionId?: string;
   /** Extra directories, outside the checkout, the session may read (`--context-dir`). Absent
-   * when none were given. */
+   * or empty when none were given. */
   contextDirs?: string[];
 }
 

@@ -174,6 +174,10 @@ describe("parseCliArgs", () => {
     expect(agentLine?.indexOf("Agent CLI")).toBe(verboseLine?.indexOf("Show"));
   });
 
+  it("names the agents that support --context-dir in the usage text", () => {
+    expect(usage()).toContain("Read-only; only for: claude");
+  });
+
   it("parses a GitLab MR URL", () => {
     expect(parseCliArgs(["https://gitlab.com/group/project/-/merge_requests/45"]).pr).toEqual({
       forge: "gitlab",

@@ -11,8 +11,9 @@ leaves it undefined, even when the user has the defining repository on disk.
 
 - **`--context-dir <path>`**, repeatable. Each path is resolved to an absolute directory at
   parse time; a missing path or a file is a usage error.
-- **Claude only.** `claude -p` gets `--add-dir <dirs...>`, which widens Read/Grep/Glob. No Bash
-  is granted, so access stays read-only as for the checkout. Backends declare
+- **Claude only.** `claude -p` gets `--add-dir <dirs...>`, which widens Read/Grep/Glob. Edit,
+  Write, NotebookEdit and Bash are always denied (`--disallowedTools`), so access stays
+  read-only as for the checkout. Backends declare
   `supportsContextDirs`; the pipeline fails before the checkout for any backend without it,
   rather than silently ignoring the flag. Codex (sandbox read dirs) and Cursor can follow.
 - **Only the explanation passes are told.** The explain prompt lists the directories after the

@@ -2,6 +2,7 @@ import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { AGENT_IDS, type AgentId, isAgentId } from "../agent/types.js";
+import { contextDirAgentIds } from "../agent-registry/registry.js";
 import { config } from "../config.js";
 import type { PrRef } from "../forge/types.js";
 import { parsePrUrl } from "../forge-registry/pr-url.js";
@@ -65,7 +66,7 @@ export function usage(): string {
     `  --agent <id>          Agent CLI that runs the analysis (default: ${DEFAULT_AGENT}). Remembered for`,
     `                        later runs. One of: ${AGENT_IDS.join(" | ")}`,
     "  --context-dir <path>  Extra directory the LLM may read, e.g. another repository the PR",
-    "                        depends on. Repeatable. Read-only; claude agent only",
+    `                        depends on. Repeatable. Read-only; only for: ${contextDirAgentIds().join(" | ")}`,
     "  -h, --help            Show this help and exit",
     "  -v, --version         Show version information and exit",
   ].join("\n");

@@ -149,7 +149,7 @@ describe("explainCategory", () => {
     expect(prompt).not.toMatch(/git diff|git log|git blame|git show/);
   });
 
-  it("lists the agent's context dirs in the prompt and grants read access to them", async () => {
+  it("lists the agent's context dirs in the prompt", async () => {
     const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
       envelope({ markdown: "# explanation" }),
     );
@@ -159,9 +159,8 @@ describe("explainCategory", () => {
       agent: createAgentFor("claude", ["/repos/protos"]),
     });
 
-    const [args, prompt] = runAgentProcess.mock.calls[0] ?? [];
+    const [, prompt] = runAgentProcess.mock.calls[0] ?? [];
     expect(prompt).toContain("- /repos/protos");
-    expect(args).toEqual(expect.arrayContaining(["--add-dir", "/repos/protos"]));
   });
 
   it("includes the full diff for a change whose range is at or under the threshold", async () => {
