@@ -152,9 +152,10 @@ tulip <PR URL> --context-dir ../shared-lib --context-dir ../other-service
 ```
 
 Access is read-only, the same as for the checkout. Only the `claude` agent
-supports it for now. Every directory you pass is readable by a model that is
-also reading the PR's content, so only pass directories you'd be happy for the
-PR's author to see.
+supports it for now. A malicious PR can trick the model into copying text from
+these directories into the generated page. Only pass directories you'd be happy
+for the PR's author to see, and never ones holding secrets (`.env` files, keys,
+credentials).
 
 ### Choosing the agent
 
