@@ -901,8 +901,8 @@ packages:
     resolution: {integrity: sha512-22XaqjyCjpqgda20erhsOjGmC3vvYwTNYniKAd45W5UWLDF43moeOuV9qYpRqobIlsnK0UhnKZjUUJm3VgORUA==}
     engines: {node: '>=12'}
 
-  d3-time@3.1.0:
-    resolution: {integrity: sha512-VqKjzBLejbSMT4IgbmVgDjpkYrNWUYJnbCGo874u7MMKIWsILRX+OpX/gTk8MqjpT1A/c6HY2dCA77ZN0lkQ2Q==}
+  d3-time@3.1.1:
+    resolution: {integrity: sha512-Ze7rjrhMzdeulh0/hjcfFj7XLAHOfowtEMfsoG6DU866HPynQNW7Wfen6hzXcqKTv8XzxvF6Hzr5XD6bMHr2ug==}
     engines: {node: '>=12'}
 
   d3-timer@3.0.1:
@@ -2063,7 +2063,7 @@ snapshots:
       d3-array: 3.2.4
       d3-format: 3.1.2
       d3-interpolate: 3.0.1
-      d3-time: 3.1.0
+      d3-time: 3.1.1
       d3-time-format: 4.1.1
 
   d3-selection@3.0.1: {}
@@ -2078,9 +2078,9 @@ snapshots:
 
   d3-time-format@4.1.1:
     dependencies:
-      d3-time: 3.1.0
+      d3-time: 3.1.1
 
-  d3-time@3.1.0:
+  d3-time@3.1.1:
     dependencies:
       d3-array: 3.2.4
 
@@ -2130,7 +2130,7 @@ snapshots:
       d3-scale-chromatic: 3.1.1
       d3-selection: 3.0.1
       d3-shape: 3.2.0
-      d3-time: 3.1.0
+      d3-time: 3.1.1
       d3-time-format: 4.1.1
       d3-timer: 3.0.1
       d3-transition: 3.0.2(d3-selection@3.0.1)
