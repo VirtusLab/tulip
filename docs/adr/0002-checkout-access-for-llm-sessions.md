@@ -208,3 +208,11 @@ self-owned (real directory, no pre-existing content) before anything is written 
   `.tulip` before every write, per the finding above.
 - One more filesystem write pass per PR (proportional to changed-file count); negligible next to
   the checkout itself.
+
+## Amendment: deny tools that write
+
+`claude -p` inherits the user's permission settings, so a user who pre-allowed Edit, Write or
+Bash let sessions write files. `planSpawn` now always passes `--disallowedTools Edit Write
+NotebookEdit Bash`. A deny wins over any allow, including `config.agents.claude.allowedTools`.
+Checked with Claude Code 2.1.325: with `Write`/`Edit`/`Bash` allowed in settings, a session
+asked to create a file could not; denying Bash also removes Monitor, and Grep/Glob still work.

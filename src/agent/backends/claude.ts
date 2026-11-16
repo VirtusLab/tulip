@@ -14,10 +14,14 @@ export const claudeBackend: AgentBackend = {
   installHint: "install Claude Code",
   // Whether `claude -p` runs a PR's `.claude/settings.json` hooks is unchecked (TODO.md).
   repoConfigDirs: [],
+  supportsContextDirs: true,
   planSpawn,
   parseReply,
   describeFailure,
 };
+
+/** Built-in tools that write files or run commands. */
+const DENIED_TOOLS = ["Edit", "Write", "NotebookEdit", "Bash"];
 
 async function planSpawn(call: AgentCallArgs): Promise<AgentSpawnPlan> {
   const args = ["-p", "--output-format", "json", "--json-schema", JSON.stringify(call.schema)];
@@ -26,6 +30,12 @@ async function planSpawn(call: AgentCallArgs): Promise<AgentSpawnPlan> {
   // same as not passing it, so this can't just always push the flag.
   if (config.agents.claude.allowedTools.length > 0) {
     args.push("--allowedTools", ...config.agents.claude.allowedTools);
+  }
+  // `claude -p` inherits the user's permission settings; this keeps sessions read-only even if
+  // the user pre-allowed these tools. Denying Bash also removes Monitor, which runs commands.
+  args.push("--disallowedTools", ...DENIED_TOOLS);
+  if (call.contextDirs !== undefined && call.contextDirs.length > 0) {
+    args.push("--add-dir", ...call.contextDirs);
   }
   // A resume continues with its session's model, so `--model` is only passed for a fresh call.
   if (call.resumeSessionId) {

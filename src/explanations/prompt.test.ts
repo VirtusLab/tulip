@@ -160,6 +160,24 @@ describe("buildCoverageAmendPrompt", () => {
   });
 });
 
+describe("context dirs", () => {
+  const REVIEW_INPUT: ReviewPromptInput = { ...EXPLAIN_INPUT, markdown: "explanation" };
+
+  it("asks the explaining session to explain what the PR uses from them", () => {
+    const prompt = buildExplainPrompt(EXPLAIN_INPUT, ["/repos/protos", "/repos/product"]);
+
+    expect(prompt).toContain("- /repos/protos\n- /repos/product");
+    expect(prompt).toMatch(/look it up, and where it helps the reviewer/);
+  });
+
+  it("asks the reviewer to check claims against them", () => {
+    const prompt = buildReviewPrompt(REVIEW_INPUT, ["/repos/protos"]);
+
+    expect(prompt).toContain("- /repos/protos");
+    expect(prompt).toMatch(/check the explanation's claims\s+about things defined there/);
+  });
+});
+
 describe("buildReviewPrompt", () => {
   it("renders byte-identical prompt output", async () => {
     const input: ReviewPromptInput = {
