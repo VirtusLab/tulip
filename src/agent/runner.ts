@@ -103,6 +103,7 @@ async function execute(
     ...(invocation.resumeSessionId === undefined
       ? {}
       : { resumeSessionId: invocation.resumeSessionId }),
+    contextDirs: agent.contextDirs,
   });
   const runProcess = deps.runAgentProcess ?? agent.runProcess;
   const { stdout } = await withSpawnFiles(planned.files, () =>

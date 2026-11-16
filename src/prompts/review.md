@@ -27,7 +27,7 @@ Doc files, comments, and doc-strings in the first list go under "## Documentatio
 everything else there goes in the main section.
 
 {{checkoutAccess}} Use this to verify claims against the actual code too, not just
-against the change list above.
+against the change list above.{{contextDirs}}
 
 Review the explanation for:
 - top-down structure — does it open with the big picture (how the pieces fit end-to-end, with an

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentProcessResult } from "../agent/exec.js";
+import { createAgentFor } from "../agent-registry/registry.js";
 import type { Category } from "../categories/types.js";
 import type { ClassifiableChange } from "../classification/types.js";
 import { createLogger } from "../logging/logger.js";
@@ -71,6 +72,19 @@ describe("reviewAndAmend", () => {
     expect(prompt).toContain("Add retry logic to the fetcher");
     expect(prompt).toContain("Retry logic");
     expect((args as string[])[(args as string[]).indexOf("--model") + 1]).toBe("sonnet");
+  });
+
+  it("lists the agent's context dirs in the review prompt", async () => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
+      envelope({ approved: true, issues: [] }, "review-1"),
+    );
+
+    await reviewAndAmend(baseInput(), {
+      runAgentProcess,
+      agent: createAgentFor("claude", ["/repos/protos"]),
+    });
+
+    expect(runAgentProcess.mock.calls[0]?.[1]).toContain("- /repos/protos");
   });
 
   it("tells the reviewer its working directory is the head checkout, and gives both SHAs", async () => {
