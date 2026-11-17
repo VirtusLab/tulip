@@ -81,3 +81,33 @@ describe("diagram fit (app.js under jsdom)", () => {
     expect(mounted.pre.classList.contains("mermaid-wide")).toBe(false);
   });
 });
+
+describe("diagram loading (app.js under jsdom)", () => {
+  it("renders the diagrams once mermaid, loaded from a CDN, arrives after the page is ready", async () => {
+    const html = renderFixturePage({ markdown: "```mermaid\ngraph LR\nA-->B\n```\n" }).replace(
+      "</main>",
+      '</main><script async src="https://cdn.example/mermaid.min.js"></script>',
+    );
+    const win = mountWithAppJs(html);
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    // jsdom fires its own DOMContentLoaded a tick later; mermaid must arrive after that.
+    await settle();
+    const pre = win.document.querySelector("pre.mermaid");
+    if (!pre) {
+      throw new Error("expected a diagram placeholder");
+    }
+
+    (win as unknown as Window & { mermaid?: unknown }).mermaid = {
+      initialize() {},
+      async run({ nodes }: { nodes: Iterable<Element> }) {
+        for (const node of nodes) {
+          node.innerHTML = "<svg></svg>";
+        }
+      },
+    };
+    win.document.querySelector("script[src]")?.dispatchEvent(new win.Event("load"));
+    await settle();
+
+    expect(pre.querySelector("svg")).not.toBeNull();
+  });
+});

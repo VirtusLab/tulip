@@ -23,7 +23,7 @@ import type {
 } from "../forge/types.js";
 import { forgeFor } from "../forge-registry/registry.js";
 import { gitlabAdapter } from "../gitlab/adapter.js";
-import type { InlineAssets } from "../rendering/inline-assets.js";
+import type { PageAssets } from "../rendering/page-assets.js";
 import type { RenderDeps, RenderInput, RenderResult } from "../rendering/render.js";
 import type { ServeOptions } from "../serve/server.js";
 import { type PipelineDeps, type PipelineOptions, run } from "./run.js";
@@ -201,7 +201,7 @@ function baseDeps(order: string[] = []) {
         },
       ];
     }),
-    loadInlineAssets: vi.fn(async (): Promise<InlineAssets> => {
+    loadPageAssets: vi.fn(async (): Promise<PageAssets> => {
       order.push("assets");
       return { style: "", scripts: [] };
     }),
@@ -236,6 +236,7 @@ function options(overrides: Partial<PipelineOptions> = {}): PipelineOptions {
     open: true,
     serve: false,
     attachPreviewAsComment: false,
+    offline: false,
     shareKeyPath: "/tmp/share-key",
     agent: "claude",
     ...overrides,
@@ -570,7 +571,7 @@ describe("run", () => {
 
   it("fails on missing page assets before fetching the PR or running any LLM phase", async () => {
     const deps = baseDeps();
-    deps.loadInlineAssets = vi.fn(async () => {
+    deps.loadPageAssets = vi.fn(async () => {
       throw new Error("ENOENT: vendor/mermaid.min.js");
     });
 
@@ -581,13 +582,21 @@ describe("run", () => {
     expect(deps.generateCategories).not.toHaveBeenCalled();
   });
 
+  it.each([true, false])("loads the page assets with offline: %s", async (offline) => {
+    const deps = baseDeps();
+
+    await run(options({ offline }), deps);
+
+    expect(deps.loadPageAssets).toHaveBeenCalledWith({ offline });
+  });
+
   it("passes the loaded assets to rendering", async () => {
     const deps = baseDeps();
 
     await run(options(), deps);
 
     expect(deps.renderExplanations).toHaveBeenCalledWith(
-      expect.objectContaining({ inlineAssets: await deps.loadInlineAssets.mock.results[0]?.value }),
+      expect.objectContaining({ assets: await deps.loadPageAssets.mock.results[0]?.value }),
       expect.anything(),
     );
   });

@@ -4,7 +4,7 @@ import { renderPage } from "./template.js";
 
 function mount(fetchImpl: () => Promise<unknown>) {
   const html = renderPage({
-    inlineAssets: NO_ASSETS,
+    assets: NO_ASSETS,
     prTitle: "t",
     prDescription: "d",
     prUrl: "https://github.com/a/b/pull/1",

@@ -7,24 +7,29 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   fontLicenseComment,
   inlineScriptText,
-  loadInlineAssets,
+  loadPageAssets,
+  mermaidCdnUrl,
   scriptHash,
-} from "./inline-assets.js";
+  subresourceIntegrity,
+} from "./page-assets.js";
 
 const FILES: Record<string, string> = {
   "style.css": 'body{} @font-face{src:url("vendor/fonts/inter.woff2") format("woff2")}',
   "vendor/fonts/inter.woff2": "FONT",
   "vendor/fonts/inter.LICENSE.txt": "Copyright Inter\n\nOFL text\n",
   "vendor/mermaid.min.js": "var m='<!-- x -->';",
+  "vendor/mermaid.version": "12.3.0\n",
   "vendor/highlight.min.js": "var h=1;",
   "app.js": "var a=2;",
 };
+
+const OFFLINE = { offline: true };
 
 const tempDirs: string[] = [];
 
 /** Writes `files` (path relative to the dir → content) into a fresh temp dir. */
 async function assetsDirWith(files: Record<string, string>): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "tulip-inline-assets-"));
+  const dir = await mkdtemp(join(tmpdir(), "tulip-page-assets-"));
   tempDirs.push(dir);
   for (const [path, content] of Object.entries(files)) {
     await mkdir(join(dir, path, ".."), { recursive: true });
@@ -52,9 +57,9 @@ function run(source: string): unknown {
   return new Script(source).runInNewContext();
 }
 
-describe("loadInlineAssets", () => {
+describe("loadPageAssets", () => {
   it("replaces each font reference with a base64 data URI", async () => {
-    const { style } = await loadInlineAssets(assetsDir);
+    const { style } = await loadPageAssets(OFFLINE, assetsDir);
 
     expect(style).toContain(
       `url("data:font/woff2;base64,${Buffer.from("FONT").toString("base64")}")`,
@@ -63,7 +68,7 @@ describe("loadInlineAssets", () => {
   });
 
   it("puts the font licenses in a comment before the stylesheet", async () => {
-    const { style } = await loadInlineAssets(assetsDir);
+    const { style } = await loadPageAssets(OFFLINE, assetsDir);
 
     expect(style).toMatch(/^\/\*\nCopyright Inter\n\nOFL text\n\*\/\nbody\{\}/);
   });
@@ -85,7 +90,7 @@ describe("loadInlineAssets", () => {
       ),
     });
 
-    const { style } = await loadInlineAssets(dir);
+    const { style } = await loadPageAssets(OFFLINE, dir);
 
     expect(fonts.length).toBeGreaterThan(0);
     expect(withoutComments(style)).not.toContain("vendor/fonts");
@@ -97,10 +102,27 @@ describe("loadInlineAssets", () => {
     }
   });
 
-  it("returns the scripts in page order, escaped for an inline <script>", async () => {
-    const { scripts } = await loadInlineAssets(assetsDir);
+  it("offline, embeds every script in page order, escaped for an inline <script>", async () => {
+    const { scripts } = await loadPageAssets(OFFLINE, assetsDir);
 
-    expect(scripts).toEqual(["var m='<\\x21-- x -->';", "var h=1;", "var a=2;"]);
+    expect(scripts).toEqual([
+      { text: "var m='<\\x21-- x -->';" },
+      { text: "var h=1;" },
+      { text: "var a=2;" },
+    ]);
+  });
+
+  it("otherwise loads mermaid from the CDN, pinned to the vendored bundle", async () => {
+    const { scripts } = await loadPageAssets({ offline: false }, assetsDir);
+
+    expect(scripts).toEqual([
+      {
+        src: "https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js",
+        integrity: subresourceIntegrity(Buffer.from("var m='<!-- x -->';")),
+      },
+      { text: "var h=1;" },
+      { text: "var a=2;" },
+    ]);
   });
 });
 
@@ -162,6 +184,33 @@ describe("inlineScriptText", () => {
 
     expect(() => new Script(escaped)).not.toThrow();
     expect(escaped).not.toMatch(/<\/script|<!--/i);
+  });
+});
+
+describe("mermaidCdnUrl", () => {
+  it.each([
+    "12.3",
+    "12.3.0 https://evil.example",
+    "https://evil.example 12.3.0",
+    "12.3.0/../x",
+    "",
+  ])("refuses %j", (version) => {
+    expect(() => mermaidCdnUrl(version)).toThrow(/unexpected mermaid version/);
+  });
+
+  it("accepts a prerelease", () => {
+    expect(mermaidCdnUrl("12.4.0-rc.1")).toBe(
+      "https://cdn.jsdelivr.net/npm/mermaid@12.4.0-rc.1/dist/mermaid.min.js",
+    );
+  });
+});
+
+describe("subresourceIntegrity", () => {
+  it("gives the SRI value of a file", () => {
+    // `echo -n "alert('Hello, world.');" | openssl dgst -sha384 -binary | openssl base64 -A`
+    expect(subresourceIntegrity(Buffer.from("alert('Hello, world.');"))).toBe(
+      "sha384-H8BRh8j48O9oYatfu5AZzq6A9RINhZO5H16dQZngK7T62em8MUt1FLm52t+eX6xO",
+    );
   });
 });
 

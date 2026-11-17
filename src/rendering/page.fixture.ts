@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import type { FileDiffData } from "./file-diffs.js";
-import type { InlineAssets } from "./inline-assets.js";
+import type { PageAssets } from "./page-assets.js";
 import { renderPage } from "./template.js";
 
 // `import.meta.dirname`, not `new URL(..., import.meta.url)` — see highlight-safety.test.ts.
 const APP_JS = readFileSync(`${import.meta.dirname}/assets/app.js`, "utf8");
 
 /** Empty page assets, for tests that don't need the real ones. */
-export const NO_ASSETS: InlineAssets = { style: "", scripts: [] };
+export const NO_ASSETS: PageAssets = { style: "", scripts: [] };
 
 /** The commit and time a test page explains. */
 export const PAGE_RUN = { headSha: "c".repeat(40), generatedAt: new Date("2026-10-19T14:32:00Z") };
@@ -33,7 +33,7 @@ export function renderFixturePage(input: {
     });
   }
   return renderPage({
-    inlineAssets: NO_ASSETS,
+    assets: NO_ASSETS,
     prTitle: "t",
     prDescription: "d",
     prUrl: "https://github.com/a/b/pull/1",

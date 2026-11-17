@@ -30,7 +30,7 @@ function renderIntoJsdom(): Document {
   const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
 
   const html = renderPage({
-    inlineAssets: NO_ASSETS,
+    assets: NO_ASSETS,
     prTitle: "t",
     prDescription: `PR description prose.\n\n> A blockquote in the PR description.\n\n${snippetRef}\n`,
     prUrl: "https://github.com/a/b/pull/1",
@@ -51,7 +51,7 @@ function renderIntoJsdom(): Document {
  * the last-section-loses-its-border rule (see docs/adr/0007's amendment) in that edge case too. */
 function renderIntoJsdomNoCategories(): Document {
   const html = renderPage({
-    inlineAssets: NO_ASSETS,
+    assets: NO_ASSETS,
     prTitle: "t",
     prDescription: "PR description prose.",
     prUrl: "https://github.com/a/b/pull/1",
@@ -138,7 +138,7 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
 
   it("keeps a serve-mode review box in the centered prose column (same width as the text)", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",

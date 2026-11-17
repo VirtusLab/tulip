@@ -28,6 +28,8 @@ export interface RunOptions {
   serve: boolean;
   /** Share the page on the PR once the run ends (docs/adr/0032). */
   attachPreviewAsComment: boolean;
+  /** Embed mermaid in the page instead of loading it from a CDN (docs/adr/0033). */
+  offline: boolean;
   /** Which agent CLI runs the LLM passes (docs/adr/0027), when given as `--agent`. When absent,
    * the remembered choice or the default is used (see ./agent-choice.ts). */
   agent?: AgentId;
@@ -72,6 +74,8 @@ export function usage(): string {
     "                        Share the page on the PR once the run ends: store it on a hidden ref",
     "                        (in your fork if you can't push) and link it from a PR comment",
     "                        (GitHub PRs only)",
+    "  --offline             Embed the diagram library in the page instead of loading it from",
+    "                        the jsDelivr CDN, so the page works without network (much larger)",
     `  --agent <id>          Agent CLI that runs the analysis (default: ${DEFAULT_AGENT}). Remembered for`,
     `                        later runs. One of: ${AGENT_IDS.join(" | ")}`,
     "  --context-dir <path>  Extra directory the LLM may read, e.g. another repository the PR",
@@ -92,6 +96,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
     "no-open"?: boolean;
     serve?: boolean;
     "attach-preview-as-comment"?: boolean;
+    offline?: boolean;
     agent?: string;
     "context-dir"?: string[];
     help?: boolean;
@@ -107,6 +112,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
         "no-open": { type: "boolean" },
         serve: { type: "boolean" },
         "attach-preview-as-comment": { type: "boolean" },
+        offline: { type: "boolean" },
         agent: { type: "string" },
         "context-dir": { type: "string", multiple: true },
         help: { type: "boolean", short: "h" },
@@ -152,6 +158,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
     open: !values["no-open"],
     serve: values.serve ?? false,
     attachPreviewAsComment: values["attach-preview-as-comment"] ?? false,
+    offline: values.offline ?? false,
     ...(values.agent === undefined ? {} : { agent: parseAgent(values.agent) }),
     ...(contextDirs.length === 0 ? {} : { contextDirs }),
   };

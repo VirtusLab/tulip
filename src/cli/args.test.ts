@@ -26,6 +26,7 @@ describe("parseCliArgs", () => {
       open: true,
       serve: false,
       attachPreviewAsComment: false,
+      offline: false,
     });
   });
 
@@ -90,6 +91,10 @@ describe("parseCliArgs", () => {
     );
   });
 
+  it("accepts --offline", () => {
+    expect(parseCliArgs([VALID_URL, "--offline"]).offline).toBe(true);
+  });
+
   it("accepts --diff-threshold and parses it as an integer", () => {
     expect(parseCliArgs([VALID_URL, "--diff-threshold", "800"])).toEqual({
       prUrl: VALID_URL,
@@ -99,6 +104,7 @@ describe("parseCliArgs", () => {
       open: true,
       serve: false,
       attachPreviewAsComment: false,
+      offline: false,
     });
   });
 

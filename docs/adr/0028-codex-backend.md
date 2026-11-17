@@ -125,6 +125,7 @@ that its sandbox did not hold:
   model-written markdown or mermaid labels (`<img>`, `<video>`, `<audio>` survive mermaid's
   sanitizer) could make the page fetch a URL on open. This applies to every backend.
   [ADR 0030](0030-single-file-output.md) embeds the assets and tightens the policy to match.
+  [ADR 0033](0033-mermaid-from-cdn.md) allows the one pinned mermaid URL on jsDelivr.
 
 ### Consequences
 

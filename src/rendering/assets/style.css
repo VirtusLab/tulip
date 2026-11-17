@@ -67,7 +67,7 @@
 /* Self-hosted webfonts (docs/adr/0004): Inter for prose, JetBrains Mono for code, both SIL OFL
    1.1, vendored from the @fontsource-variable/* devDependencies (see scripts/copy-assets.mjs —
    not checked into git, refreshed at every build, mirroring mermaid/highlight.js's vendoring).
-   src/rendering/inline-assets.ts embeds each font as a data URI, matching exactly the
+   src/rendering/page-assets.ts embeds each font as a data URI, matching exactly the
    `url("vendor/fonts/<name>.woff2")` form below. Only each font's variable-weight,
    non-italic, latin-subset file is vendored — the smallest single file that covers every
    weight this page actually uses (see the weight values below; docs/adr/0004 for the total). */
