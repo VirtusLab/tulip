@@ -349,13 +349,14 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
         prUrl,
         categoryNames,
         postComment: commenter.postComment,
-        ...(share && { share: async () => (await share()).commentUrl }),
+        ...(share && {
+          share: async () => (await share()).commentUrl,
+          onShutdown: () => share.stop(),
+        }),
         open: options.open,
         logger,
         openInBrowser: doOpenInBrowser,
       });
-      // The server only stops on Ctrl+C, which already ended any gh call in flight.
-      share?.stop();
     }
     // A failure the page's Share button later retried successfully doesn't count.
     if (sharing) {

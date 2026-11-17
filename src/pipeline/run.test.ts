@@ -249,6 +249,16 @@ function serveOptions(deps: ReturnType<typeof baseDeps>): ServeOptions {
   return calls[0]?.[0] as ServeOptions;
 }
 
+/** A publish that only ends, rejecting, once `signal` aborts. */
+function untilAborted(signal?: AbortSignal): Promise<PublishedPreview> {
+  return new Promise((_resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+    }
+    signal?.addEventListener("abort", () => reject(signal.reason));
+  });
+}
+
 function infoLines(deps: PipelineDeps): string[] {
   const info = deps.logger?.info as ReturnType<typeof vi.fn>;
   return info.mock.calls.map((call) => String(call[0]));
@@ -1244,22 +1254,40 @@ describe("run", () => {
     const publisher = deps.previewPublisher as PreviewPublisher;
     let stopSignal: AbortSignal | undefined;
     publisher.prepare = vi.fn(async () => ({
-      publish: vi.fn(
-        (_preview: unknown, signal?: AbortSignal) =>
-          new Promise<PublishedPreview>((_resolve, reject) => {
-            stopSignal = signal;
-            if (signal?.aborted) {
-              reject(signal.reason);
-            }
-            signal?.addEventListener("abort", () => reject(signal.reason));
-          }),
-      ),
+      publish: vi.fn((_preview: unknown, signal?: AbortSignal) => {
+        stopSignal = signal;
+        return untilAborted(signal);
+      }),
     }));
+    deps.serveForReview.mockImplementation(async (...args: unknown[]) => {
+      (args[0] as ServeOptions).onShutdown?.();
+    });
 
     await run(options({ attachPreviewAsComment: true, serve: true }), deps);
 
     expect(stopSignal?.aborted).toBe(true);
     expect(process.exitCode).toBe(1);
+  });
+
+  it("in serve mode, stops a share from the page as the server starts shutting down", async () => {
+    const deps = baseDeps();
+    const publisher = deps.previewPublisher as PreviewPublisher;
+    publisher.prepare = vi.fn(async () => ({
+      publish: vi.fn((_preview: unknown, signal?: AbortSignal) => untilAborted(signal)),
+    }));
+    // Like the real server, doesn't resolve until the in-flight share request ends.
+    deps.serveForReview.mockImplementation(async (...args: unknown[]) => {
+      const serve = args[0] as ServeOptions;
+      const sharing = serve.share?.();
+      await vi.waitFor(() => expect(publisher.prepare).toHaveBeenCalled());
+      serve.onShutdown?.();
+      await expect(sharing).rejects.toThrow();
+    });
+
+    await run(options({ serve: true }), deps);
+
+    // A failed expectation inside the mock would fail the run.
+    expect(process.exitCode).toBeUndefined();
   });
 
   it("renders the Share button only in serve mode, for a forge that can share", async () => {

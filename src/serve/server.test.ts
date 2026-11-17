@@ -316,6 +316,43 @@ describe("serveForReview lifecycle", () => {
       closeIdle.mockRestore();
     }
   });
+
+  it("calls onShutdown while a share request is still in flight", async () => {
+    const info = vi.fn();
+    let stopShare: (() => void) | undefined;
+    const share = vi.fn(
+      () =>
+        new Promise<string>((_resolve, reject) => {
+          stopShare = () => reject(new Error("stopped"));
+        }),
+    );
+    const onShutdown = vi.fn(() => stopShare?.());
+    const done = serveForReview({
+      page: PAGE,
+      prUrl: PR_URL,
+      categoryNames: CATEGORY_NAMES,
+      postComment: vi.fn(async () => "url"),
+      share,
+      logger: { info, debug: vi.fn() },
+      open: false,
+      onShutdown,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const url = String(info.mock.calls[0]?.[0]).match(/http:\/\/\S+/)?.[0];
+
+    const response = fetch(`${url}/api/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    await vi.waitFor(() => expect(share).toHaveBeenCalled());
+    process.emit("SIGINT");
+
+    // close() only resolves once the share request ends, which only onShutdown makes happen.
+    await done;
+    expect(onShutdown).toHaveBeenCalledTimes(1);
+    expect((await response).status).toBe(500);
+  });
 });
 
 describe("POST /api/share", () => {

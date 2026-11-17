@@ -225,6 +225,8 @@ export type ServeOptions = ReviewServerOptions & {
   open: boolean;
   /** Browser opener; defaults to spawning the OS opener. Injected in tests / by the pipeline. */
   openInBrowser?: (url: string) => Promise<void>;
+  /** Called as shutdown starts. Closing waits for in-flight requests, e.g. a share. */
+  onShutdown?: () => void;
 };
 
 /**
@@ -240,6 +242,7 @@ export function serveForReview(opts: ServeOptions): Promise<void> {
     const shutdown = () => {
       process.off("SIGINT", shutdown);
       process.off("SIGTERM", shutdown);
+      opts.onShutdown?.();
       // Close idle keep-alive sockets (e.g. the still-open browser page) first, so close()'s
       // callback fires promptly instead of waiting out keepAliveTimeout — otherwise Ctrl+C appears
       // to hang, and a second Ctrl+C during the wait would hit Node's default handler and hard-exit
