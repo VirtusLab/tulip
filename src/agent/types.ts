@@ -43,6 +43,8 @@ export interface AgentReply {
   usage?: ModelTokens;
   numTurns?: number;
   durationMs?: number;
+  /** The call's cost in USD, as the CLI reports it. */
+  costUsd?: number;
 }
 
 /** One invocation, as handed to {@link AgentBackend.planSpawn}. */

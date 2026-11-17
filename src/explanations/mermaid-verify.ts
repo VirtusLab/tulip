@@ -109,6 +109,7 @@ async function fixMermaidFence(
         sessionId: currentSessionId,
         schema: MERMAID_FIX_SCHEMA,
         prompt: buildMermaidFixPrompt(source, error),
+        label: { step: "mermaid-fix", category: categoryName, attempt },
       },
       deps,
     );

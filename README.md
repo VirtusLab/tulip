@@ -141,6 +141,10 @@ build.
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser.
 
+Each run also writes per-call statistics (step, category, model, tokens, cost,
+time) to a JSONL file in the temp directory and logs its path, for analysing
+where a run's cost goes.
+
 ### Choosing the agent
 
 Tulip uses `claude` unless you pass `--agent` with another id from the table

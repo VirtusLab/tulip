@@ -26,6 +26,7 @@ export async function explainCategory(
       model: config.models.explanation,
       schema: EXPLANATION_SCHEMA,
       prompt: buildExplainPrompt(input),
+      label: { step: "explain", category: input.category.name },
     },
     deps,
   );

@@ -92,6 +92,7 @@ export async function classifyInBatches(
         model: config.models.classification,
         schema: buildClassifyBatchSchema(currentCategories),
         prompt: buildClassifyPrompt(currentCategories, batch),
+        label: { step: "classify", batch: index + 1 },
       },
       deps,
     );

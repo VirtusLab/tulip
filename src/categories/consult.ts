@@ -76,6 +76,7 @@ export async function consultOnCategory(
       sessionId: input.sessionId,
       schema: CONSULT_CATEGORY_SCHEMA,
       prompt: buildPrompt(input.proposedName, input.change),
+      label: { step: "category-consult" },
     },
     deps,
   );

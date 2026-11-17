@@ -3,6 +3,7 @@ import { formatDuration } from "../logging/duration.js";
 import type { Logger } from "../logging/logger.js";
 import { createAgent } from "./agent.js";
 import { claudeBackend } from "./backends/claude.js";
+import type { CallLabel, CallLog, CallRecord } from "./call-log.js";
 import { agentConcurrencyLimiter } from "./concurrency.js";
 import { AgentOutputError, truncate } from "./errors.js";
 import type { AgentProcessRunner } from "./exec.js";
@@ -16,6 +17,8 @@ export interface AgentInvocation {
   resumeSessionId?: string;
   schema: JsonSchema;
   prompt: string;
+  /** Tags the call in the call log; unlabelled calls are logged as step "unlabelled". */
+  label?: CallLabel;
 }
 
 export interface AgentRunResult<T> {
@@ -37,6 +40,9 @@ export interface RunnerDeps {
   /** Collects per-model token usage across the run for the end-of-run summary (see
    * src/agent/usage.ts). When set, every agent invocation (including retries) is recorded. */
   usage?: UsageLedger;
+  /** Per-call statistics of the run, for cost analysis (see ./call-log.ts). When set, every agent
+   * invocation (including retries and failed ones) is recorded. */
+  callLog?: CallLog;
   /** The pipeline's logger, threaded to every phase so progress lines share one sink. Modules
    * fall back to `createLogger()` when absent; the runner itself only logs at debug level. */
   logger?: Logger;
@@ -58,7 +64,7 @@ export async function invokeAgent<T = unknown>(
   // session state apart. The pipeline always passes the run's agent.
   const agent = deps.agent ?? createAgent(claudeBackend);
 
-  const first = await execute(invocation, agent, deps);
+  const first = await execute(invocation, agent, deps, false);
   const firstAttempt = extractStructuredOutput<T>(first, invocation.schema, agent.backend.id);
   if (firstAttempt.ok) {
     return { result: firstAttempt.value, sessionId: first.sessionId };
@@ -68,8 +74,9 @@ export async function invokeAgent<T = unknown>(
     resumeSessionId: first.sessionId,
     schema: invocation.schema,
     prompt: `${RETRY_PREFIX}: ${firstAttempt.error}. Reply again with ONLY valid JSON matching the schema.`,
+    ...(invocation.label === undefined ? {} : { label: invocation.label }),
   };
-  const second = await execute(retry, agent, deps);
+  const second = await execute(retry, agent, deps, true);
   const secondAttempt = extractStructuredOutput<T>(second, invocation.schema, agent.backend.id);
   if (secondAttempt.ok) {
     return { result: secondAttempt.value, sessionId: second.sessionId };
@@ -88,6 +95,7 @@ async function execute(
   invocation: AgentInvocation,
   agent: Agent,
   deps: RunnerDeps,
+  schemaRetry: boolean,
 ): Promise<AgentReply> {
   const { backend } = agent;
   const tier =
@@ -105,17 +113,57 @@ async function execute(
       : { resumeSessionId: invocation.resumeSessionId }),
   });
   const runProcess = deps.runAgentProcess ?? agent.runProcess;
-  const { stdout } = await withSpawnFiles(planned.files, () =>
-    agentConcurrencyLimiter.run(() =>
-      runProcess(planned.args, planned.prompt, deps.cwd === undefined ? {} : { cwd: deps.cwd }),
-    ),
-  );
-  const reply = backend.parseReply(stdout, invocation.schema);
+  let wallMs = 0;
+  const record: Omit<CallRecord, "wallMs"> = {
+    type: "call",
+    label: invocation.label ?? { step: "unlabelled" },
+    schemaRetry,
+    backend: backend.id,
+    ...(call === undefined ? {} : { tier: call.tier, model: call.model }),
+    ...(invocation.resumeSessionId === undefined
+      ? {}
+      : { resumedFrom: invocation.resumeSessionId }),
+    promptChars: invocation.prompt.length,
+  };
+  let reply: AgentReply;
+  try {
+    const { stdout } = await withSpawnFiles(planned.files, () =>
+      agentConcurrencyLimiter.run(async () => {
+        const started = Date.now();
+        try {
+          return await runProcess(
+            planned.args,
+            planned.prompt,
+            deps.cwd === undefined ? {} : { cwd: deps.cwd },
+          );
+        } finally {
+          wallMs = Date.now() - started;
+        }
+      }),
+    );
+    reply = backend.parseReply(stdout, invocation.schema);
+  } catch (error) {
+    deps.callLog?.record({
+      ...record,
+      wallMs,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 
   if (call !== undefined) {
     agent.sessionTiers.set(reply.sessionId, call.tier);
   }
-  deps.usage?.record(call, callUsage(agent, invocation, reply));
+  const tokens = callUsage(agent, invocation, reply);
+  deps.usage?.record(call, tokens);
+  deps.callLog?.record({
+    ...record,
+    sessionId: reply.sessionId,
+    wallMs,
+    ...(tokens === undefined ? {} : { tokens }),
+    ...(reply.numTurns === undefined ? {} : { numTurns: reply.numTurns }),
+    ...(reply.costUsd === undefined ? {} : { costUsd: reply.costUsd }),
+  });
   if (deps.logger) {
     // `--verbose` trace. Turn count and duration aren't reported by every CLI, so a missing one
     // prints as `?` rather than being assumed.

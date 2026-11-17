@@ -117,6 +117,7 @@ export async function verifySnippetCoverage(
         sessionId: currentSessionId,
         schema: EXPLANATION_SCHEMA,
         prompt: buildCoverageAmendPrompt(missing),
+        label: { step: "snippet-amend", category: categoryName, attempt: attempt + 1 },
       },
       deps,
     );

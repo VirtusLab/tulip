@@ -19,7 +19,7 @@ Remaining tasks, roughly by priority.
   once. Non-blocking diagnostic, not a fix.
 - [ ] Optionally feed phase-1 per-file churn (+/- counts) or diffs to sharpen attention ordering (needs CategoryInputFile + diff-stats plumbing)
 - [ ] Checkpointing & resumability of a partially-completed run (spec: "a later concern")
-- [ ] Surface per-run LLM cost (envelopes carry `total_cost_usd`; sum and log it)
+- [ ] Surface per-run LLM cost (per-call `costUsd` is in the call log, docs/adr/0029; sum and log it)
 - [ ] Category-level progress for phase 3 in non-verbose mode is minimal; consider a progress line per review/amend step
 
 ## Validation

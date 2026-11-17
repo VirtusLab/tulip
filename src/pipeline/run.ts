@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { type CallLog, createCallLog } from "../agent/call-log.js";
 import { AgentBinaryMissingError } from "../agent/errors.js";
 import type { Agent, AgentId } from "../agent/types.js";
 import { createUsageLedger, formatUsageSummary } from "../agent/usage.js";
@@ -63,6 +64,8 @@ export interface PipelineDeps {
   openInBrowser?: BrowserOpener;
   /** Overrides the agent built from `options.agent`. */
   agent?: Agent;
+  /** Defaults to a new JSONL file in the OS temp dir (see src/agent/call-log.ts). */
+  callLog?: CallLog;
   logger?: Logger;
 }
 
@@ -111,6 +114,8 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
   // Shared by every phase (threaded via each phase's RunnerDeps), summarized at the end.
   const usage = createUsageLedger();
+  const callLog = deps.callLog ?? createCallLog(logger);
+  const runStartedAt = Date.now();
 
   let checkout: PrCheckout | undefined;
   try {
@@ -128,6 +133,16 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     const diff = parseDiff(metadata.diff);
     warnOnFileListMismatch(metadata, diff, logger);
+    callLog.record({
+      type: "run",
+      version: formatVersion(),
+      agent: agent.backend.id,
+      pr: prUrl,
+      files: diff.files.length,
+      changes: diff.files.reduce((count, file) => count + file.changes.length, 0),
+      diffLines: metadata.diff.split("\n").length,
+      diffThreshold: options.diffThreshold,
+    });
 
     if (prepareClassifiableChanges(diff).length === 0) {
       // Binary-only/mode-only PR: nothing for phases 1-3 to work with. Exit cleanly rather than
@@ -168,7 +183,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     const phase1 = await runPhase("phase 1 (generating categories)", () =>
       doGenerateCategories(
         { title: metadata.title, description: metadata.body, files: changedFiles },
-        { cwd: checkoutDir, usage, logger, agent },
+        { cwd: checkoutDir, usage, callLog, logger, agent },
       ),
     );
     logger.info(
@@ -187,7 +202,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categories: phase1.categories,
           generateSessionId: phase1.sessionId,
         },
-        { cwd: checkoutDir, usage, logger, agent },
+        { cwd: checkoutDir, usage, callLog, logger, agent },
       ),
     );
     logger.info(
@@ -203,7 +218,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     const splitDiff = await runPhase("splitting large changes", () =>
       doSplitLargeChanges(
         { diff, categories: categoryReview.categories },
-        { logger, cwd: checkoutDir, usage, agent },
+        { logger, cwd: checkoutDir, usage, callLog, agent },
       ),
     );
 
@@ -216,11 +231,20 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categories: categoryReview.categories,
           phase1SessionId: categoryReview.sessionId,
         },
-        { cwd: checkoutDir, usage, logger, agent },
+        { cwd: checkoutDir, usage, callLog, logger, agent },
       ),
     );
 
     const { sets: categorySets, owners: changeOwners } = groupChangesByCategory(classification);
+    callLog.record({
+      type: "categories",
+      categories: categorySets.map((set) => ({
+        name: set.category.name,
+        attention: set.category.attention,
+        production: set.production.length,
+        test: set.test.length,
+      })),
+    });
     logger.info(describeClassification(classification, categorySets, classifyElapsed()));
 
     logger.info(`phase 3: generating explanations for ${categorySets.length} categories...`);
@@ -236,7 +260,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           categorySets,
           changeOwners,
         },
-        { logger, cwd: checkoutDir, usage, agent },
+        { logger, cwd: checkoutDir, usage, callLog, agent },
       ),
     );
     logger.info(
@@ -286,9 +310,16 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
         logger.debug(`could not auto-open the page: ${causeMessage(error)}`);
       }
     }
+    callLog.record({ type: "end", ok: true, wallMs: Date.now() - runStartedAt });
   } catch (error) {
     logger.info(describeFailure(error));
     process.exitCode = 1;
+    callLog.record({
+      type: "end",
+      ok: false,
+      wallMs: Date.now() - runStartedAt,
+      error: describeFailure(error),
+    });
   } finally {
     // Printed whenever any LLM work ran — on success, and after a mid-run failure that still
     // burned tokens; empty for an untouched ledger.
@@ -299,6 +330,9 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     }
     if (unreported > 0) {
       logger.info(`${unreported} ${agent.backend.id} call(s) didn't report token usage`);
+    }
+    if (usageSummary || unreported > 0) {
+      logger.info(`per-call statistics: ${callLog.path}`);
     }
     if (checkout) {
       logger.debug("cleaning up checkout...");

@@ -72,6 +72,7 @@ export async function generateCategories(
       model: config.models.categoryGeneration,
       schema: GENERATE_CATEGORIES_SCHEMA,
       prompt: buildPrompt(input),
+      label: { step: "category-generate" },
     },
     deps,
   );

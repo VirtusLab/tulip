@@ -64,6 +64,7 @@ export async function reviewAndAmend(
         headSha: input.headSha,
         markdown: input.markdown,
       }),
+      label: { step: "review", category: input.category.name },
     },
     deps,
   );
@@ -82,6 +83,7 @@ export async function reviewAndAmend(
       sessionId: input.explainSessionId,
       schema: EXPLANATION_SCHEMA,
       prompt: buildReviewAmendPrompt(review.result.issues),
+      label: { step: "review-amend", category: input.category.name },
     },
     deps,
   );

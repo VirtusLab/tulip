@@ -5,6 +5,7 @@ import { config } from "../config.js";
 import { createLogger } from "../logging/logger.js";
 import { createCodexBackend } from "./backends/codex.js";
 import { toStrictSchema } from "./backends/codex-schema.js";
+import type { CallLog, CallLogRecord } from "./call-log.js";
 import { AgentBinaryMissingError, AgentOutputError } from "./errors.js";
 import type { AgentProcessResult } from "./exec.js";
 import { type AgentInvocation, invokeAgent } from "./runner.js";
@@ -35,6 +36,11 @@ function envelope(overrides: Record<string, unknown> = {}): string {
 
 function processResult(stdout: string): AgentProcessResult {
   return { stdout, stderr: "" };
+}
+
+function memoryCallLog(): CallLog & { records: CallLogRecord[] } {
+  const records: CallLogRecord[] = [];
+  return { path: "unused", records, record: (record) => records.push(record) };
 }
 
 describe("invokeAgent", () => {
@@ -94,6 +100,74 @@ describe("invokeAgent", () => {
     expect(usage.rows()).toEqual([
       { model: "sonnet", tokens: { input: 140, output: 15, cacheWrite: 0, cacheRead: 0 } },
     ]);
+  });
+
+  it("logs each call with its label, model, tokens, turns and cost", async () => {
+    const runAgentProcess = vi.fn(async () =>
+      processResult(
+        envelope({
+          usage: { input_tokens: 100, output_tokens: 20 },
+          num_turns: 4,
+          total_cost_usd: 0.5,
+        }),
+      ),
+    );
+    const callLog = memoryCallLog();
+
+    await invokeAgent(
+      { ...BASE_INVOCATION, label: { step: "explain", category: "Core" } },
+      { runAgentProcess, callLog },
+    );
+
+    expect(callLog.records).toEqual([
+      {
+        type: "call",
+        label: { step: "explain", category: "Core" },
+        schemaRetry: false,
+        backend: "claude",
+        tier: "balanced",
+        model: "sonnet",
+        sessionId: "session-1",
+        promptChars: BASE_INVOCATION.prompt.length,
+        wallMs: expect.any(Number),
+        tokens: { input: 100, output: 20, cacheWrite: 0, cacheRead: 0 },
+        numTurns: 4,
+        costUsd: 0.5,
+      },
+    ]);
+  });
+
+  it("logs a schema retry as a resume of the first call's session, under the same label", async () => {
+    let call = 0;
+    const runAgentProcess = vi.fn(async () => {
+      call++;
+      return processResult(
+        call === 1 ? JSON.stringify({ result: "oops", session_id: "session-1" }) : envelope(),
+      );
+    });
+    const callLog = memoryCallLog();
+
+    await invokeAgent(
+      { ...BASE_INVOCATION, label: { step: "review" } },
+      { runAgentProcess, callLog },
+    );
+
+    expect(callLog.records).toMatchObject([
+      { label: { step: "review" }, schemaRetry: false },
+      { label: { step: "review" }, schemaRetry: true, resumedFrom: "session-1", model: "sonnet" },
+    ]);
+  });
+
+  it("logs a failed call with its error", async () => {
+    const runAgentProcess = vi.fn(async () => {
+      throw new Error("timed out");
+    });
+    const callLog = memoryCallLog();
+
+    await expect(invokeAgent(BASE_INVOCATION, { runAgentProcess, callLog })).rejects.toThrow();
+
+    expect(callLog.records).toMatchObject([{ label: { step: "unlabelled" }, error: "timed out" }]);
+    expect(callLog.records[0]).not.toHaveProperty("sessionId");
   });
 
   it("builds the CLI args (-p, --output-format json, --json-schema, --model) and sends the prompt via stdin, not argv", async () => {

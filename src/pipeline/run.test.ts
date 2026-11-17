@@ -182,6 +182,7 @@ function baseDeps(order: string[] = []) {
     }),
     openInBrowser: vi.fn(async (): Promise<void> => {}),
     logger: { info: vi.fn(), debug: vi.fn() },
+    callLog: { path: "/tmp/tulip-calls.jsonl", record: vi.fn() },
   };
   return deps;
 }
@@ -217,6 +218,7 @@ function expectedRunnerDeps(deps: ReturnType<typeof baseDeps>) {
   return {
     cwd: "/tmp/tulip-checkout",
     usage: expect.any(Object),
+    callLog: deps.callLog,
     logger: deps.logger,
     agent: expect.any(Object),
   };
@@ -417,6 +419,40 @@ describe("run", () => {
 
     expect(process.exitCode).toBe(1);
     expect(infoLines(deps).find((line) => line.startsWith("Token usage"))).toBeDefined();
+  });
+
+  it("writes run, categories and end records to the call log, and prints its path", async () => {
+    const deps = baseDeps();
+    deps.generateCategories = recordingGenerate();
+
+    await run(options(), deps);
+
+    const records = deps.callLog.record.mock.calls.map((call) => call[0]);
+    expect(records).toEqual([
+      expect.objectContaining({ type: "run", agent: "claude", files: 1 }),
+      {
+        type: "categories",
+        categories: [{ name: "Greeting", attention: "normal", production: 1, test: 0 }],
+      },
+      { type: "end", ok: true, wallMs: expect.any(Number) },
+    ]);
+    expect(infoLines(deps)).toContain("per-call statistics: /tmp/tulip-calls.jsonl");
+  });
+
+  it("writes a failed end record to the call log after a mid-run failure", async () => {
+    const deps = baseDeps();
+    deps.classifyChanges = vi.fn(async () => {
+      throw new Error("boom");
+    });
+
+    await run(options(), deps);
+
+    expect(deps.callLog.record).toHaveBeenLastCalledWith({
+      type: "end",
+      ok: false,
+      wallMs: expect.any(Number),
+      error: "phase 2 (classifying changes) failed: boom",
+    });
   });
 
   it("logs the welcome message and what it will process, before fetching", async () => {

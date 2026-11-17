@@ -37,18 +37,24 @@ export function parseEnvelope(stdout: string, label: string): Envelope {
   return { sessionId: parsed.session_id, text: parsed.result, fields: parsed };
 }
 
-/** An {@link AgentReply} from a parsed envelope: `num_turns`/`duration_ms` when numeric, and the
- * `usage` object read via `usageFields` (see {@link readUsage}). */
+/** An {@link AgentReply} from a parsed envelope: `num_turns`/`duration_ms`/`total_cost_usd` when
+ * numeric, and the `usage` object read via `usageFields` (see {@link readUsage}). */
 export function replyFrom(
   envelope: Envelope,
   structured: unknown,
   usageFields: UsageFieldNames,
 ): AgentReply {
   const reply: AgentReply = { sessionId: envelope.sessionId, text: envelope.text, structured };
-  const { usage, num_turns: numTurns, duration_ms: durationMs } = envelope.fields;
+  const {
+    usage,
+    num_turns: numTurns,
+    duration_ms: durationMs,
+    total_cost_usd: costUsd,
+  } = envelope.fields;
   const tokens = readUsage(usage, usageFields);
   if (tokens !== undefined) reply.usage = tokens;
   if (typeof numTurns === "number") reply.numTurns = numTurns;
   if (typeof durationMs === "number") reply.durationMs = durationMs;
+  if (typeof costUsd === "number") reply.costUsd = costUsd;
   return reply;
 }
