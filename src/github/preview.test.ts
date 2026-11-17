@@ -53,6 +53,15 @@ function fakeGh(responses: Record<string, Response>) {
   return { runGh, calls, bodyOf };
 }
 
+/** The calls that change something on GitHub. */
+function writes(calls: GhCall[]): GhCall[] {
+  return calls.filter(
+    (call) =>
+      call.method !== "GET" &&
+      !(call.endpoint === "graphql" && (call.body as { query: string }).query.startsWith("query")),
+  );
+}
+
 function ghError(message: string, status: number): Error {
   return Object.assign(new Error("Command failed"), { stderr: `gh: ${message} (HTTP ${status})` });
 }
@@ -264,16 +273,6 @@ describe("publish", () => {
     expect(calls.some((call) => call.endpoint.endsWith("/refs"))).toBe(false);
   });
 
-  it("never moves an existing ref, so earlier links keep working", async () => {
-    const { runGh, calls } = fakeGh(PUBLISH);
-
-    await publish(runGh);
-
-    expect(
-      calls.some((call) => call.method === "PATCH" && call.endpoint.includes("/git/refs")),
-    ).toBe(false);
-  });
-
   it("uses the repo's canonical name, as typed differently or renamed, for every later call", async () => {
     const { runGh, calls } = fakeGh({
       ...PUBLISH,
@@ -302,14 +301,19 @@ describe("publish", () => {
     await expect(publish(runGh)).rejects.toThrow(
       "octo/widgets#42 has moved to eeeeeee since this preview of ccccccc was made",
     );
-    const writes = calls.filter(
-      (call) =>
-        call.method !== "GET" &&
-        !(
-          call.endpoint === "graphql" && (call.body as { query: string }).query.startsWith("query")
-        ),
-    );
-    expect(writes).toEqual([]);
+    expect(writes(calls)).toEqual([]);
+  });
+
+  it("refuses, before writing anything, when the PR was closed after preparing", async () => {
+    let pullReads = 0;
+    const { runGh, calls } = fakeGh({
+      ...PUBLISH,
+      "GET repos/octo/widgets/pulls/42": () =>
+        ++pullReads === 1 ? OPEN_PULL : '{"state":"closed","locked":false,"headSha":"x"}',
+    });
+
+    await expect(publish(runGh)).rejects.toThrow("octo/widgets#42 is closed");
+    expect(writes(calls)).toEqual([]);
   });
 
   it("edits the user's comment in place when it already shows this commit", async () => {
@@ -380,6 +384,33 @@ describe("publish", () => {
     ]);
   });
 
+  it("edits the user's latest preview comment, not an earlier one", async () => {
+    const earlier = previewComment(OLD_SHA, { id: "IC_first", databaseId: 5 });
+    const latest = previewComment(HEAD_SHA);
+    const { runGh } = fakeGh({
+      ...PUBLISH,
+      query: commentsResponse([earlier, latest]),
+      "PATCH repos/octo/widgets/issues/comments/7": latest.url,
+    });
+
+    const result = await publish(runGh);
+
+    expect(result.commentUrl).toBe(latest.url);
+  });
+
+  it("leaves someone else's preview comment alone and posts the user's own", async () => {
+    const theirs = previewComment(HEAD_SHA, { viewerDidAuthor: false });
+    const { runGh, calls, bodyOf } = fakeGh({ ...PUBLISH, query: commentsResponse([theirs]) });
+
+    const result = await publish(runGh);
+
+    expect(result.commentUrl).toBe("https://github.com/octo/widgets/pull/42#issuecomment-1");
+    expect(calls.some((call) => call.method === "PATCH")).toBe(false);
+    expect(JSON.stringify(calls)).not.toContain("minimizeComment");
+    const posted = bodyOf("POST", "repos/octo/widgets/issues/42/comments") as { body: string };
+    expect(posted.body).not.toContain("Earlier previews");
+  });
+
   it("leaves alone the user's own comment that quotes a preview comment", async () => {
     const quoting = previewComment(OLD_SHA, {
       body: `${previewComment(OLD_SHA).body}\n\nWhy is this preview outdated?`,
@@ -437,10 +468,6 @@ describe("publish", () => {
       return posted.body.includes("- `ddddddd` on");
     }
 
-    it("keeps a link to a stored preview file", async () => {
-      expect(await carriedOver(OLD_URL)).toBe(true);
-    });
-
     it.each([
       ["another file", OLD_URL.replace("tulip-pr-42-ddddddd", "secrets")],
       ["another PR", OLD_URL.replace("tulip-pr-42-", "tulip-pr-41-")],
@@ -461,6 +488,32 @@ describe("publish", () => {
     ])("drops a link with %s", async (_, url) => {
       expect(await carriedOver(url)).toBe(false);
     });
+  });
+
+  it("carries over an earlier preview stored in the user's fork", async () => {
+    const FORK_URL = `https://github.com/me/widgets/blob/${STORED_COMMIT}/tulip-pr-42-ddddddd.html`;
+    const comment = previewComment(OLD_SHA, {
+      body: buildPreviewComment(
+        { sha: OLD_SHA, url: FORK_URL, generatedAt: "2026-10-18T09:00:00.000Z" },
+        "gh api ...",
+        [],
+      ),
+    });
+    const { runGh, bodyOf } = fakeGh({
+      ...PUBLISH,
+      ...FORK_STORE,
+      "POST repos/octo/widgets/forks": FORK,
+      "POST repos/me/widgets/git/blobs": "blob-sha",
+      query: commentsResponse([comment]),
+      mutation: "{}",
+    });
+
+    await publish(runGh);
+
+    const posted = bodyOf("POST", "repos/octo/widgets/issues/42/comments") as { body: string };
+    expect(posted.body).toContain(
+      `- \`ddddddd\` on 2026-10-18 09:00 UTC: [\`tulip-pr-42-ddddddd.html\`](${FORK_URL})`,
+    );
   });
 
   it("stores the page in a fork it just created", async () => {

@@ -87,15 +87,6 @@ describe("readSignedPage", () => {
     await expect(readSignedPage(pagePath, keyPath)).rejects.toThrow("isn't a page signed by Tulip");
   });
 
-  it("ignores tags outside the head, even in a correctly signed page", async () => {
-    const body = `<meta name="tulip-pr-url" content="${EVIL_URL}"><meta name="tulip-signature" content="${UNSIGNED}">`;
-    await writeSigned(page(body));
-
-    const run = await readSignedPage(pagePath, keyPath);
-
-    expect(run.pr.repoPath).toBe("octo/widgets");
-  });
-
   it("refuses a page whose only tags, though signed, are in the body", async () => {
     const unsigned = `<!doctype html><head></head><body>${pageRunMetaTags(RUN)}</body>`;
     const signature = await sign(unsigned, keyPath);

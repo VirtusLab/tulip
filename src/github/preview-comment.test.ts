@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { config } from "../config.js";
 import {
   buildPreviewComment,
   buildSupersededComment,
@@ -43,6 +44,17 @@ describe("buildPreviewComment", () => {
     expect(body).toContain("<details><summary>Earlier previews</summary>");
     expect(body).toContain("- `bbbbbbb` on 2026-10-18 10:00 UTC:");
     expect(body).not.toContain("2026-10-18 09:00 UTC");
+  });
+
+  it("lists at most the configured number of earlier previews, newest first", () => {
+    const max = config.preview.maxEarlierPreviews;
+    const earlier = Array.from({ length: max + 1 }, (_, i) =>
+      entry((i + 1).toString(16).padStart(40, "0")),
+    );
+
+    const body = buildPreviewComment(entry(SHA_A), DOWNLOAD, earlier);
+
+    expect(previewEntries(body)).toEqual([entry(SHA_A), ...earlier.slice(0, max)]);
   });
 
   it("round-trips its previews through previewEntries", () => {

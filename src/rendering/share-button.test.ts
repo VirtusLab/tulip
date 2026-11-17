@@ -25,10 +25,6 @@ function mount(fetchImpl: () => Promise<unknown>) {
   return { button, status, fetch };
 }
 
-async function settle(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 describe("the Share button", () => {
   it("posts to /api/share as JSON and links the comment", async () => {
     const { button, status, fetch } = mount(async () => ({
@@ -38,7 +34,7 @@ describe("the Share button", () => {
 
     button.click();
     expect(button.disabled).toBe(true);
-    await settle();
+    await vi.waitFor(() => expect(button.disabled).toBe(false));
 
     expect(fetch).toHaveBeenCalledWith("/api/share", {
       method: "POST",
@@ -49,17 +45,23 @@ describe("the Share button", () => {
     expect(status.querySelector("a")?.getAttribute("href")).toBe(
       "https://github.com/a/b/pull/1#issuecomment-2",
     );
-    expect(button.disabled).toBe(false);
   });
 
-  it("shows an error and re-enables the button when sharing fails", async () => {
-    const { button, status } = mount(async () => ({ ok: false, json: async () => ({}) }));
+  it.each([
+    ["the server answers with an error", async () => ({ ok: false, json: async () => ({}) })],
+    [
+      "the request fails",
+      async () => {
+        throw new TypeError("Failed to fetch");
+      },
+    ],
+  ])("shows an error and re-enables the button when %s", async (_, fetchImpl) => {
+    const { button, status } = mount(fetchImpl);
 
     button.click();
-    await settle();
+    await vi.waitFor(() => expect(button.disabled).toBe(false));
 
     expect(status.classList.contains("error")).toBe(true);
     expect(status.textContent).toContain("Could not share the page");
-    expect(button.disabled).toBe(false);
   });
 });
