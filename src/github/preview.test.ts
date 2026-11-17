@@ -123,9 +123,7 @@ async function publish(runGh: (args: string[]) => Promise<string>, signal?: Abor
   );
 }
 
-function forkResponse(createdAt: Date): string {
-  return JSON.stringify({ fullName: "me/widgets", createdAt: createdAt.toISOString() });
-}
+const FORK = "me/widgets";
 
 const FORK_STORE = {
   "GET repos/octo/widgets":
@@ -469,7 +467,7 @@ describe("publish", () => {
     const { runGh, bodyOf } = fakeGh({
       ...PUBLISH,
       ...FORK_STORE,
-      "POST repos/octo/widgets/forks": forkResponse(new Date()),
+      "POST repos/octo/widgets/forks": FORK,
       "POST repos/me/widgets/git/blobs": "blob-sha",
     });
 
@@ -479,34 +477,29 @@ describe("publish", () => {
     expect(result.previewUrl).toBe(`https://github.com/me/widgets/blob/${COMMIT}/${FILE}`);
   });
 
-  it("asks to retry later when a fork it just created isn't ready yet", async () => {
-    const { runGh, calls } = fakeGh({
-      ...PUBLISH,
-      ...FORK_STORE,
-      "POST repos/octo/widgets/forks": forkResponse(new Date()),
-      "POST repos/me/widgets/git/blobs": () => {
-        throw ghError("Git Repository is empty.", 409);
-      },
-    });
+  it.each([
+    ["Git Repository is empty.", 409],
+    ["Not Found", 404],
+  ])(
+    "on a fork write failing with %s, suggests the fork may not be ready yet",
+    async (message, status) => {
+      const { runGh, calls } = fakeGh({
+        ...PUBLISH,
+        ...FORK_STORE,
+        "POST repos/octo/widgets/forks": FORK,
+        "POST repos/me/widgets/git/blobs": () => {
+          throw ghError(message, status);
+        },
+      });
 
-    await expect(publish(runGh)).rejects.toThrow(
-      "your fork me/widgets is still being created; retry in a minute",
-    );
-    expect(calls.filter((call) => call.endpoint === "repos/me/widgets/git/blobs")).toHaveLength(1);
-  });
-
-  it("reports a fork that already existed failing a write as is", async () => {
-    const { runGh } = fakeGh({
-      ...PUBLISH,
-      ...FORK_STORE,
-      "POST repos/octo/widgets/forks": forkResponse(new Date("2024-01-01T00:00:00Z")),
-      "POST repos/me/widgets/git/blobs": () => {
-        throw ghError("Not Found", 404);
-      },
-    });
-
-    await expect(publish(runGh)).rejects.toThrow("Not Found (HTTP 404)");
-  });
+      await expect(publish(runGh)).rejects.toThrow(
+        `${message} (HTTP ${status}); your fork me/widgets may still be being created; retry in a minute`,
+      );
+      expect(calls.filter((call) => call.endpoint === "repos/me/widgets/git/blobs")).toHaveLength(
+        1,
+      );
+    },
+  );
 
   it("stops before its next step once asked to", async () => {
     const stop = new AbortController();

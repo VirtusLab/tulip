@@ -82,8 +82,8 @@ analysis; and that edits notify nobody.
   read the PR but not the preview. GitHub's docs don't say whether org base permissions carry over.
 - Preparing is read-only (auth, repo and PR state), so it can run before the LLM work. The fork is
   created only when sharing. GitHub creates forks asynchronously (it says up to five minutes). If a
-  write to a fork created in the last ten minutes fails with 404/409, the share fails asking the
-  user to retry in a minute, rather than waiting. An older fork's 404 is reported as is. The
+  write to the fork fails with 404/409, the share fails with GitHub's error and a hint that the
+  fork may still be being created, to retry in a minute, rather than waiting. The
   preview's `gh` calls get a 10-minute timeout: the page upload is megabytes.
 - Before writing, publishing checks the PR is open and still at the previewed commit. Otherwise a
   stale share would replace the newer preview as the current comment.

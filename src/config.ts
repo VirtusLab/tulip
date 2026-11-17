@@ -149,8 +149,6 @@ export const config = {
     /** Outside refs/heads, so clones don't fetch previews and branch rules don't apply. */
     refPrefix: "refs/tulip/previews",
     maxEarlierPreviews: 20,
-    /** A fork created this recently may not accept writes yet. */
-    newForkMs: 10 * 60 * 1000,
     ghCommandTimeoutMs: 10 * 60 * 1000,
   },
 } as const;

@@ -106,10 +106,12 @@ async function publishPreview(
   }
 
   const fork = useFork ? await forkOf(api, pr) : undefined;
-  const storeRepo = fork?.fullName ?? pr.repoPath;
+  const storeRepo = fork ?? pr.repoPath;
   const stored = await storePreviewFile(api, pr, storeRepo, preview).catch((error: unknown) => {
-    throw fork?.isNew && isNotReady(error)
-      ? new Error(`your fork ${fork.fullName} is still being created; retry in a minute`)
+    throw fork && isNotReady(error)
+      ? new Error(
+          `${errorMessage(error)}; your fork ${fork} may still be being created; retry in a minute`,
+        )
       : error;
   });
   const current = {
@@ -144,18 +146,15 @@ function assertOpen(pr: PrRef, pull: PullState): void {
   }
 }
 
-/** POST /forks also returns an existing fork, under whatever name it has now. */
-async function forkOf(api: GhApi, pr: PrRef): Promise<{ fullName: string; isNew: boolean }> {
+/** The fork's full name. POST /forks also returns an existing fork, under whatever name it has
+ * now. */
+async function forkOf(api: GhApi, pr: PrRef): Promise<string> {
   try {
-    const fork = JSON.parse(
-      await api(`repos/${pr.repoPath}/forks`, {
-        method: "POST",
-        body: { default_branch_only: true },
-        jq: "{fullName: .full_name, createdAt: .created_at}",
-      }),
-    ) as { fullName: string; createdAt: string };
-    const age = Date.now() - Date.parse(fork.createdAt);
-    return { fullName: fork.fullName, isNew: age < config.preview.newForkMs };
+    return await api(`repos/${pr.repoPath}/forks`, {
+      method: "POST",
+      body: { default_branch_only: true },
+      jq: ".full_name",
+    });
   } catch (error) {
     throw new Error(`forking ${pr.repoPath} failed: ${errorMessage(error)}`);
   }
@@ -253,7 +252,7 @@ function isPreviewFileLink(entry: PreviewEntry, pr: PrRef, repos: string[]): boo
 }
 
 /** A just-created fork answers writes with 404 or 409 until GitHub has copied the repo, which
- * GitHub says can take up to five minutes. An older fork's 404 is a real error. */
+ * GitHub says can take up to five minutes. */
 function isNotReady(error: unknown): boolean {
   return error instanceof GhApiError && (error.status === 404 || error.status === 409);
 }
