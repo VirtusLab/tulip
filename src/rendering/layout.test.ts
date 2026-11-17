@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { serializeSnippetRef } from "../explanations/markup.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { buildAlignedDiff } from "./line-diff.js";
-import { NO_ASSETS } from "./page.fixture.js";
+import { NO_ASSETS, PAGE_RUN } from "./page.fixture.js";
 import { renderPage } from "./template.js";
 
 // `import.meta.dirname` rather than `new URL(..., import.meta.url)` — under the jsdom test
@@ -34,6 +34,7 @@ function renderIntoJsdom(): Document {
     prTitle: "t",
     prDescription: `PR description prose.\n\n> A blockquote in the PR description.\n\n${snippetRef}\n`,
     prUrl: "https://github.com/a/b/pull/1",
+    ...PAGE_RUN,
     fileDiffs,
     explanations: [
       {
@@ -54,6 +55,7 @@ function renderIntoJsdomNoCategories(): Document {
     prTitle: "t",
     prDescription: "PR description prose.",
     prUrl: "https://github.com/a/b/pull/1",
+    ...PAGE_RUN,
     fileDiffs: new Map(),
     explanations: [],
   });
@@ -140,6 +142,7 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       serve: true,
       explanations: [

@@ -50,11 +50,11 @@ export class VersionRequestedError extends Error {}
 export function usage(): string {
   return [
     "Usage: tulip <PR URL> [options]",
-    "       tulip share <run dir>",
+    "       tulip share <page>",
     "",
     "Explains a GitHub pull request or GitLab merge request to reviewers using LLMs.",
     "`tulip share` posts an earlier run's page on its PR, as --attach-preview-as-comment does;",
-    "pass the directory (or a file:// path in it) that the run logged.",
+    "pass the index.html path (or file:// URL) that the run logged.",
     "",
     "Arguments:",
     "  <PR URL>              GitHub PR or GitLab MR URL, e.g.",
@@ -179,7 +179,7 @@ export function parseShareArgs(argv: string[]): ShareOptions {
   }
   const [location, ...extra] = positionals;
   if (location === undefined) {
-    throw new CliUsageError("Missing required argument: <run dir>");
+    throw new CliUsageError("Missing required argument: <page>");
   }
   if (extra.length > 0) {
     throw new CliUsageError(`Unexpected extra arguments: ${extra.join(" ")}`);

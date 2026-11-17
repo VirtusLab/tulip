@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mountWithAppJs, NO_ASSETS } from "./page.fixture.js";
+import { mountWithAppJs, NO_ASSETS, PAGE_RUN } from "./page.fixture.js";
 import { renderPage } from "./template.js";
 
 function mount(fetchImpl: () => Promise<unknown>) {
@@ -8,6 +8,7 @@ function mount(fetchImpl: () => Promise<unknown>) {
     prTitle: "t",
     prDescription: "d",
     prUrl: "https://github.com/a/b/pull/1",
+    ...PAGE_RUN,
     fileDiffs: new Map(),
     explanations: [],
     serve: true,

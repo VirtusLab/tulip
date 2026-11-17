@@ -14,6 +14,8 @@ export interface RenderInput {
   prTitle: string;
   prDescription: string;
   prUrl: string;
+  headSha: string;
+  generatedAt: Date;
   explanations: CategoryExplanation[];
   /** Maps a renamed file's head-side path to its base-side path (see src/diff/change.ts's
    * `FileDiff.previousPath`) — lets snippet base content be fetched from the right revision path
@@ -41,6 +43,8 @@ export interface RenderDeps extends AssembleDeps {
   /** Supplies the build info shown in the page footer (see src/version.ts). Defaults to the
    * real `getBuildInfo`; overridable so tests don't depend on a real dist/build-info.json. */
   getBuildInfo?: () => BuildInfo;
+  /** Signs the static page before it's written (docs/adr/0029). Defaults to leaving it unsigned. */
+  signPage?: (page: string) => Promise<string>;
 }
 
 /**
@@ -64,13 +68,19 @@ export async function renderExplanations(
     prTitle: input.prTitle,
     prDescription: input.prDescription,
     prUrl: input.prUrl,
+    headSha: input.headSha,
+    generatedAt: input.generatedAt,
     explanations: input.explanations,
     fileDiffs,
     generatedBy: formatVersion((deps.getBuildInfo ?? getBuildInfo)()),
     inlineAssets: input.inlineAssets,
   };
 
-  const assembled = await assembleOutput(renderPage(pageInput), { ...deps, logger });
+  const page = renderPage(pageInput);
+  const assembled = await assembleOutput(deps.signPage ? await deps.signPage(page) : page, {
+    ...deps,
+    logger,
+  });
   return input.serve
     ? {
         ...assembled,

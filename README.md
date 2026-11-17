@@ -137,7 +137,7 @@ tulip https://gitlab.com/group/project/-/merge_requests/45
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
 `--attach-preview-as-comment`, `--agent <id>`, `--context-dir <path>`. Run
 `tulip --help` for details, or `tulip --version` for the build. `tulip share
-<run dir>` shares an earlier run's page on its PR (see [Sharing the page on the
+<page>` shares an earlier run's page on its PR (see [Sharing the page on the
 PR](#sharing-the-page-on-the-pr)).
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
@@ -231,14 +231,14 @@ There are three ways to share:
 
 ```sh
 tulip <PR URL> --attach-preview-as-comment   # as soon as the run ends
-tulip share <run dir>                        # after reading the page, or to retry
+tulip share <page>                           # after reading the page, or to retry
 tulip <PR URL> --serve                       # click "Share on PR" on the page
 ```
 
-`<run dir>` is the directory the run logged (a `file://...` path in it works
-too). It's a temp dir the OS eventually removes, so share within a few days.
-`tulip share` only accepts runs your own Tulip produced and nobody changed since:
-each run is signed with a key Tulip keeps next to its settings.
+`<page>` is the `index.html` path the run logged (the `file://...` URL works
+too). It's in a temp dir the OS eventually removes, so share within a few days.
+`tulip share` only accepts pages your own Tulip produced and nobody changed
+since: each page is signed with a key Tulip keeps next to its settings.
 
 Previews are stored on hidden refs (`refs/tulip/previews/pr-<n>/<commit>`), so
 they don't end up in clones or the branch list. They go into the PR's repository

@@ -21,26 +21,36 @@ analysis; and that edits notify nobody.
 ### Every run writes what sharing needs
 - The run dir's `index.html` is always the static page (ADR 0030), and is what's shared. Serve
   mode's page, with its review boxes and Share button, is kept in memory and served from there.
-- `tulip-run.json` records the PR URL, head commit and render time, with an HMAC-SHA256 over them
-  and the page. The key is random, per user, created on first use next to Tulip's
-  settings (`share-key`, mode 0600).
+- The page's `<head>` starts with `<meta>` tags for the PR URL, head commit, render time and an
+  HMAC-SHA256 over the whole page. The key is random, per user, created on first use next to
+  Tulip's settings (`share-key`, mode 0600). Keeping all this in the page, rather than in a file
+  next to it, keeps the page one self-contained file: it can be moved and still shared.
+- The page is rendered with 64 zeros as the signature, the HMAC is computed over that, and the
+  zeros are replaced by it (same length). Verifying puts the zeros back at the same place and
+  recomputes, so the signature covers every other byte; a page still holding the zeros is
+  refused. Only the first matching tag in the leading `<head>` counts. The tags come before the
+  PR title, the first text there Tulip doesn't control (and escapes), so nothing in the page, e.g.
+  model-written markdown, can stand in for them. The other tags are read only once the signature
+  checks out.
+- If the key can't be created or read (e.g. a read-only home), the run still succeeds with an
+  unsigned page, which can't be shared.
 
 ### Three ways to share, one code path
 - `--attach-preview-as-comment`: share once the run ends (after opening the page; alongside the
   server in `--serve` mode). A failed share doesn't discard the run: it exits non-zero and prints
   the `tulip share` command to retry. Ctrl+C, or stopping the server, stops the share between steps,
   and the run still cleans up.
-- `tulip share <run dir>`: share an earlier run, so the user can read the page first or retry. The
-  run dir is a temp dir the OS eventually removes, so this is for "after reading" and "retry", not
-  "next week". A directory can come from anyone, so the run must carry this user's signature
-  over the page and the manifest. Checking the page's content instead isn't enough: the CSP pins
-  its scripts, but not a `<meta http-equiv="refresh">` redirect or a full-page phishing link.
+- `tulip share <page>`: share an earlier run's page, so the user can read it first or retry. The
+  page is in a temp dir the OS eventually removes, so this is for "after reading" and "retry", not
+  "next week". A file can come from anyone, so the page must carry this user's signature.
+  Checking the page's content instead isn't enough: the CSP pins its scripts, but not a
+  `<meta http-equiv="refresh">` redirect or a full-page phishing link.
 - A **Share on PR** button in `--serve` mode, when the forge can share, posting to the local
   server's `POST /api/share`.
   It has `/api/comment`'s Host and Origin guards, and also requires a JSON content type: with no
   body to validate, that is what stops a cross-site form, and a cross-site fetch with that type
   needs a CORS preflight the server never answers.
-- All three publish through the same code, and all three read the page back through the run's
+- All three publish through the same code, and all three read the page back through its
   signature, so what's shared is what Tulip rendered. Within a run, the flag and the button share one
   memoized attempt: concurrent calls share it, a success is kept, a failure is forgotten so it can
   be retried.

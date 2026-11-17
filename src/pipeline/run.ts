@@ -22,7 +22,7 @@ import { createLogger, type Logger } from "../logging/logger.js";
 import { loadInlineAssets } from "../rendering/inline-assets.js";
 import { renderExplanations } from "../rendering/render.js";
 import { serveForReview } from "../serve/server.js";
-import { readSharableRun, writeRunManifest } from "../share/run-manifest.js";
+import { readSignedPage, signPage } from "../share/page-signature.js";
 import {
   createShare,
   memoizeUntilSuccess,
@@ -48,7 +48,7 @@ export interface PipelineOptions {
   /** Share the page on the PR once the run ends (docs/adr/0029). Fails when the PR's forge has no
    * `previewPublisher`. */
   attachPreviewAsComment: boolean;
-  /** Signs this run so `tulip share` can trust it later (see src/share/signing.ts). */
+  /** Signs the page so `tulip share` can trust it later (see src/share/signing.ts). */
   shareKeyPath: string;
   /** Which agent CLI runs every LLM pass (docs/adr/0027); see src/cli/agent-choice.ts. */
   agent: AgentId;
@@ -75,8 +75,8 @@ export interface PipelineDeps {
   loadInlineAssets?: typeof loadInlineAssets;
   renderExplanations?: typeof renderExplanations;
   serveForReview?: typeof serveForReview;
-  writeRunManifest?: typeof writeRunManifest;
-  readSharableRun?: typeof readSharableRun;
+  signPage?: typeof signPage;
+  readSignedPage?: typeof readSignedPage;
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
    * never actually spawns a browser. */
   openInBrowser?: BrowserOpener;
@@ -117,8 +117,8 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doLoadInlineAssets = deps.loadInlineAssets ?? loadInlineAssets;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
   const doServeForReview = deps.serveForReview ?? serveForReview;
-  const doWriteRunManifest = deps.writeRunManifest ?? writeRunManifest;
-  const doReadSharableRun = deps.readSharableRun ?? readSharableRun;
+  const doSignPage = deps.signPage ?? signPage;
+  const doReadSignedPage = deps.readSignedPage ?? readSignedPage;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
   const adapter = (deps.forgeFor ?? forgeFor)(options.pr);
@@ -284,31 +284,42 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.info("preparing output page...");
     const renamedFrom = buildRenamedFromMap(diff);
-    const generatedAt = new Date();
+    let signed = true;
     // Safe: this phase only runs once "creating checkout" (above) has already succeeded, so
     // `checkout` is always assigned by this point — TypeScript just can't see that across the
     // try/finally.
-    const { dir, indexPath, servedPage } = await runPhase("rendering", async () => {
-      const rendered = await doRenderExplanations(
+    const { indexPath, servedPage } = await runPhase("rendering", () =>
+      doRenderExplanations(
         {
           prTitle: metadata.title,
           prDescription: metadata.body,
           prUrl,
+          headSha: metadata.head.sha,
+          generatedAt: new Date(),
           explanations,
           renamedFrom,
           serve: options.serve,
           inlineAssets,
           share: options.serve && publisher !== undefined,
         },
-        { checkout: checkout as PrCheckout, logger },
-      );
-      await doWriteRunManifest(
-        rendered.dir,
-        { prUrl, headSha: metadata.head.sha, generatedAt },
-        options.shareKeyPath,
-      );
-      return rendered;
-    });
+        {
+          checkout: checkout as PrCheckout,
+          logger,
+          // An unsigned page is still worth reading; it just can't be shared.
+          signPage: async (page) => {
+            try {
+              return await doSignPage(page, options.shareKeyPath);
+            } catch (error) {
+              signed = false;
+              logger.info(
+                `warning: couldn't sign the page, so it can't be shared: ${causeMessage(error)}`,
+              );
+              return page;
+            }
+          },
+        },
+      ),
+    );
     logger.debug(`rendered output at ${indexPath}`);
 
     const categoryNames = explanations.map((explanation) => explanation.category.name);
@@ -328,14 +339,16 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       prepare &&
       createShare({
         prepare,
-        loadPreview: async () => (await doReadSharableRun(dir, options.shareKeyPath)).preview,
+        loadPreview: async () => (await doReadSignedPage(indexPath, options.shareKeyPath)).preview,
         logger,
       });
     const sharing =
-      share && options.attachPreviewAsComment ? shareOrSuggestRetry(share, dir, logger) : undefined;
-    if (prepare && !sharing) {
+      share && options.attachPreviewAsComment
+        ? shareOrSuggestRetry(share, signed ? indexPath : undefined, logger)
+        : undefined;
+    if (prepare && !sharing && signed) {
       logger.info(
-        `to share it on the PR later: ${shareCommand(dir)} (a temp dir the OS removes eventually)`,
+        `to share it on the PR later: ${shareCommand(indexPath)} (in a temp dir the OS removes eventually)`,
       );
     }
 

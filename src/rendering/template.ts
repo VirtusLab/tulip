@@ -6,6 +6,7 @@ import { renderFileTree } from "./file-tree.js";
 import { categoryId, PR_DESCRIPTION_ID, type SubsectionWithId, withSubsectionIds } from "./ids.js";
 import { type InlineAssets, scriptHash } from "./inline-assets.js";
 import { type MarkdownRenderContext, renderCategoryMarkdown } from "./markdown.js";
+import { pageRunMetaTags } from "./page-meta.js";
 import { splitCategoryMarkdown } from "./sections.js";
 import { buildToc, renderTocHtml } from "./toc.js";
 
@@ -31,6 +32,9 @@ export interface PageInput {
   prTitle: string;
   prDescription: string;
   prUrl: string;
+  /** The PR head commit the page explains; with `generatedAt`, recorded for sharing. */
+  headSha: string;
+  generatedAt: Date;
   explanations: CategoryExplanation[];
   fileDiffs: Map<string, FileDiffData>;
   /** Display line for the Tulip build that produced this page (see src/version.ts's
@@ -99,6 +103,7 @@ export function renderPage(input: PageInput): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
+${pageRunMetaTags({ prUrl: input.prUrl, headSha: input.headSha, generatedAt: input.generatedAt })}
 <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy(input.inlineAssets.scripts)}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.prTitle)} — Tulip</title>

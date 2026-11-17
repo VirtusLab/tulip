@@ -23,7 +23,7 @@ import type {
 import { forgeFor } from "../forge-registry/registry.js";
 import { gitlabAdapter } from "../gitlab/adapter.js";
 import type { InlineAssets } from "../rendering/inline-assets.js";
-import type { RenderResult } from "../rendering/render.js";
+import type { RenderDeps, RenderResult } from "../rendering/render.js";
 import type { ServeOptions } from "../serve/server.js";
 import { type PipelineDeps, type PipelineOptions, run } from "./run.js";
 
@@ -204,16 +204,19 @@ function baseDeps(order: string[] = []) {
       order.push("assets");
       return { style: "", scripts: [] };
     }),
-    renderExplanations: vi.fn(async (): Promise<RenderResult> => {
-      order.push("render");
-      return {
-        dir: "/tmp/tulip-render",
-        indexPath: "/tmp/tulip-render/index.html",
-        servedPage: "<html>served</html>",
-      };
-    }),
-    writeRunManifest: vi.fn(async (): Promise<void> => {}),
-    readSharableRun: vi.fn(async () => ({
+    renderExplanations: vi.fn(
+      async (_input: unknown, renderDeps: RenderDeps): Promise<RenderResult> => {
+        order.push("render");
+        await renderDeps.signPage?.("<html>page</html>");
+        return {
+          dir: "/tmp/tulip-render",
+          indexPath: "/tmp/tulip-render/index.html",
+          servedPage: "<html>served</html>",
+        };
+      },
+    ),
+    signPage: vi.fn(async (page: string): Promise<string> => page),
+    readSignedPage: vi.fn(async () => ({
       pr: PR,
       preview: {
         page: "<html>page</html>",
@@ -1076,16 +1079,15 @@ describe("run", () => {
     expect(process.exitCode).toBeUndefined();
     expect(order.slice(0, 3)).toEqual(["preview-prepare", "assets", "fetch"]);
     expect(deps.previewPublisher?.prepare).toHaveBeenCalledWith(PR);
-    expect(deps.writeRunManifest).toHaveBeenCalledWith(
-      "/tmp/tulip-render",
-      {
-        prUrl: "https://github.com/octo/widgets/pull/42",
-        headSha: "head-sha",
-        generatedAt: expect.any(Date),
-      },
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({ headSha: "head-sha", generatedAt: expect.any(Date) }),
+      expect.anything(),
+    );
+    expect(deps.signPage).toHaveBeenCalledWith("<html>page</html>", "/tmp/share-key");
+    expect(deps.readSignedPage).toHaveBeenCalledWith(
+      "/tmp/tulip-render/index.html",
       "/tmp/share-key",
     );
-    expect(deps.readSharableRun).toHaveBeenCalledWith("/tmp/tulip-render", "/tmp/share-key");
     const prepared = await (deps.previewPublisher as PreviewPublisher).prepare(PR);
     expect(prepared.publish).toHaveBeenCalledWith(
       {
@@ -1178,8 +1180,41 @@ describe("run", () => {
 
     expect(deps.previewPublisher?.prepare).not.toHaveBeenCalled();
     expect(infoLines(deps)).toContain(
-      "to share it on the PR later: tulip share /tmp/tulip-render (a temp dir the OS removes eventually)",
+      "to share it on the PR later: tulip share /tmp/tulip-render/index.html (in a temp dir the OS removes eventually)",
     );
+  });
+
+  it("without a signing key, still renders the page but doesn't suggest sharing it", async () => {
+    const deps = baseDeps();
+    deps.signPage = vi.fn(async () => {
+      throw new Error("EROFS");
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBeUndefined();
+    expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
+    const lines = infoLines(deps);
+    expect(lines).toContain("warning: couldn't sign the page, so it can't be shared: EROFS");
+    expect(lines.some((line) => line.includes("tulip share"))).toBe(false);
+  });
+
+  it("with a preview and no signing key, fails the share without suggesting a retry", async () => {
+    const deps = baseDeps();
+    deps.signPage = vi.fn(async () => {
+      throw new Error("EROFS");
+    });
+    // As the real one does for an unsigned page.
+    deps.readSignedPage = vi.fn(async () => {
+      throw new Error("not signed");
+    });
+
+    await run(options({ attachPreviewAsComment: true }), deps);
+
+    expect(process.exitCode).toBe(1);
+    const lines = infoLines(deps);
+    expect(lines).toContain("sharing the preview failed: not signed");
+    expect(lines.some((line) => line.includes("tulip share"))).toBe(false);
   });
 
   it("doesn't suggest sharing for a forge that can't", async () => {
@@ -1242,7 +1277,7 @@ describe("run", () => {
     expect(infoLines(deps)).toEqual(
       expect.arrayContaining([
         "stopping the preview share...",
-        "retry without re-running the analysis: tulip share /tmp/tulip-render",
+        "retry without re-running the analysis: tulip share /tmp/tulip-render/index.html",
       ]),
     );
     expect(process.exitCode).toBe(1);
@@ -1316,7 +1351,7 @@ describe("run", () => {
     expect(infoLines(deps)).toEqual(
       expect.arrayContaining([
         "sharing the preview failed: HTTP 422",
-        "retry without re-running the analysis: tulip share /tmp/tulip-render",
+        "retry without re-running the analysis: tulip share /tmp/tulip-render/index.html",
       ]),
     );
     expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");

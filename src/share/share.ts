@@ -8,7 +8,7 @@ import type {
 } from "../forge/types.js";
 import { forgeFor } from "../forge-registry/registry.js";
 import { createLogger, type Logger } from "../logging/logger.js";
-import { readSharableRun } from "./run-manifest.js";
+import { readSignedPage } from "./page-signature.js";
 
 export interface ShareDeps {
   forgeFor?: typeof forgeFor;
@@ -22,7 +22,7 @@ export async function shareRun(
   deps: ShareDeps = {},
 ): Promise<void> {
   const logger = deps.logger ?? createLogger();
-  const run = await readSharableRun(location, keyPath);
+  const run = await readSignedPage(location, keyPath);
   const adapter = (deps.forgeFor ?? forgeFor)(run.pr);
   if (!adapter.previewPublisher) {
     throw new Error(`sharing isn't supported for ${run.pr.forge} URLs`);
@@ -100,11 +100,11 @@ export function shareCommand(dir: string): string {
     : `tulip share '${dir.replace(/'/g, "'\\''")}'`;
 }
 
-/** Runs a first attempt, explaining how to retry if it fails. Ctrl+C stops it, rather than Node's
- * default exiting before the run has cleaned up. */
+/** Runs a first attempt, explaining how to retry with `pagePath`, when given, if it fails. Ctrl+C
+ * stops it, rather than Node's default exiting before the run has cleaned up. */
 export async function shareOrSuggestRetry(
   share: Share,
-  dir: string,
+  pagePath: string | undefined,
   logger: Logger,
 ): Promise<void> {
   const stop = () => {
@@ -118,7 +118,9 @@ export async function shareOrSuggestRetry(
     logger.info(
       `sharing the preview failed: ${error instanceof Error ? error.message : String(error)}`,
     );
-    logger.info(`retry without re-running the analysis: ${shareCommand(dir)}`);
+    if (pagePath !== undefined) {
+      logger.info(`retry without re-running the analysis: ${shareCommand(pagePath)}`);
+    }
   } finally {
     process.off("SIGINT", stop);
   }

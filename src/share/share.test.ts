@@ -4,11 +4,12 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ForgeAdapter, PreviewPublisher, PrRef, PublishedPreview } from "../forge/types.js";
 import { forgeFor } from "../forge-registry/registry.js";
-import { writeRunManifest } from "./run-manifest.js";
+import { pageRunMetaTags } from "../rendering/page-meta.js";
+import { signPage } from "./page-signature.js";
 import { memoizeUntilSuccess, shareCommand, shareRun } from "./share.js";
 
-const TULIP_PAGE = "<!doctype html><title>page</title>";
 const HEAD_SHA = "c".repeat(40);
+const GENERATED_AT = new Date("2026-10-19T14:32:00.000Z");
 const PUBLISHED: PublishedPreview = {
   commentUrl: "https://github.com/octo/widgets/pull/42#issuecomment-1",
   previewUrl: "https://github.com/octo/widgets/blob/abc/tulip-pr-42-ccccccc.html",
@@ -16,9 +17,12 @@ const PUBLISHED: PublishedPreview = {
 };
 
 let dir: string;
+let pagePath: string;
+let page: string;
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "tulip-share-test-"));
+  pagePath = join(dir, "index.html");
 });
 
 afterEach(async () => {
@@ -26,12 +30,9 @@ afterEach(async () => {
 });
 
 async function writeRun(prUrl = "https://github.com/octo/widgets/pull/42") {
-  await writeFile(join(dir, "index.html"), TULIP_PAGE);
-  await writeRunManifest(
-    dir,
-    { prUrl, headSha: HEAD_SHA, generatedAt: new Date("2026-10-19T14:32:00.000Z") },
-    join(dir, "share-key"),
-  );
+  const tags = pageRunMetaTags({ prUrl, headSha: HEAD_SHA, generatedAt: GENERATED_AT });
+  page = await signPage(`<!doctype html><head>${tags}</head>`, join(dir, "share-key"));
+  await writeFile(pagePath, page);
 }
 
 function deps(publisher: PreviewPublisher | undefined) {
@@ -59,10 +60,10 @@ describe("shareRun", () => {
     const { publisher, publish } = fakePublisher();
     const shareDeps = deps(publisher);
 
-    await shareRun(dir, join(dir, "share-key"), shareDeps);
+    await shareRun(pagePath, join(dir, "share-key"), shareDeps);
 
     expect(publish).toHaveBeenCalledWith(
-      { page: TULIP_PAGE, headSha: HEAD_SHA, generatedAt: new Date("2026-10-19T14:32:00.000Z") },
+      { page, headSha: HEAD_SHA, generatedAt: GENERATED_AT },
       undefined,
     );
     const lines = shareDeps.logger.info.mock.calls.map((call) => String(call[0]));
@@ -77,11 +78,11 @@ describe("shareRun", () => {
 
   it("refuses a page changed after Tulip rendered it, before preparing anything", async () => {
     await writeRun();
-    await writeFile(join(dir, "index.html"), "<!doctype html><script>steal()</script>");
+    await writeFile(pagePath, `${page}<script>steal()</script>`);
     const { publisher } = fakePublisher();
 
-    await expect(shareRun(dir, join(dir, "share-key"), deps(publisher))).rejects.toThrow(
-      "wasn't produced by Tulip",
+    await expect(shareRun(pagePath, join(dir, "share-key"), deps(publisher))).rejects.toThrow(
+      "isn't a page signed by Tulip",
     );
     expect(publisher.prepare).not.toHaveBeenCalled();
   });
@@ -89,7 +90,7 @@ describe("shareRun", () => {
   it("refuses a run whose forge can't share", async () => {
     await writeRun("https://gitlab.com/group/project/-/merge_requests/7");
 
-    await expect(shareRun(dir, join(dir, "share-key"), deps(undefined))).rejects.toThrow(
+    await expect(shareRun(pagePath, join(dir, "share-key"), deps(undefined))).rejects.toThrow(
       "sharing isn't supported for gitlab URLs",
     );
   });

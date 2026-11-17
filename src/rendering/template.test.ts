@@ -5,7 +5,7 @@ import type { CategoryExplanation } from "../explanations/types.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { scriptHash } from "./inline-assets.js";
 import { buildAlignedDiff } from "./line-diff.js";
-import { NO_ASSETS } from "./page.fixture.js";
+import { NO_ASSETS, PAGE_RUN } from "./page.fixture.js";
 import { renderPage } from "./template.js";
 
 function explanation(overrides: Partial<CategoryExplanation> = {}): CategoryExplanation {
@@ -28,6 +28,7 @@ describe("renderPage", () => {
       prTitle: "Add retry logic",
       prDescription: "Retries flaky requests.",
       prUrl: "https://github.com/acme/widgets/pull/7",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [],
     });
@@ -39,12 +40,35 @@ describe("renderPage", () => {
     );
   });
 
+  it("records what sharing needs at the start of the head, before the PR title", () => {
+    const html = renderPage({
+      inlineAssets: NO_ASSETS,
+      prTitle: '<meta name="tulip-pr-url" content="x">',
+      prDescription: "",
+      prUrl: "https://github.com/acme/widgets/pull/7",
+      ...PAGE_RUN,
+      fileDiffs: new Map(),
+      explanations: [],
+    });
+    const head = html.slice(html.indexOf("<head>"), html.indexOf("<title>"));
+    expect(head).toContain(
+      [
+        '<meta name="tulip-pr-url" content="https://github.com/acme/widgets/pull/7">',
+        `<meta name="tulip-head-sha" content="${PAGE_RUN.headSha}">`,
+        '<meta name="tulip-generated-at" content="2026-10-19T14:32:00.000Z">',
+        `<meta name="tulip-signature" content="${"0".repeat(64)}">`,
+      ].join("\n"),
+    );
+    expect(html.match(/<meta name="tulip-pr-url"/g)).toHaveLength(1);
+  });
+
   it("embeds its assets and lets the page load nothing else but data: images and fonts", () => {
     const scripts = ["var m=1;", "var h=2;", "var a=3;"];
     const html = renderPage({
       prTitle: "t",
       prDescription: "",
       prUrl: "https://github.com/acme/widgets/pull/7",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [],
       inlineAssets: { style: "body{color:red}", scripts },
@@ -71,6 +95,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "Retries flaky requests.",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({ category: { id: "c1", name: "Auth", description: "", attention: "normal" } }),
@@ -107,6 +132,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: `Some prose.\n\n${ref}\n`,
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [],
     });
@@ -131,6 +157,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [
         explanation({
@@ -164,6 +191,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [explanation({ markdown: "Intro.\n\n## ###\n\nMore.\n" })],
     });
@@ -180,6 +208,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({
@@ -207,6 +236,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({
@@ -241,6 +271,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({ category: { id: "c1", name: "Core", description: "", attention: "close" } }),
@@ -267,6 +298,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [explanation()],
     });
@@ -280,6 +312,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [explanation()],
     });
@@ -307,6 +340,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [explanation({ markdown: `## What changed\n\nMain.\n\n## Tests\n\n${ref}\n` })],
     });
@@ -336,6 +370,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [explanation({ markdown: `Intro.\n\n## Tests\n\n${ref}\n` })],
     });
@@ -350,6 +385,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({ markdown: "\n## Tests\n\nOnly tests here.\n\n## Documentation\n\nDocs.\n" }),
@@ -367,6 +403,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({
@@ -390,6 +427,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [explanation({ markdown: "Just some prose, no headings." })],
     });
@@ -413,6 +451,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [
         explanation({
@@ -437,6 +476,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({ category: { id: "c1", name: "Auth", description: "", attention: "normal" } }),
@@ -470,6 +510,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({
@@ -500,6 +541,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [
         explanation({
@@ -530,6 +572,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
@@ -546,6 +589,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({
@@ -572,6 +616,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
@@ -585,6 +630,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [],
     });
@@ -600,6 +646,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [],
       generatedBy: "Tulip 0.1.0 (5d6fe0d, built 2026-08-31T18:49:05.783Z)",
@@ -617,6 +664,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [],
     });
@@ -629,6 +677,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       serve: true,
       explanations: [
@@ -660,6 +709,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [explanation()],
       inlineAssets: NO_ASSETS,
@@ -673,6 +723,7 @@ describe("renderPage", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [explanation()],
     };
@@ -693,6 +744,7 @@ describe("renderPage XSS safety", () => {
       prTitle: '<script>alert("title")</script>',
       prDescription: "before <script>alert(1)</script> after",
       prUrl: 'https://github.com/a/b/pull/1"><script>alert(2)</script>',
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [],
     });
@@ -706,6 +758,7 @@ describe("renderPage XSS safety", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({
@@ -729,6 +782,7 @@ describe("renderPage XSS safety", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [
         explanation({
@@ -761,6 +815,7 @@ describe("renderPage XSS safety", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
@@ -788,6 +843,7 @@ describe("renderPage XSS safety", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs,
       explanations: [explanation({ markdown: `## What changed\n\n${ref}\n` })],
     });
@@ -803,6 +859,7 @@ describe("renderPage XSS safety", () => {
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
+      ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [],
       generatedBy: '<script>alert("version")</script>',
