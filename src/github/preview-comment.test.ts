@@ -9,6 +9,7 @@ import {
 
 const SHA_A = "a".repeat(40);
 const SHA_B = "b".repeat(40);
+const DOWNLOAD = "gh api 'repos/o/r/contents/x.html?ref=e' > x.html";
 
 function entry(sha: string, generatedAt = "2026-10-19T14:32:05.000Z"): PreviewEntry {
   return {
@@ -19,18 +20,21 @@ function entry(sha: string, generatedAt = "2026-10-19T14:32:05.000Z"): PreviewEn
 }
 
 describe("buildPreviewComment", () => {
-  it("links the preview and names its commit and time", () => {
-    const body = buildPreviewComment(entry(SHA_A), []);
+  it("links the preview, names its commit and time, and shows how to download it", () => {
+    const body = buildPreviewComment(entry(SHA_A), DOWNLOAD, []);
 
-    expect(body.split("\n")[0]).toBe(
+    expect(body.slice(0, body.indexOf(PREVIEW_MARKER))).toBe(
       "🌷 **[Tulip](https://github.com/VirtusLab/tulip) explanation of this PR** (as of `aaaaaaa`): " +
-        `[\`tulip-pr-7-aaaaaaa.html\`](${entry(SHA_A).url}) (2026-10-19 14:32 UTC)`,
+        `[\`tulip-pr-7-aaaaaaa.html\`](${entry(SHA_A).url}) (2026-10-19 14:32 UTC)\n\n` +
+        "The changes grouped by concern, most important first, with diagrams. Download the file " +
+        "(from its page, or with this command) and open it in a browser:\n\n" +
+        `\`\`\`sh\n${DOWNLOAD}\n\`\`\`\n\n` +
+        '<sub>GitHub\'s "not on any branch" warning is expected: previews live on hidden refs.</sub>\n\n',
     );
-    expect(body).not.toContain("<details>");
   });
 
   it("lists earlier previews, without the current commit", () => {
-    const body = buildPreviewComment(entry(SHA_A), [
+    const body = buildPreviewComment(entry(SHA_A), DOWNLOAD, [
       entry(SHA_A, "2026-10-18T09:00:00.000Z"),
       entry(SHA_B, "2026-10-18T10:00:00.000Z"),
     ]);
@@ -41,7 +45,7 @@ describe("buildPreviewComment", () => {
   });
 
   it("round-trips its previews through previewEntries", () => {
-    const body = buildPreviewComment(entry(SHA_A), [entry(SHA_B)]);
+    const body = buildPreviewComment(entry(SHA_A), DOWNLOAD, [entry(SHA_B)]);
 
     expect(previewEntries(body)).toEqual([entry(SHA_A), entry(SHA_B)]);
   });
@@ -71,7 +75,7 @@ describe("previewEntries", () => {
     const state = { previews: [{ ...entry(SHA_B), generatedAt: sneaky }] };
 
     const earlier = previewEntries(`<!-- tulip-preview ${JSON.stringify(state)} -->`);
-    const body = buildPreviewComment(entry(SHA_A), earlier);
+    const body = buildPreviewComment(entry(SHA_A), DOWNLOAD, earlier);
 
     expect(earlier[0]?.generatedAt).toBe(new Date(Date.parse(sneaky)).toISOString());
     expect(body).not.toContain("evil.example");
@@ -83,6 +87,7 @@ describe("the hidden state", () => {
   it("can't be closed early by any value in it", () => {
     const body = buildPreviewComment(
       { ...entry(SHA_A), url: "https://github.com/o/r/blob/c/a-->b.html" },
+      DOWNLOAD,
       [],
     );
     const marker = body.slice(body.indexOf(PREVIEW_MARKER));

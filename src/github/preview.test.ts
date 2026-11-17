@@ -8,8 +8,9 @@ const PR: PrRef = { forge: "github", host: "github.com", repoPath: "octo/widgets
 const HEAD_SHA = "c".repeat(40);
 const OLD_SHA = "d".repeat(40);
 const FILE = "tulip-pr-42-ccccccc.html";
-const PREVIEW_URL = `https://github.com/octo/widgets/blob/commit-sha/${FILE}`;
-const REF = "refs/tulip/previews/pr-42/commit-sha";
+const COMMIT = "f".repeat(40);
+const PREVIEW_URL = `https://github.com/octo/widgets/blob/${COMMIT}/${FILE}`;
+const REF = `refs/tulip/previews/pr-42/${COMMIT}`;
 const STORED_COMMIT = "e".repeat(40);
 
 interface GhCall {
@@ -87,6 +88,7 @@ function previewComment(sha: string, overrides: Partial<FakeComment> = {}): Fake
         url: `https://github.com/octo/widgets/blob/${STORED_COMMIT}/tulip-pr-42-${sha.slice(0, 7)}.html`,
         generatedAt: "2026-10-18T09:00:00.000Z",
       },
+      "gh api ...",
       [],
     ),
     ...overrides,
@@ -102,7 +104,7 @@ const PUBLISH = {
   "GET repos/octo/widgets/pulls/42": OPEN_PULL,
   "POST repos/octo/widgets/git/blobs": "blob-sha",
   "POST repos/octo/widgets/git/trees": "tree-sha",
-  "POST repos/octo/widgets/git/commits": "commit-sha",
+  "POST repos/octo/widgets/git/commits": COMMIT,
   "POST repos/octo/widgets/git/refs": "{}",
   query: commentsResponse([]),
   "POST repos/octo/widgets/issues/42/comments":
@@ -129,7 +131,7 @@ const FORK_STORE = {
   "GET repos/octo/widgets":
     '{"fullName":"octo/widgets","push":false,"allowForking":true,"archived":false}',
   "POST repos/me/widgets/git/trees": "tree-sha",
-  "POST repos/me/widgets/git/commits": "commit-sha",
+  "POST repos/me/widgets/git/commits": COMMIT,
   "POST repos/me/widgets/git/refs": "{}",
 };
 
@@ -231,13 +233,37 @@ describe("publish", () => {
       tree: "tree-sha",
       parents: [],
     });
-    expect(bodyOf("POST", "repos/octo/widgets/git/refs")).toEqual({ ref: REF, sha: "commit-sha" });
+    expect(bodyOf("POST", "repos/octo/widgets/git/refs")).toEqual({ ref: REF, sha: COMMIT });
     expect(bodyOf("POST", "repos/octo/widgets/issues/42/comments")).toEqual({
       body: buildPreviewComment(
         { sha: HEAD_SHA, url: PREVIEW_URL, generatedAt: "2026-10-19T14:32:00.000Z" },
+        `gh api 'repos/octo/widgets/contents/${FILE}?ref=${COMMIT}' ` +
+          `-H 'Accept: application/vnd.github.raw' > ${FILE}`,
         [],
       ),
     });
+  });
+
+  it("names a GitHub Enterprise host in the download command", async () => {
+    const { runGh, bodyOf } = fakeGh(PUBLISH);
+    const prepared = await preparePreview({ ...PR, host: "git.xyz.com" }, { runGh });
+
+    await prepared.publish({ page: "<html/>", headSha: HEAD_SHA, generatedAt: new Date() });
+
+    const posted = bodyOf("POST", "repos/octo/widgets/issues/42/comments") as { body: string };
+    expect(posted.body).toContain(
+      `-H 'Accept: application/vnd.github.raw' --hostname git.xyz.com > ${FILE}\n`,
+    );
+  });
+
+  it("refuses a commit SHA that could break the download command", async () => {
+    const { runGh, calls } = fakeGh({
+      ...PUBLISH,
+      "POST repos/octo/widgets/git/commits": "x' && rm -rf ~ #",
+    });
+
+    await expect(publish(runGh)).rejects.toThrow("unexpected preview location");
+    expect(calls.some((call) => call.endpoint.endsWith("/refs"))).toBe(false);
   });
 
   it("never moves an existing ref, so earlier links keep working", async () => {
@@ -387,6 +413,7 @@ describe("publish", () => {
       const comment = previewComment(OLD_SHA, {
         body: buildPreviewComment(
           { sha: OLD_SHA, url, generatedAt: "2026-10-18T09:00:00.000Z" },
+          "gh api ...",
           [],
         ),
       });
@@ -437,7 +464,7 @@ describe("publish", () => {
     const result = await publish(runGh);
 
     expect(bodyOf("POST", "repos/octo/widgets/forks")).toEqual({ default_branch_only: true });
-    expect(result.previewUrl).toBe(`https://github.com/me/widgets/blob/commit-sha/${FILE}`);
+    expect(result.previewUrl).toBe(`https://github.com/me/widgets/blob/${COMMIT}/${FILE}`);
   });
 
   it("asks to retry later when a fork it just created isn't ready yet", async () => {

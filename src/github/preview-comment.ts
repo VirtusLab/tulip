@@ -13,7 +13,12 @@ export interface PreviewEntry {
 export const PREVIEW_MARKER = "<!-- tulip-preview";
 const STATE = new RegExp(`${PREVIEW_MARKER} (\\{.*\\}) -->`);
 
-export function buildPreviewComment(current: PreviewEntry, earlier: PreviewEntry[]): string {
+/** `downloadCommand` is a shell command that downloads the current preview. */
+export function buildPreviewComment(
+  current: PreviewEntry,
+  downloadCommand: string,
+  earlier: PreviewEntry[],
+): string {
   const listed = earlier
     .filter((entry) => entry.sha !== current.sha)
     .slice(0, config.preview.maxEarlierPreviews);
@@ -24,8 +29,9 @@ export function buildPreviewComment(current: PreviewEntry, earlier: PreviewEntry
   return [
     `🌷 **[Tulip](https://github.com/VirtusLab/tulip) explanation of this PR** (as of ` +
       `\`${shortSha(current.sha)}\`): ${link(current)} (${formatTime(current.generatedAt)})`,
-    "Download the raw file and open it in a browser: the changes grouped by concern, most " +
-      "important first, with diagrams.",
+    "The changes grouped by concern, most important first, with diagrams. Download the file " +
+      "(from its page, or with this command) and open it in a browser:",
+    `\`\`\`sh\n${downloadCommand}\n\`\`\``,
     // Without this, GitHub's warning on the file page reads like a spoofed commit.
     '<sub>GitHub\'s "not on any branch" warning is expected: previews live on hidden refs.</sub>',
     ...(listed.length > 0

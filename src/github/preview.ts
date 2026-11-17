@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { COMMIT_SHA_PATTERN, shortSha } from "../forge/sha.js";
 import type { PreparedPreview, Preview, PrRef, PublishedPreview } from "../forge/types.js";
+import { HOST_PATTERN, isValidRepoPath } from "../forge/url-parts.js";
 import { errorMessage } from "../logging/error-message.js";
 import { runCommand } from "../process/exec.js";
 import { type CommandRunner, type GhApi, GhApiError, ghApi, ghGraphql } from "./gh.js";
@@ -106,17 +107,27 @@ async function publishPreview(
 
   const fork = useFork ? await forkOf(api, pr) : undefined;
   const storeRepo = fork?.fullName ?? pr.repoPath;
-  const previewUrl = await storePreviewFile(api, pr, storeRepo, preview).catch((error: unknown) => {
+  const stored = await storePreviewFile(api, pr, storeRepo, preview).catch((error: unknown) => {
     throw fork?.isNew && isNotReady(error)
       ? new Error(`your fork ${fork.fullName} is still being created; retry in a minute`)
       : error;
   });
   const current = {
     sha: preview.headSha,
-    url: previewUrl,
+    url: stored.url,
     generatedAt: preview.generatedAt.toISOString(),
   };
-  return { previewUrl, ...(await postPreviewComment(api, pr, storeRepo, current, latestComment)) };
+  return {
+    previewUrl: stored.url,
+    ...(await postPreviewComment(
+      api,
+      pr,
+      storeRepo,
+      current,
+      stored.downloadCommand,
+      latestComment,
+    )),
+  };
 }
 
 async function fetchPull(api: GhApi, pr: PrRef): Promise<PullState> {
@@ -150,14 +161,14 @@ async function forkOf(api: GhApi, pr: PrRef): Promise<{ fullName: string; isNew:
   }
 }
 
-/** One orphan commit per preview, under its own ref; resolves with the file's web URL, pinned to
- * that commit. */
+/** One orphan commit per preview, under its own ref; resolves with the file's web URL and a shell
+ * command that downloads it, both pinned to that commit. */
 async function storePreviewFile(
   api: GhApi,
   pr: PrRef,
   storeRepo: string,
   preview: Preview,
-): Promise<string> {
+): Promise<{ url: string; downloadCommand: string }> {
   const repo = `repos/${storeRepo}`;
   const file = previewFileName(pr.number, preview.headSha);
 
@@ -180,13 +191,18 @@ async function storePreviewFile(
     },
     jq: ".sha",
   });
+  // Before the ref, so a refusal leaves only unreferenced objects, which GitHub garbage-collects.
+  const downloadCommand = previewDownloadCommand(pr.host, storeRepo, commitSha, file);
   // Named after the commit, so it's never moved: another user's comment, or an earlier one of
   // this user's, keeps a working link.
   await api(`${repo}/git/refs`, {
     method: "POST",
     body: { ref: `${config.preview.refPrefix}/pr-${pr.number}/${commitSha}`, sha: commitSha },
   });
-  return previewFileUrl(pr.host, storeRepo, commitSha, file);
+  return {
+    url: previewFileUrl(pr.host, storeRepo, commitSha, file),
+    downloadCommand,
+  };
 }
 
 function previewFileName(prNumber: number, headSha: string): string {
@@ -195,6 +211,34 @@ function previewFileName(prNumber: number, headSha: string): string {
 
 function previewFileUrl(host: string, repo: string, commitSha: string, file: string): string {
   return `https://${host}/${repo}/blob/${commitSha}/${file}`;
+}
+
+const HOST = new RegExp(`^${HOST_PATTERN}$`);
+const FILE_NAME = /^tulip-pr-\d+-[0-9a-f]{7}\.html$/;
+
+/** A `gh` command that saves the file under its own name. GitHub serves the HTML as text
+ * everywhere, so a reviewer opens a local copy. */
+function previewDownloadCommand(
+  host: string,
+  repo: string,
+  commitSha: string,
+  file: string,
+): string {
+  // Checked so the command needs no quoting beyond what's here, and can't end its code block.
+  if (
+    !HOST.test(host) ||
+    !isValidRepoPath(repo) ||
+    !COMMIT_SHA_PATTERN.test(commitSha) ||
+    !FILE_NAME.test(file)
+  ) {
+    throw new Error(`unexpected preview location: ${host} ${repo} ${commitSha} ${file}`);
+  }
+  return (
+    `gh api 'repos/${repo}/contents/${file}?ref=${commitSha}' ` +
+    `-H 'Accept: application/vnd.github.raw'` +
+    (host === "github.com" ? "" : ` --hostname ${host}`) +
+    ` > ${file}`
+  );
 }
 
 /** Whether the entry links exactly a file `storePreviewFile` could have stored for this PR's
@@ -258,6 +302,7 @@ async function postPreviewComment(
   pr: PrRef,
   storeRepo: string,
   current: PreviewEntry,
+  downloadCommand: string,
   latest: PreviewComment | undefined,
 ): Promise<{ commentUrl: string; warnings: string[] }> {
   // A hidden comment isn't edited or retired, but its list of previews is still carried over.
@@ -267,7 +312,7 @@ async function postPreviewComment(
   const earlier = (latest ? previewEntries(latest.body) : []).filter((entry) =>
     isPreviewFileLink(entry, pr, [pr.repoPath, storeRepo]),
   );
-  const body = buildPreviewComment(current, earlier);
+  const body = buildPreviewComment(current, downloadCommand, earlier);
 
   if (active && earlier[0]?.sha === current.sha) {
     const commentUrl = await api(`repos/${pr.repoPath}/issues/comments/${active.databaseId}`, {

@@ -224,8 +224,8 @@ are posted via `gh`, so they come from your GitHub account.
 
 Sharing stores the page's `index.html` in the repository and comments on the PR
 with a link to it, the commit it explains and when it was generated. Other
-reviewers download the file and open it in a browser, without running Tulip
-themselves.
+reviewers download the file (from the link, or with the `gh api` command in
+the comment) and open it in a browser, without running Tulip themselves.
 
 There are three ways to share:
 

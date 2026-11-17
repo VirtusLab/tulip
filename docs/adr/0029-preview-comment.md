@@ -67,7 +67,11 @@ analysis; and that edits notify nobody.
   ls-remote` still see them.
 - The comment links the file's blob page by commit SHA, which has a **Download raw file** button.
   GitHub warns there that the commit "does not belong to any branch"; the comment explains why.
-  GitHub doesn't render HTML there; the reviewer opens the downloaded file.
+  GitHub doesn't render HTML there, and serves the raw file as text; the reviewer opens the
+  downloaded file. The blob page may not display a multi-MB file, so the comment also gives a
+  `gh api` command that downloads it through the contents API (`application/vnd.github.raw`
+  media type, up to 100 MB, same access rules as the repo), with `--hostname` for GitHub
+  Enterprise. Every value in it is checked against a strict format, so it needs no extra quoting.
 - The PR's repo when the user can push to it (`permissions.push`), otherwise the user's fork,
   unless the repo reports `allow_forking: false`. A private repo's fork inherits its access, so a
   preview of private code is only readable by people who can read the code.
