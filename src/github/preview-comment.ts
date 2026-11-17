@@ -48,6 +48,7 @@ export function buildSupersededComment(replacementUrl: string): string {
   return `🌷 Superseded by a [newer Tulip explanation](${replacementUrl}).`;
 }
 
+/** URLs aren't checked: the caller knows which links are Tulip's. */
 export function previewEntries(body: string): PreviewEntry[] {
   const json = STATE.exec(body)?.[1];
   if (json === undefined) {
@@ -63,17 +64,13 @@ export function previewEntries(body: string): PreviewEntry[] {
 }
 
 /** The state can be edited by anyone with write access, and is posted again under the user's
- * name: so URLs must be ones a browser won't rewrite (no `..` or encoded-dot segments), and the
- * time is re-serialized rather than kept as written. */
+ * name: so the time is re-serialized rather than kept as written. */
 function toPreviewEntry(value: unknown): PreviewEntry[] {
   const entry = value as Partial<Record<keyof PreviewEntry, unknown>>;
   if (
     typeof entry?.sha !== "string" ||
     !COMMIT_SHA_PATTERN.test(entry.sha) ||
     typeof entry.url !== "string" ||
-    !/^https:\/\/[^\s()<>]+$/.test(entry.url) ||
-    !URL.canParse(entry.url) ||
-    new URL(entry.url).href !== entry.url ||
     typeof entry.generatedAt !== "string"
   ) {
     return [];

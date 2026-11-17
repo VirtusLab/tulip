@@ -97,8 +97,9 @@ needs a cookie).
   warning, not a failure, since the new comment already exists. If someone already hid the latest
   comment, a new one is posted, still carrying its list of earlier previews.
 - Others with write access can edit the marker JSON, and it is posted again under the user's
-  name. So earlier-preview links are only carried over when they point into the PR's repo or the
-  store repo and a browser wouldn't rewrite them (no `..` segments), times are re-serialized, and
+  name. So an earlier-preview link is only carried over when it is exactly one Tulip writes,
+  `https://<host>/<repo>/blob/<commit sha>/tulip-pr-<n>-<sha7>.html`, with `<repo>` the PR's repo
+  or the store repo, `<n>` this PR and `<sha7>` the entry's commit. Times are re-serialized, and
   `<`/`>` in the JSON are escaped so nothing can end the hidden comment early.
 - Someone else's preview comment is never edited; the user gets their own.
 

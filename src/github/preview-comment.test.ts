@@ -58,28 +58,12 @@ describe("previewEntries", () => {
 
   it("drops entries that don't look like previews", () => {
     const state = {
-      previews: [
-        entry(SHA_A),
-        { ...entry(SHA_B), url: "javascript:alert(1)" },
-        { ...entry(SHA_B), sha: "not-a-sha" },
-      ],
+      previews: [entry(SHA_A), { ...entry(SHA_B), sha: "not-a-sha" }],
     };
 
     expect(previewEntries(`<!-- tulip-preview ${JSON.stringify(state)} -->`)).toEqual([
       entry(SHA_A),
     ]);
-  });
-
-  it("drops URLs a browser would resolve elsewhere", () => {
-    const state = {
-      previews: [
-        { ...entry(SHA_A), url: "https://github.com/o/r/blob/../../../evil/x/blob/c/p.html" },
-        { ...entry(SHA_A), url: "https://github.com/o/r/blob/%2e%2e/%2e%2e/evil/x/p.html" },
-        { ...entry(SHA_A), url: "https://github.com/o/r/blob\\..\\evil/p.html" },
-      ],
-    };
-
-    expect(previewEntries(`<!-- tulip-preview ${JSON.stringify(state)} -->`)).toEqual([]);
   });
 
   it("re-serializes the time, so text inside it never reaches a posted comment", () => {

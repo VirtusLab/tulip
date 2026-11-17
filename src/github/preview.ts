@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { shortSha } from "../forge/sha.js";
+import { COMMIT_SHA_PATTERN, shortSha } from "../forge/sha.js";
 import type { PreparedPreview, Preview, PrRef, PublishedPreview } from "../forge/types.js";
 import { runCommand } from "../process/exec.js";
 import { type CommandRunner, type GhApi, GhApiError, ghApi, ghGraphql } from "./gh.js";
@@ -158,7 +158,7 @@ async function storePreviewFile(
   preview: Preview,
 ): Promise<string> {
   const repo = `repos/${storeRepo}`;
-  const file = `tulip-pr-${pr.number}-${shortSha(preview.headSha)}.html`;
+  const file = previewFileName(pr.number, preview.headSha);
 
   const blobSha = await api(`${repo}/git/blobs`, {
     method: "POST",
@@ -185,7 +185,26 @@ async function storePreviewFile(
     method: "POST",
     body: { ref: `${config.preview.refPrefix}/pr-${pr.number}/${commitSha}`, sha: commitSha },
   });
-  return `${blobUrlPrefix(pr.host, storeRepo)}${commitSha}/${file}`;
+  return previewFileUrl(pr.host, storeRepo, commitSha, file);
+}
+
+function previewFileName(prNumber: number, headSha: string): string {
+  return `tulip-pr-${prNumber}-${shortSha(headSha)}.html`;
+}
+
+function previewFileUrl(host: string, repo: string, commitSha: string, file: string): string {
+  return `https://${host}/${repo}/blob/${commitSha}/${file}`;
+}
+
+/** Whether the entry links exactly a file `storePreviewFile` could have stored for this PR's
+ * entry.sha, in one of `repos`. */
+function isPreviewFileLink(entry: PreviewEntry, pr: PrRef, repos: string[]): boolean {
+  const commitSha = entry.url.split("/").at(-2) ?? "";
+  const file = previewFileName(pr.number, entry.sha);
+  return (
+    COMMIT_SHA_PATTERN.test(commitSha) &&
+    repos.some((repo) => entry.url === previewFileUrl(pr.host, repo, commitSha, file))
+  );
 }
 
 /** A just-created fork answers writes with 404 or 409 until GitHub has copied the repo, which
@@ -242,11 +261,10 @@ async function postPreviewComment(
 ): Promise<{ commentUrl: string; warnings: string[] }> {
   // A hidden comment isn't edited or retired, but its list of previews is still carried over.
   const active = latest?.isMinimized ? undefined : latest;
-  // The state is in a comment others with write access can edit, so only links into the repos
-  // Tulip itself stores previews in are carried over.
-  const trusted = [pr.repoPath, storeRepo].map((repo) => blobUrlPrefix(pr.host, repo));
+  // The state is in a comment others with write access can edit, so only links Tulip itself could
+  // have written are carried over.
   const earlier = (latest ? previewEntries(latest.body) : []).filter((entry) =>
-    trusted.some((prefix) => entry.url.startsWith(prefix)),
+    isPreviewFileLink(entry, pr, [pr.repoPath, storeRepo]),
   );
   const body = buildPreviewComment(current, earlier);
 
@@ -294,10 +312,6 @@ async function retire(
   } catch (error) {
     return [`couldn't retire the earlier preview comment ${comment.url}: ${errorMessage(error)}`];
   }
-}
-
-function blobUrlPrefix(host: string, repo: string): string {
-  return `https://${host}/${repo}/blob/`;
 }
 
 function errorMessage(error: unknown): string {

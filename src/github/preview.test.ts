@@ -10,6 +10,7 @@ const OLD_SHA = "d".repeat(40);
 const FILE = "tulip-pr-42-ccccccc.html";
 const PREVIEW_URL = `https://github.com/octo/widgets/blob/commit-sha/${FILE}`;
 const REF = "refs/tulip/previews/pr-42/commit-sha";
+const STORED_COMMIT = "e".repeat(40);
 
 interface GhCall {
   method: string;
@@ -83,7 +84,7 @@ function previewComment(sha: string, overrides: Partial<FakeComment> = {}): Fake
     body: buildPreviewComment(
       {
         sha,
-        url: `https://github.com/octo/widgets/blob/old-commit/tulip-pr-42-${sha.slice(0, 7)}.html`,
+        url: `https://github.com/octo/widgets/blob/${STORED_COMMIT}/tulip-pr-42-${sha.slice(0, 7)}.html`,
         generatedAt: "2026-10-18T09:00:00.000Z",
       },
       [],
@@ -379,27 +380,50 @@ describe("publish", () => {
     expect(posted.body).toContain("- `ddddddd` on 2026-10-18 09:00 UTC:");
   });
 
-  it("only carries over history links into the repos previews are stored in", async () => {
-    const tampered = previewComment(OLD_SHA, {
-      body: buildPreviewComment(
-        {
-          sha: OLD_SHA,
-          url: "https://github.com/attacker/repo/blob/x/evil.html",
-          generatedAt: "2026-10-18T09:00:00.000Z",
-        },
-        [],
-      ),
-    });
-    const { runGh, bodyOf } = fakeGh({
-      ...PUBLISH,
-      query: commentsResponse([tampered]),
-      mutation: "{}",
+  describe("carrying over history", () => {
+    const OLD_URL = `https://github.com/octo/widgets/blob/${STORED_COMMIT}/tulip-pr-42-ddddddd.html`;
+
+    async function carriedOver(url: string): Promise<boolean> {
+      const comment = previewComment(OLD_SHA, {
+        body: buildPreviewComment(
+          { sha: OLD_SHA, url, generatedAt: "2026-10-18T09:00:00.000Z" },
+          [],
+        ),
+      });
+      const { runGh, bodyOf } = fakeGh({
+        ...PUBLISH,
+        query: commentsResponse([comment]),
+        mutation: "{}",
+      });
+      await publish(runGh);
+      const posted = bodyOf("POST", "repos/octo/widgets/issues/42/comments") as { body: string };
+      return posted.body.includes("- `ddddddd` on");
+    }
+
+    it("keeps a link to a stored preview file", async () => {
+      expect(await carriedOver(OLD_URL)).toBe(true);
     });
 
-    await publish(runGh);
-
-    const posted = bodyOf("POST", "repos/octo/widgets/issues/42/comments") as { body: string };
-    expect(posted.body).not.toContain("attacker");
+    it.each([
+      ["another file", OLD_URL.replace("tulip-pr-42-ddddddd", "secrets")],
+      ["another PR", OLD_URL.replace("tulip-pr-42-", "tulip-pr-41-")],
+      ["another head commit", OLD_URL.replace("ddddddd", "aaaaaaa")],
+      ["a query", `${OLD_URL}?raw=true`],
+      ["a fragment", `${OLD_URL}#x`],
+      ["a dot segment", OLD_URL.replace("/blob/", "/blob/../../../evil/x/blob/")],
+      ["an encoded dot segment", OLD_URL.replace("/blob/", "/blob/%2e%2e/")],
+      ["an extra segment", OLD_URL.replace("/tulip-pr", "/dir/tulip-pr")],
+      ["an uppercase commit", OLD_URL.replace(STORED_COMMIT, "E".repeat(40))],
+      ["a short commit", OLD_URL.replace(STORED_COMMIT, "e".repeat(39))],
+      ["a branch", OLD_URL.replace(STORED_COMMIT, "main")],
+      ["another repo", OLD_URL.replace("octo/widgets", "attacker/widgets")],
+      ["another repo case", OLD_URL.replace("octo/widgets", "Octo/widgets")],
+      ["another host", OLD_URL.replace("github.com", "evil.example")],
+      ["http", OLD_URL.replace("https:", "http:")],
+      ["whitespace", `${OLD_URL} `],
+    ])("drops a link with %s", async (_, url) => {
+      expect(await carriedOver(url)).toBe(false);
+    });
   });
 
   it("stores the page in a fork it just created", async () => {
