@@ -98,6 +98,7 @@ describe("renderPage", () => {
 
     const [external, inline] = root.querySelectorAll("script:not([type])");
     expect(external?.attributes).toEqual({
+      async: "",
       src: cdn.src,
       integrity: cdn.integrity,
       crossorigin: "anonymous",
@@ -758,6 +759,16 @@ describe("renderPage", () => {
 });
 
 describe("renderPage XSS safety", () => {
+  it("escapes a CDN script's attributes", () => {
+    const cdn = { src: 'https://x/"><script>alert(1)</script>', integrity: '"x' };
+    const root = parse(pageWithScripts([cdn]));
+
+    const scripts = root.querySelectorAll("script:not([type])");
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]?.getAttribute("src")).toBe(cdn.src);
+    expect(scripts[0]?.getAttribute("integrity")).toBe(cdn.integrity);
+  });
+
   it("escapes a <script> tag in the PR title, description and URL", () => {
     const html = renderPage({
       assets: NO_ASSETS,

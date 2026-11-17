@@ -245,6 +245,9 @@
   // restores each element's original source from the page-embedded JSON before re-running.
   function setupMermaid() {
     if (!window.mermaid) {
+      // Loaded from a CDN with `async` (docs/adr/0033), so it may arrive after the page is ready.
+      // If it never does, each diagram stays as its source text.
+      document.querySelector("script[src]")?.addEventListener("load", setupMermaid, { once: true });
       return;
     }
     var sources = loadMermaidSources();

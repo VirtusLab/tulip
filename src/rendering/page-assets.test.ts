@@ -188,7 +188,13 @@ describe("inlineScriptText", () => {
 });
 
 describe("mermaidCdnUrl", () => {
-  it.each(["12.3", "12.3.0 https://evil.example", "12.3.0/../x", ""])("refuses %j", (version) => {
+  it.each([
+    "12.3",
+    "12.3.0 https://evil.example",
+    "https://evil.example 12.3.0",
+    "12.3.0/../x",
+    "",
+  ])("refuses %j", (version) => {
     expect(() => mermaidCdnUrl(version)).toThrow(/unexpected mermaid version/);
   });
 

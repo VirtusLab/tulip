@@ -26,7 +26,7 @@ export interface RenderInput {
   serve?: boolean;
   /** Adds the Share button to the served page (docs/adr/0032), if the static page got signed. */
   share?: boolean;
-  /** Embedded into the page (docs/adr/0030). Loaded by the caller, so missing assets fail a run
+  /** The page's stylesheet and scripts (docs/adr/0030, docs/adr/0033). Loaded by the caller, so missing assets fail a run
    * before its LLM work rather than after. */
   assets: PageAssets;
 }

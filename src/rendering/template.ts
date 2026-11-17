@@ -106,7 +106,7 @@ export function renderPage(input: PageInput): string {
 <head>
 <meta charset="utf-8">
 ${pageRunMetaTags({ prUrl: input.prUrl, headSha: input.headSha, generatedAt: input.generatedAt })}
-<meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy(input.assets.scripts)}">
+<meta http-equiv="Content-Security-Policy" content="${escapeHtml(contentSecurityPolicy(input.assets.scripts))}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.prTitle)} — Tulip</title>
 <style>${input.assets.style}</style>
@@ -140,7 +140,8 @@ ${input.assets.scripts.map(scriptElement).join("\n")}
 
 function scriptElement(script: PageScript): string {
   return "src" in script
-    ? `<script src="${escapeHtml(script.src)}" integrity="${escapeHtml(script.integrity)}" crossorigin="anonymous"></script>`
+    ? // `async`: a slow CDN must not hold up app.js, which waits for the script itself.
+      `<script async src="${escapeHtml(script.src)}" integrity="${escapeHtml(script.integrity)}" crossorigin="anonymous"></script>`
     : `<script>${script.text}</script>`;
 }
 

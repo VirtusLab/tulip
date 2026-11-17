@@ -143,8 +143,8 @@ the build. `tulip share <page>` shares an earlier run's page on its PR (see
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser. The page is a single `index.html` with its CSS, scripts and fonts
 embedded, so you can send it as one file. It loads the diagram library from the
-jsDelivr CDN; with `--offline` it embeds that too (about 5 MB more), so it works
-without network.
+jsDelivr CDN; with `--offline` it embeds that too, so it works without network,
+but is much larger.
 
 ### Extra context from other repositories
 

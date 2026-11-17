@@ -13,7 +13,8 @@ or host it. `index.html` alone showed an unstyled page with no diagrams.
   loaded from a CDN unless `--offline`.
 - **Embedding.** `src/rendering/page-assets.ts` reads the assets. Fonts become base64 data URIs
   inside the stylesheet, the stylesheet goes in a `<style>` element, and each script goes in its
-  own inline `<script>`, in page order: mermaid, highlight.js, app.js. The assets are read when a
+  own inline `<script>`, in page order: mermaid (only with `--offline` since ADR 0033),
+  highlight.js, app.js. The assets are read when a
   run starts, so a missing file (e.g. no `pnpm build`) fails the run before any LLM work.
   `--serve` serves only the page (from memory since ADR 0032).
 - **Script escaping.** Each script is escaped so the HTML parser can't end or swallow it early,
@@ -31,7 +32,7 @@ or host it. `index.html` alone showed an unstyled page with no diagrams.
 
 ## Consequences
 
-- The page is a few MB, mostly mermaid (about 350 KB since ADR 0033).
+- The page is a few MB, mostly mermaid. ADR 0033 leaves mermaid out by default.
 - Loading fonts and mermaid from a CDN instead was rejected. The page must fetch nothing external:
   a private PR's page shouldn't reveal that it was opened, it must work offline, and the CSP
   forbids it. Fonts are only about 3% of the page anyway. ADR 0033 reverses this for mermaid,

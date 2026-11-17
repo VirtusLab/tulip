@@ -8,8 +8,7 @@ page every reviewer can open from the PR.
 
 GitHub has no API for attaching a file to a comment: the browser's drag-and-drop upload uses an
 internal endpoint that needs a session cookie, and `.html` isn't an accepted attachment type
-anyway. The page is one file of a few hundred KB, or a few MB with `--offline` (ADRs 0030,
-0033).
+anyway. The page is one file (ADRs 0030, 0033).
 
 A first version committed previews to a `tulip-previews` branch and edited one comment in place.
 Review found that every clone fetched the branch and it grew without bound; that it appeared in

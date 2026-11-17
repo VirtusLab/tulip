@@ -70,8 +70,8 @@ export async function loadPageAssets(
   return { style, scripts };
 }
 
-/** jsDelivr serves the npm package's files unchanged, so this is the vendored bundle. The URL
- * also goes into the CSP, where a space would add another source: hence the strict version. */
+/** The vendored bundle's URL on jsDelivr (docs/adr/0033). It also goes into the CSP, where a
+ * space would add another source: hence the strict version check. */
 export function mermaidCdnUrl(version: string): string {
   if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
     throw new Error(`unexpected mermaid version: ${JSON.stringify(version)}`);
