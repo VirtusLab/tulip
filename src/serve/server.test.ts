@@ -337,7 +337,7 @@ describe("serveForReview lifecycle", () => {
       open: false,
       onShutdown,
     });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.waitFor(() => expect(info).toHaveBeenCalled());
     const url = String(info.mock.calls[0]?.[0]).match(/http:\/\/\S+/)?.[0];
 
     const response = fetch(`${url}/api/share`, {

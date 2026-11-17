@@ -1181,7 +1181,9 @@ describe("run", () => {
       }),
     }));
     deps.serveForReview.mockImplementation(async (...args: unknown[]) => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await vi.waitFor(() =>
+        expect(infoLines(deps)).toContain("sharing the preview failed: transient"),
+      );
       await (args[0] as ServeOptions).share?.();
     });
 
