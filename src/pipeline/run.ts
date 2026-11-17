@@ -351,9 +351,10 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
             } catch (error) {
               signed = false;
               logger.info(
-                `warning: couldn't sign the page, so it can't be shared: ${causeMessage(error)}`,
+                `warning: couldn't sign the page, so it can't be shared on the PR, ` +
+                  `now or later with tulip share: ${causeMessage(error)}`,
               );
-              return page;
+              return undefined;
             }
           },
         },
@@ -374,9 +375,14 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       }
     }
 
+    // The user asked for a share that can't happen; the reason was logged when signing failed.
+    if (options.attachPreviewAsComment && !signed) {
+      process.exitCode = 1;
+    }
     // Read back through the signature, so what's shared is what Tulip rendered.
     const share =
       prepare &&
+      signed &&
       createShare({
         prepare,
         loadPreview: async () => (await doReadSignedPage(indexPath, options.shareKeyPath)).preview,
@@ -384,9 +390,9 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       });
     const sharing =
       share && options.attachPreviewAsComment
-        ? shareOrSuggestRetry(share, signed ? indexPath : undefined, logger)
+        ? shareOrSuggestRetry(share, indexPath, logger)
         : undefined;
-    if (prepare && !sharing && signed) {
+    if (share && !sharing) {
       logger.info(
         `to share it on the PR later: ${shareCommand(indexPath)} (in a temp dir the OS removes eventually)`,
       );

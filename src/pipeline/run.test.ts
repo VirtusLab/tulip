@@ -1236,37 +1236,63 @@ describe("run", () => {
     );
   });
 
-  it("without a signing key, still renders the page but doesn't suggest sharing it", async () => {
-    const deps = baseDeps();
+  const SIGNING_FAILED =
+    "warning: couldn't sign the page, so it can't be shared on the PR, now or later with tulip share: EROFS";
+
+  function failSigning(deps: ReturnType<typeof baseDeps>): void {
     deps.signPage = vi.fn(async () => {
       throw new Error("EROFS");
     });
+  }
+
+  it("without a signing key, still renders the page but doesn't suggest sharing it", async () => {
+    const deps = baseDeps();
+    failSigning(deps);
 
     await run(options(), deps);
 
     expect(process.exitCode).toBeUndefined();
     expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
     const lines = infoLines(deps);
-    expect(lines).toContain("warning: couldn't sign the page, so it can't be shared: EROFS");
-    expect(lines.some((line) => line.includes("tulip share"))).toBe(false);
+    expect(lines).toContain(SIGNING_FAILED);
+    expect(lines.some((line) => line.includes("tulip share "))).toBe(false);
   });
 
-  it("with a preview and no signing key, fails the share without suggesting a retry", async () => {
+  it("with a preview and no signing key, doesn't try to share and fails the run", async () => {
     const deps = baseDeps();
-    deps.signPage = vi.fn(async () => {
-      throw new Error("EROFS");
-    });
-    // As the real one does for an unsigned page.
-    deps.readSignedPage = vi.fn(async () => {
-      throw new Error("not signed");
-    });
+    failSigning(deps);
 
     await run(options({ attachPreviewAsComment: true }), deps);
 
     expect(process.exitCode).toBe(1);
+    expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
+    expect(deps.readSignedPage).not.toHaveBeenCalled();
+    const prepared = await (deps.previewPublisher as PreviewPublisher).prepare(PR);
+    expect(prepared.publish).not.toHaveBeenCalled();
     const lines = infoLines(deps);
-    expect(lines).toContain("sharing the preview failed: not signed");
-    expect(lines.some((line) => line.includes("tulip share"))).toBe(false);
+    expect(lines.filter((line) => line === SIGNING_FAILED)).toHaveLength(1);
+    expect(lines.some((line) => line.includes("tulip share "))).toBe(false);
+  });
+
+  it("in serve mode with no signing key, serves the page without sharing", async () => {
+    const deps = baseDeps();
+    failSigning(deps);
+    deps.renderExplanations.mockImplementation(async (_input, renderDeps) => {
+      // Render leaves the Share button out when signing resolves to undefined.
+      expect(await renderDeps.signPage?.("<html>page</html>")).toBeUndefined();
+      return {
+        dir: "/tmp/tulip-render",
+        indexPath: "/tmp/tulip-render/index.html",
+        servedPage: "<html>served</html>",
+      };
+    });
+
+    await run(options({ serve: true }), deps);
+
+    expect(process.exitCode).toBeUndefined();
+    expect(deps.serveForReview).toHaveBeenCalled();
+    expect(serveOptions(deps).share).toBeUndefined();
+    expect(infoLines(deps)).toContain(SIGNING_FAILED);
   });
 
   it("doesn't suggest sharing for a forge that can't", async () => {

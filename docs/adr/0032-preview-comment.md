@@ -32,8 +32,10 @@ analysis; and that edits notify nobody.
   PR title, the first text there Tulip doesn't control (and escapes), so nothing in the page, e.g.
   model-written markdown, can stand in for them. The other tags are read only once the signature
   checks out.
-- If the key can't be created or read (e.g. a read-only home), the run still succeeds with an
-  unsigned page, which can't be shared.
+- If the key can't be created or read (e.g. a read-only home), the run writes an unsigned page,
+  which can't be shared, also not by `tulip share`. It says why once, and turns sharing off: no
+  Share button, no `tulip share` hint, and `--attach-preview-as-comment` doesn't try to share but
+  exits non-zero.
 
 ### Three ways to share, one code path
 - `--attach-preview-as-comment`: share once the run ends (after opening the page; alongside the

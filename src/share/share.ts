@@ -101,11 +101,11 @@ export function shareCommand(dir: string): string {
     : `tulip share '${dir.replace(/'/g, "'\\''")}'`;
 }
 
-/** Runs a first attempt, explaining how to retry with `pagePath`, when given, if it fails. Ctrl+C
+/** Runs a first attempt, explaining how to retry with `pagePath` if it fails. Ctrl+C
  * stops it, rather than Node's default exiting before the run has cleaned up. */
 export async function shareOrSuggestRetry(
   share: Share,
-  pagePath: string | undefined,
+  pagePath: string,
   logger: Logger,
 ): Promise<void> {
   const stop = () => {
@@ -117,9 +117,7 @@ export async function shareOrSuggestRetry(
     await share();
   } catch (error) {
     logger.info(`sharing the preview failed: ${errorMessage(error)}`);
-    if (pagePath !== undefined) {
-      logger.info(`retry without re-running the analysis: ${shareCommand(pagePath)}`);
-    }
+    logger.info(`retry without re-running the analysis: ${shareCommand(pagePath)}`);
   } finally {
     process.off("SIGINT", stop);
   }

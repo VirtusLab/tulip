@@ -312,6 +312,36 @@ describe("renderExplanations", () => {
     expect(result.servedPage).toContain("share-submit");
   });
 
+  it("in serve mode, leaves out the Share button when the page can't be signed", async () => {
+    const written = new Map<string, string>();
+
+    const result = await renderExplanations(
+      {
+        prTitle: "t",
+        prDescription: "d",
+        prUrl: "https://github.com/a/b/pull/1",
+        ...PAGE_RUN,
+        inlineAssets: ASSETS,
+        explanations: [explanation("## What changed\n\nprose\n")],
+        serve: true,
+        share: true,
+      },
+      {
+        checkout: { getFileAtBase: vi.fn(), getFileAtHead: vi.fn() },
+        mkdtemp: async () => "/tmp/tulip-render-serve",
+        writeFile: async (path, content) => {
+          written.set(path, content);
+        },
+        signPage: async () => undefined,
+        logger: { info: vi.fn(), debug: vi.fn() },
+      },
+    );
+
+    expect(written.get(result.indexPath)).toContain("<html");
+    expect(result.servedPage).toContain("review-box");
+    expect(result.servedPage).not.toContain("share-submit");
+  });
+
   it("returns no served page outside serve mode", async () => {
     const result = await renderExplanations(
       {
