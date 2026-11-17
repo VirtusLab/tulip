@@ -72,20 +72,14 @@ export interface Share {
  * failure can be retried. */
 export function createShare(options: {
   prepare: () => Promise<PreparedPreview>;
-  /** Loaded per attempt rather than held, so a long serve session doesn't keep the page in memory. */
-  loadPreview: () => Promise<Preview>;
+  preview: Preview;
   logger: Logger;
 }): Share {
-  const { prepare, loadPreview, logger } = options;
+  const { prepare, preview, logger } = options;
   const stopping = new AbortController();
   let succeeded = false;
   const attempt = memoizeUntilSuccess(async () => {
-    const published = await publishAndReport(
-      await prepare(),
-      await loadPreview(),
-      logger,
-      stopping.signal,
-    );
+    const published = await publishAndReport(await prepare(), preview, logger, stopping.signal);
     succeeded = true;
     return published;
   });

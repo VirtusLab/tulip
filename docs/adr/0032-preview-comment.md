@@ -52,10 +52,10 @@ analysis; and that edits notify nobody.
   It has `/api/comment`'s Host and Origin guards, and also requires a JSON content type: with no
   body to validate, that is what stops a cross-site form, and a cross-site fetch with that type
   needs a CORS preflight the server never answers.
-- All three publish through the same code, and all three read the page back through its
-  signature, so what's shared is what Tulip rendered. Within a run, the flag and the button share one
-  memoized attempt: concurrent calls share it, a success is kept, a failure is forgotten so it can
-  be retried.
+- All three publish through the same code. `tulip share` reads the page back through its
+  signature, so what's shared is what Tulip rendered. Within a run, the flag and the button share
+  the page the run just signed, and one memoized attempt: concurrent calls share it, a success is
+  kept, a failure is forgotten so it can be retried.
 
 ### Where the file goes
 - One ref per published preview, `refs/tulip/previews/pr-<n>/<preview commit sha>`, pointing at

@@ -24,7 +24,7 @@ import type {
 import { forgeFor } from "../forge-registry/registry.js";
 import { gitlabAdapter } from "../gitlab/adapter.js";
 import type { InlineAssets } from "../rendering/inline-assets.js";
-import type { RenderDeps, RenderResult } from "../rendering/render.js";
+import type { RenderDeps, RenderInput, RenderResult } from "../rendering/render.js";
 import type { ServeOptions } from "../serve/server.js";
 import { type PipelineDeps, type PipelineOptions, run } from "./run.js";
 
@@ -208,23 +208,16 @@ function baseDeps(order: string[] = []) {
     renderExplanations: vi.fn(
       async (_input: unknown, renderDeps: RenderDeps): Promise<RenderResult> => {
         order.push("render");
-        await renderDeps.signPage?.("<html>page</html>");
+        const signedPage = await renderDeps.signPage?.("<html>page</html>");
         return {
           dir: "/tmp/tulip-render",
           indexPath: "/tmp/tulip-render/index.html",
           servedPage: "<html>served</html>",
+          ...(signedPage !== undefined && { signedPage }),
         };
       },
     ),
-    signPage: vi.fn(async (page: string): Promise<string> => page),
-    readSignedPage: vi.fn(async () => ({
-      pr: PR,
-      preview: {
-        page: "<html>page</html>",
-        headSha: "head-sha",
-        generatedAt: new Date("2026-10-19T14:32:00Z"),
-      },
-    })),
+    signPage: vi.fn(async (page: string): Promise<string> => `${page}<!-- signed -->`),
     serveForReview: vi.fn(async (): Promise<void> => {
       order.push("serve");
     }),
@@ -1135,17 +1128,14 @@ describe("run", () => {
       expect.objectContaining({ headSha: "head-sha", generatedAt: expect.any(Date) }),
       expect.anything(),
     );
+    const renderInput = deps.renderExplanations.mock.calls[0]?.[0] as RenderInput | undefined;
     expect(deps.signPage).toHaveBeenCalledWith("<html>page</html>", "/tmp/share-key");
-    expect(deps.readSignedPage).toHaveBeenCalledWith(
-      "/tmp/tulip-render/index.html",
-      "/tmp/share-key",
-    );
     const prepared = await (deps.previewPublisher as PreviewPublisher).prepare(PR);
     expect(prepared.publish).toHaveBeenCalledWith(
       {
-        page: "<html>page</html>",
+        page: "<html>page</html><!-- signed -->",
         headSha: "head-sha",
-        generatedAt: new Date("2026-10-19T14:32:00Z"),
+        generatedAt: renderInput?.generatedAt,
       },
       expect.any(AbortSignal),
     );
@@ -1266,7 +1256,6 @@ describe("run", () => {
 
     expect(process.exitCode).toBe(1);
     expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
-    expect(deps.readSignedPage).not.toHaveBeenCalled();
     const prepared = await (deps.previewPublisher as PreviewPublisher).prepare(PR);
     expect(prepared.publish).not.toHaveBeenCalled();
     const lines = infoLines(deps);

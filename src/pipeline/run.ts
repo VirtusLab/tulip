@@ -24,7 +24,7 @@ import { createLogger, type Logger } from "../logging/logger.js";
 import { loadInlineAssets } from "../rendering/inline-assets.js";
 import { renderExplanations } from "../rendering/render.js";
 import { serveForReview } from "../serve/server.js";
-import { readSignedPage, signPage } from "../share/page-signature.js";
+import { signPage } from "../share/page-signature.js";
 import {
   createShare,
   memoizeUntilSuccess,
@@ -78,7 +78,6 @@ export interface PipelineDeps {
   renderExplanations?: typeof renderExplanations;
   serveForReview?: typeof serveForReview;
   signPage?: typeof signPage;
-  readSignedPage?: typeof readSignedPage;
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
    * never actually spawns a browser. */
   openInBrowser?: BrowserOpener;
@@ -122,7 +121,6 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
   const doServeForReview = deps.serveForReview ?? serveForReview;
   const doSignPage = deps.signPage ?? signPage;
-  const doReadSignedPage = deps.readSignedPage ?? readSignedPage;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
   const adapter = (deps.forgeFor ?? forgeFor)(options.pr);
@@ -324,18 +322,18 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.info("preparing output page...");
     const renamedFrom = buildRenamedFromMap(diff);
-    let signed = true;
+    const generatedAt = new Date();
     // Safe: this phase only runs once "creating checkout" (above) has already succeeded, so
     // `checkout` is always assigned by this point — TypeScript just can't see that across the
     // try/finally.
-    const { indexPath, servedPage } = await runPhase("rendering", () =>
+    const { indexPath, servedPage, signedPage } = await runPhase("rendering", () =>
       doRenderExplanations(
         {
           prTitle: metadata.title,
           prDescription: metadata.body,
           prUrl,
           headSha: metadata.head.sha,
-          generatedAt: new Date(),
+          generatedAt,
           explanations,
           renamedFrom,
           serve: options.serve,
@@ -350,7 +348,6 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
             try {
               return await doSignPage(page, options.shareKeyPath);
             } catch (error) {
-              signed = false;
               logger.info(
                 `warning: couldn't sign the page, so it can't be shared on the PR, ` +
                   `now or later with tulip share: ${errorMessage(error)}`,
@@ -377,18 +374,17 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     }
 
     // The user asked for a share that can't happen; the reason was logged when signing failed.
-    if (options.attachPreviewAsComment && !signed) {
+    if (options.attachPreviewAsComment && signedPage === undefined) {
       process.exitCode = 1;
     }
-    // Read back through the signature, so what's shared is what Tulip rendered.
     const share =
-      prepare &&
-      signed &&
-      createShare({
-        prepare,
-        loadPreview: async () => (await doReadSignedPage(indexPath, options.shareKeyPath)).preview,
-        logger,
-      });
+      prepare && signedPage !== undefined
+        ? createShare({
+            prepare,
+            preview: { page: signedPage, headSha: metadata.head.sha, generatedAt },
+            logger,
+          })
+        : undefined;
     const sharing =
       share && options.attachPreviewAsComment
         ? shareOrSuggestRetry(share, indexPath, logger)

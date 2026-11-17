@@ -305,6 +305,7 @@ describe("renderExplanations", () => {
     expect([...written.keys()]).toEqual([result.indexPath]);
     const page = written.get(result.indexPath);
     expect(page).toMatch(/<!-- signed -->$/);
+    expect(result.signedPage).toBe(page);
     expect(result.servedPage).not.toContain("<!-- signed -->");
     expect(page).not.toContain("review-box");
     expect(page).not.toContain("share-submit");
@@ -338,6 +339,7 @@ describe("renderExplanations", () => {
     );
 
     expect(written.get(result.indexPath)).toContain("<html");
+    expect(result.signedPage).toBeUndefined();
     expect(result.servedPage).toContain("review-box");
     expect(result.servedPage).not.toContain("share-submit");
   });

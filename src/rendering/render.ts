@@ -34,6 +34,8 @@ export interface RenderInput {
 export interface RenderResult extends AssembleResult {
   /** Serve mode's page; never written to disk, so `index.html` stays the shareable one. */
   servedPage?: string;
+  /** The written page, if it got signed. */
+  signedPage?: string;
 }
 
 export interface RenderDeps extends AssembleDeps {
@@ -78,15 +80,18 @@ export async function renderExplanations(
   };
 
   const page = renderPage(pageInput);
-  const signed = await deps.signPage?.(page);
-  const assembled = await assembleOutput(signed ?? page, { ...deps, logger });
+  const signedPage = await deps.signPage?.(page);
+  const assembled = {
+    ...(await assembleOutput(signedPage ?? page, { ...deps, logger })),
+    ...(signedPage !== undefined && { signedPage }),
+  };
   return input.serve
     ? {
         ...assembled,
         servedPage: renderPage({
           ...pageInput,
           serve: true,
-          share: (input.share ?? false) && signed !== undefined,
+          share: (input.share ?? false) && signedPage !== undefined,
         }),
       }
     : assembled;
