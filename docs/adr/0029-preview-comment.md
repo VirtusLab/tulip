@@ -73,8 +73,10 @@ analysis; and that edits notify nobody.
   media type, up to 100 MB, same access rules as the repo), with `--hostname` for GitHub
   Enterprise. Every value in it is checked against a strict format, so it needs no extra quoting.
 - The PR's repo when the user can push to it (`permissions.push`), otherwise the user's fork,
-  unless the repo reports `allow_forking: false`. A private repo's fork inherits its access, so a
-  preview of private code is only readable by people who can read the code.
+  unless the repo reports `allow_forking: false`. A private repo's fork is private, so the preview
+  is never more visible than the code. But the fork gets only the repo's team permissions, not
+  individual ones: people with individual access (e.g. collaborators on a user-owned repo) can
+  read the PR but not the preview. GitHub's docs don't say whether org base permissions carry over.
 - Preparing is read-only (auth, repo and PR state), so it can run before the LLM work. The fork is
   created only when sharing. GitHub creates forks asynchronously (it says up to five minutes). If a
   write to a fork created in the last ten minutes fails with 404/409, the share fails asking the
@@ -119,3 +121,5 @@ needs a cookie).
 - ADR 0019 (serve mode) — the `gh` preflight, the local server's guards, and the other path that
   posts to the PR.
 - ADR 0030 — the single-file page and its CSP.
+- GitHub, "About permissions and visibility of forks" — who can read a private fork:
+  https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/about-permissions-and-visibility-of-forks
