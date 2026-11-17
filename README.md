@@ -159,6 +159,10 @@ these directories into the generated page. Only pass directories you'd be happy
 for the PR's author to see, and never ones holding secrets (`.env` files, keys,
 credentials).
 
+Each run also writes per-call statistics (step, category, model, tokens, cost,
+time) to a JSONL file in the temp directory and logs its path, for analysing
+where a run's cost goes.
+
 ### Choosing the agent
 
 Tulip uses `claude` unless you pass `--agent` with another id from the table
