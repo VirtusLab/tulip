@@ -63,8 +63,9 @@ analysis; and that edits notify nobody.
 - All calls after preparing use the repo's canonical `full_name`: GitHub follows a renamed repo's
   old name (and any letter case) for reads, but answers writes with a redirect `gh` doesn't follow.
 - Refs outside `refs/heads` aren't fetched by clones, aren't in the branch list, aren't covered by
-  branch rulesets, and don't trigger workflows (all checked on github.com). Mirrors and `git
-  ls-remote` still see them.
+  branch rulesets, and don't trigger workflows. Mirrors and `git ls-remote` still see them. On
+  github.com (2026-11-17), `refs/tulip/*` refs created through the API or `git push` started no
+  unfiltered `on: push` workflow, and weren't fetched by a default clone.
 - The comment links the file's blob page by commit SHA, which has a **Download raw file** button.
   GitHub warns there that the commit "does not belong to any branch"; the comment explains why.
   GitHub doesn't render HTML there, and serves the raw file as text; the reviewer opens the
