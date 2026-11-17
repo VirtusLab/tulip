@@ -12,11 +12,20 @@ import type { ClassifiableChange } from "../classification/types.js";
 import type { ParsedDiff } from "../diff/change.js";
 import { SnippetCoverageError } from "../explanations/coverage.js";
 import type { CategoryExplanation } from "../explanations/types.js";
-import type { ForgeAdapter, PrCommenter, PrMetadata, PrRef } from "../forge/types.js";
+import type {
+  ForgeAdapter,
+  PrCommenter,
+  PreparedPreview,
+  PreviewPublisher,
+  PrMetadata,
+  PrRef,
+  PublishedPreview,
+} from "../forge/types.js";
 import { forgeFor } from "../forge-registry/registry.js";
 import { gitlabAdapter } from "../gitlab/adapter.js";
-import type { AssembleResult } from "../rendering/assemble.js";
 import type { InlineAssets } from "../rendering/inline-assets.js";
+import type { RenderDeps, RenderInput, RenderResult } from "../rendering/render.js";
+import type { ServeOptions } from "../serve/server.js";
 import { type PipelineDeps, type PipelineOptions, run } from "./run.js";
 
 // Stubbed so the welcome-message test below asserts on a fixed string, independent of whether
@@ -105,6 +114,16 @@ function classificationResult(): ClassifyChangesResult {
 
 function baseDeps(order: string[] = []) {
   const checkout = fakeCheckout();
+  const preview: PreparedPreview = {
+    publish: vi.fn(async (): Promise<PublishedPreview> => {
+      order.push("preview-publish");
+      return {
+        commentUrl: "https://github.com/octo/widgets/pull/42#issuecomment-9",
+        previewUrl: "https://github.com/octo/widgets/blob/abc/tulip-pr-42-headsha.html",
+        warnings: [],
+      };
+    }),
+  };
   const deps = {
     fetchPrMetadata: vi.fn(async () => {
       order.push("fetch");
@@ -116,13 +135,20 @@ function baseDeps(order: string[] = []) {
       }),
       postComment: vi.fn(async () => "comment-url"),
     } as PrCommenter | undefined,
+    previewPublisher: {
+      prepare: vi.fn(async (): Promise<PreparedPreview> => {
+        order.push("preview-prepare");
+        return preview;
+      }),
+    } as PreviewPublisher | undefined,
     // The real adapter, with the network-facing parts replaced by the fakes above.
     forgeFor: (pr: PrRef): ForgeAdapter => {
-      const { commenter: _, ...adapter } = forgeFor(pr);
+      const { commenter: _, previewPublisher: __, ...adapter } = forgeFor(pr);
       return {
         ...adapter,
         fetchPrMetadata: () => deps.fetchPrMetadata(),
         ...(deps.commenter && { commenter: deps.commenter }),
+        ...(deps.previewPublisher && { previewPublisher: deps.previewPublisher }),
       };
     },
     createCheckout: vi.fn(async () => {
@@ -179,10 +205,19 @@ function baseDeps(order: string[] = []) {
       order.push("assets");
       return { style: "", scripts: [] };
     }),
-    renderExplanations: vi.fn(async (): Promise<AssembleResult> => {
-      order.push("render");
-      return { dir: "/tmp/tulip-render", indexPath: "/tmp/tulip-render/index.html" };
-    }),
+    renderExplanations: vi.fn(
+      async (_input: unknown, renderDeps: RenderDeps): Promise<RenderResult> => {
+        order.push("render");
+        const signedPage = await renderDeps.signPage?.("<html>page</html>");
+        return {
+          dir: "/tmp/tulip-render",
+          indexPath: "/tmp/tulip-render/index.html",
+          servedPage: "<html>served</html>",
+          ...(signedPage !== undefined && { signedPage }),
+        };
+      },
+    ),
+    signPage: vi.fn(async (page: string): Promise<string> => `${page}<!-- signed -->`),
     serveForReview: vi.fn(async (): Promise<void> => {
       order.push("serve");
     }),
@@ -200,9 +235,26 @@ function options(overrides: Partial<PipelineOptions> = {}): PipelineOptions {
     verbose: false,
     open: true,
     serve: false,
+    attachPreviewAsComment: false,
+    shareKeyPath: "/tmp/share-key",
     agent: "claude",
     ...overrides,
   };
+}
+
+function serveOptions(deps: ReturnType<typeof baseDeps>): ServeOptions {
+  const calls = deps.serveForReview.mock.calls as unknown as [ServeOptions][];
+  return calls[0]?.[0] as ServeOptions;
+}
+
+/** A publish that only ends, rejecting, once `signal` aborts. */
+function untilAborted(signal?: AbortSignal): Promise<PublishedPreview> {
+  return new Promise((_resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+    }
+    signal?.addEventListener("abort", () => reject(signal.reason));
+  });
 }
 
 function infoLines(deps: PipelineDeps): string[] {
@@ -1009,7 +1061,7 @@ describe("run", () => {
     expect(deps.serveForReview).toHaveBeenCalledTimes(1);
     expect(deps.serveForReview).toHaveBeenCalledWith(
       expect.objectContaining({
-        dir: "/tmp/tulip-render",
+        page: "<html>served</html>",
         prUrl: "https://github.com/octo/widgets/pull/42",
         categoryNames: ["Greeting"],
         postComment: commenter?.postComment,
@@ -1061,6 +1113,317 @@ describe("run", () => {
     expect(deps.fetchPrMetadata).not.toHaveBeenCalled();
     expect(deps.serveForReview).not.toHaveBeenCalled();
     expect(infoLines(deps)).toContain("--serve isn't supported for gitlab URLs");
+  });
+
+  it("with a preview, prepares it before fetching and shares the page", async () => {
+    const order: string[] = [];
+    const deps = baseDeps(order);
+
+    await run(options({ attachPreviewAsComment: true }), deps);
+
+    expect(process.exitCode).toBeUndefined();
+    expect(order.slice(0, 3)).toEqual(["preview-prepare", "assets", "fetch"]);
+    expect(deps.previewPublisher?.prepare).toHaveBeenCalledWith(PR);
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({ headSha: "head-sha", generatedAt: expect.any(Date) }),
+      expect.anything(),
+    );
+    const renderInput = deps.renderExplanations.mock.calls[0]?.[0] as RenderInput | undefined;
+    expect(deps.signPage).toHaveBeenCalledWith("<html>page</html>", "/tmp/share-key");
+    const prepared = await (deps.previewPublisher as PreviewPublisher).prepare(PR);
+    expect(prepared.publish).toHaveBeenCalledWith(
+      {
+        page: "<html>page</html><!-- signed -->",
+        headSha: "head-sha",
+        generatedAt: renderInput?.generatedAt,
+      },
+      expect.any(AbortSignal),
+    );
+    expect(infoLines(deps)).toContain(
+      "preview shared: https://github.com/octo/widgets/pull/42#issuecomment-9",
+    );
+  });
+
+  it("with a preview, logs the publisher's notice", async () => {
+    const deps = baseDeps();
+    const publisher = deps.previewPublisher as PreviewPublisher;
+    const prepared = await publisher.prepare(PR);
+    publisher.prepare = vi.fn(async () => ({ ...prepared, notice: "the preview goes to a fork" }));
+
+    await run(options({ attachPreviewAsComment: true }), deps);
+
+    expect(infoLines(deps)).toContain("the preview goes to a fork");
+  });
+
+  it("with a preview, opens the page before sharing it", async () => {
+    const order: string[] = [];
+    const deps = baseDeps(order);
+    deps.openInBrowser = vi.fn(async () => {
+      order.push("open");
+    });
+
+    await run(options({ attachPreviewAsComment: true }), deps);
+
+    expect(order.indexOf("open")).toBeLessThan(order.indexOf("preview-publish"));
+  });
+
+  it("with a preview and serve mode, a failed share retried from the page doesn't fail the run", async () => {
+    const deps = baseDeps();
+    const publisher = deps.previewPublisher as PreviewPublisher;
+    let attempts = 0;
+    publisher.prepare = vi.fn(async () => ({
+      publish: vi.fn(async (): Promise<PublishedPreview> => {
+        attempts++;
+        if (attempts === 1) {
+          throw new Error("transient");
+        }
+        return { commentUrl: "c", previewUrl: "p", warnings: [] };
+      }),
+    }));
+    deps.serveForReview.mockImplementation(async (...args: unknown[]) => {
+      await vi.waitFor(() =>
+        expect(infoLines(deps)).toContain("sharing the preview failed: transient"),
+      );
+      await (args[0] as ServeOptions).share?.();
+    });
+
+    await run(options({ attachPreviewAsComment: true, serve: true }), deps);
+
+    expect(attempts).toBe(2);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("with a preview and serve mode, shares alongside serving, and gives the server the same share", async () => {
+    const order: string[] = [];
+    const deps = baseDeps(order);
+
+    await run(options({ attachPreviewAsComment: true, serve: true }), deps);
+
+    const share = serveOptions(deps).share;
+    expect(share).toBeDefined();
+    await share?.();
+    const prepared = await (deps.previewPublisher as PreviewPublisher).prepare(PR);
+    expect(prepared.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it("in serve mode alone, prepares the preview only when the page asks to share", async () => {
+    const deps = baseDeps();
+
+    await run(options({ serve: true }), deps);
+
+    expect(deps.previewPublisher?.prepare).not.toHaveBeenCalled();
+    const commentUrl = await serveOptions(deps).share?.();
+    expect(deps.previewPublisher?.prepare).toHaveBeenCalledWith(PR);
+    expect(commentUrl).toBe("https://github.com/octo/widgets/pull/42#issuecomment-9");
+  });
+
+  it("without sharing, prepares nothing and says how to share later", async () => {
+    const deps = baseDeps();
+
+    await run(options(), deps);
+
+    expect(deps.previewPublisher?.prepare).not.toHaveBeenCalled();
+    expect(infoLines(deps)).toContain(
+      "to share it on the PR later: tulip share /tmp/tulip-render/index.html (in a temp dir the OS removes eventually)",
+    );
+  });
+
+  const SIGNING_FAILED =
+    "warning: couldn't sign the page, so it can't be shared on the PR, now or later with tulip share: EROFS";
+
+  function failSigning(deps: ReturnType<typeof baseDeps>): void {
+    deps.signPage = vi.fn(async () => {
+      throw new Error("EROFS");
+    });
+  }
+
+  it("without a signing key, still renders the page but doesn't suggest sharing it", async () => {
+    const deps = baseDeps();
+    failSigning(deps);
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBeUndefined();
+    expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
+    const lines = infoLines(deps);
+    expect(lines).toContain(SIGNING_FAILED);
+    expect(lines.some((line) => line.includes("tulip share "))).toBe(false);
+  });
+
+  it("with a preview and no signing key, doesn't try to share and fails the run", async () => {
+    const deps = baseDeps();
+    failSigning(deps);
+
+    await run(options({ attachPreviewAsComment: true }), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
+    const prepared = await (deps.previewPublisher as PreviewPublisher).prepare(PR);
+    expect(prepared.publish).not.toHaveBeenCalled();
+    const lines = infoLines(deps);
+    expect(lines.filter((line) => line === SIGNING_FAILED)).toHaveLength(1);
+    expect(lines.some((line) => line.includes("tulip share "))).toBe(false);
+  });
+
+  it("in serve mode with no signing key, serves the page without sharing", async () => {
+    const deps = baseDeps();
+    failSigning(deps);
+    deps.renderExplanations.mockImplementation(async (_input, renderDeps) => {
+      // Render leaves the Share button out when signing resolves to undefined.
+      expect(await renderDeps.signPage?.("<html>page</html>")).toBeUndefined();
+      return {
+        dir: "/tmp/tulip-render",
+        indexPath: "/tmp/tulip-render/index.html",
+        servedPage: "<html>served</html>",
+      };
+    });
+
+    await run(options({ serve: true }), deps);
+
+    expect(process.exitCode).toBeUndefined();
+    expect(deps.serveForReview).toHaveBeenCalled();
+    expect(serveOptions(deps).share).toBeUndefined();
+    expect(infoLines(deps)).toContain(SIGNING_FAILED);
+  });
+
+  it("doesn't suggest sharing for a forge that can't", async () => {
+    const deps = baseDeps();
+    deps.previewPublisher = undefined;
+    const pr: PrRef = { forge: "gitlab", host: "gitlab.com", repoPath: "group/project", number: 7 };
+
+    await run(options({ pr }), deps);
+
+    expect(infoLines(deps).some((line) => line.includes("tulip share"))).toBe(false);
+  });
+
+  it("with a preview, fails before fetching when the forge can't share", async () => {
+    const deps = baseDeps();
+    deps.previewPublisher = undefined;
+    const pr: PrRef = { forge: "gitlab", host: "gitlab.com", repoPath: "group/project", number: 7 };
+
+    await run(options({ pr, attachPreviewAsComment: true }), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.fetchPrMetadata).not.toHaveBeenCalled();
+    expect(infoLines(deps)).toContain(
+      "--attach-preview-as-comment isn't supported for gitlab URLs",
+    );
+  });
+
+  it("with a preview, a failed preparation aborts before fetching", async () => {
+    const deps = baseDeps();
+    const publisher = deps.previewPublisher as PreviewPublisher;
+    publisher.prepare = vi.fn(async () => {
+      throw new Error("gh is not authenticated for github.com");
+    });
+
+    await run(options({ attachPreviewAsComment: true }), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.fetchPrMetadata).not.toHaveBeenCalled();
+    expect(infoLines(deps)).toContain(
+      "preparing the preview failed: gh is not authenticated for github.com",
+    );
+  });
+
+  it("with a preview, stops the share on Ctrl+C, still cleans up, and stops listening after", async () => {
+    const deps = baseDeps();
+    const publisher = deps.previewPublisher as PreviewPublisher;
+    let stopSignal: AbortSignal | undefined;
+    publisher.prepare = vi.fn(async () => ({
+      publish: vi.fn(async (_preview: unknown, signal?: AbortSignal) => {
+        stopSignal = signal;
+        process.emit("SIGINT");
+        signal?.throwIfAborted();
+        return { commentUrl: "c", previewUrl: "p", warnings: [] };
+      }),
+    }));
+    const listenersBefore = process.listenerCount("SIGINT");
+
+    await run(options({ attachPreviewAsComment: true }), deps);
+
+    expect(stopSignal?.aborted).toBe(true);
+    expect(infoLines(deps)).toEqual(
+      expect.arrayContaining([
+        "stopping the preview share...",
+        "retry without re-running the analysis: tulip share /tmp/tulip-render/index.html",
+      ]),
+    );
+    expect(process.exitCode).toBe(1);
+    expect(process.listenerCount("SIGINT")).toBe(listenersBefore);
+  });
+
+  it("with a preview and serve mode, stops the share once the server is stopped", async () => {
+    const deps = baseDeps();
+    const publisher = deps.previewPublisher as PreviewPublisher;
+    let stopSignal: AbortSignal | undefined;
+    publisher.prepare = vi.fn(async () => ({
+      publish: vi.fn((_preview: unknown, signal?: AbortSignal) => {
+        stopSignal = signal;
+        return untilAborted(signal);
+      }),
+    }));
+    deps.serveForReview.mockImplementation(async (...args: unknown[]) => {
+      (args[0] as ServeOptions).onShutdown?.();
+    });
+
+    await run(options({ attachPreviewAsComment: true, serve: true }), deps);
+
+    expect(stopSignal?.aborted).toBe(true);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("in serve mode, stops a share from the page as the server starts shutting down", async () => {
+    const deps = baseDeps();
+    const publisher = deps.previewPublisher as PreviewPublisher;
+    publisher.prepare = vi.fn(async () => ({
+      publish: vi.fn((_preview: unknown, signal?: AbortSignal) => untilAborted(signal)),
+    }));
+    // Like the real server, doesn't resolve until the in-flight share request ends.
+    deps.serveForReview.mockImplementation(async (...args: unknown[]) => {
+      const serve = args[0] as ServeOptions;
+      const sharing = serve.share?.();
+      await vi.waitFor(() => expect(publisher.prepare).toHaveBeenCalled());
+      serve.onShutdown?.();
+      await expect(sharing).rejects.toThrow();
+    });
+
+    await run(options({ serve: true }), deps);
+
+    // A failed expectation inside the mock would fail the run.
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("renders the Share button only in serve mode, for a forge that can share", async () => {
+    const deps = baseDeps();
+
+    await run(options({ serve: true }), deps);
+
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({ serve: true, share: true }),
+      expect.anything(),
+    );
+  });
+
+  it("with a preview, a failed share keeps the run's results and says how to retry", async () => {
+    const deps = baseDeps();
+    const publisher = deps.previewPublisher as PreviewPublisher;
+    publisher.prepare = vi.fn(async () => ({
+      publish: vi.fn(async (): Promise<PublishedPreview> => {
+        throw new Error("HTTP 422");
+      }),
+    }));
+
+    await run(options({ attachPreviewAsComment: true }), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(infoLines(deps)).toEqual(
+      expect.arrayContaining([
+        "sharing the preview failed: HTTP 422",
+        "retry without re-running the analysis: tulip share /tmp/tulip-render/index.html",
+      ]),
+    );
+    expect(deps.openInBrowser).toHaveBeenCalledWith("/tmp/tulip-render/index.html");
   });
 
   it("uses the PR's host in the serve-mode URL, not a hardcoded github.com", async () => {

@@ -921,6 +921,18 @@ main table:not(.snippet-table) th {
   color: var(--remove-fg);
 }
 
+.share-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.share-box .review-status {
+  margin-top: 0;
+}
+
 /* highlight.js theme — written against this page's own palette (rather than one of
    highlight.js's bundled theme stylesheets) so highlighted code, diff +/- colors and the rest
    of the UI stay one cohesive palette in both light and dark, and so a theme toggle needs no

@@ -6,7 +6,7 @@ import { type BuildInfo, formatVersion, getBuildInfo } from "../version.js";
 import { type AssembleDeps, type AssembleResult, assembleOutput } from "./assemble.js";
 import { loadFileDiffs } from "./file-diffs.js";
 import type { InlineAssets } from "./inline-assets.js";
-import { renderPage } from "./template.js";
+import { type PageInput, renderPage } from "./template.js";
 
 /** What's needed to render the final page: PR context plus the reviewed, coverage-verified
  * explanations in presentation order (see src/explanations/orchestrate.ts, epic 6). */
@@ -14,16 +14,28 @@ export interface RenderInput {
   prTitle: string;
   prDescription: string;
   prUrl: string;
+  headSha: string;
+  generatedAt: Date;
   explanations: CategoryExplanation[];
   /** Maps a renamed file's head-side path to its base-side path (see src/diff/change.ts's
    * `FileDiff.previousPath`) — lets snippet base content be fetched from the right revision path
    * for a renamed-with-changes file. Defaults to no renames. */
   renamedFrom?: Map<string, string>;
-  /** Serve mode (docs/adr/0019): renders a per-category review box. Default false (static page). */
+  /** Serve mode (docs/adr/0019): also renders the served page, with a per-category review box.
+   * `index.html` is always the static page, the one that's shared (docs/adr/0032). */
   serve?: boolean;
+  /** Adds the Share button to the served page (docs/adr/0032), if the static page got signed. */
+  share?: boolean;
   /** Embedded into the page (docs/adr/0030). Loaded by the caller, so missing assets fail a run
    * before its LLM work rather than after. */
   inlineAssets: InlineAssets;
+}
+
+export interface RenderResult extends AssembleResult {
+  /** Serve mode's page; never written to disk, so `index.html` stays the shareable one. */
+  servedPage?: string;
+  /** The written page, if it got signed. */
+  signedPage?: string;
 }
 
 export interface RenderDeps extends AssembleDeps {
@@ -33,6 +45,9 @@ export interface RenderDeps extends AssembleDeps {
   /** Supplies the build info shown in the page footer (see src/version.ts). Defaults to the
    * real `getBuildInfo`; overridable so tests don't depend on a real dist/build-info.json. */
   getBuildInfo?: () => BuildInfo;
+  /** Signs the static page before it's written (docs/adr/0032), or resolves to `undefined` if it
+   * can't, leaving it unsigned. Defaults to leaving it unsigned. */
+  signPage?: (page: string) => Promise<string | undefined>;
 }
 
 /**
@@ -43,7 +58,7 @@ export interface RenderDeps extends AssembleDeps {
 export async function renderExplanations(
   input: RenderInput,
   deps: RenderDeps,
-): Promise<AssembleResult> {
+): Promise<RenderResult> {
   const logger = deps.logger ?? createLogger();
   logger.info("rendering explanation page...");
 
@@ -52,16 +67,32 @@ export async function renderExplanations(
   );
   const fileDiffs = await loadFileDiffs(referencedPaths, deps.checkout, input.renamedFrom);
 
-  const page = renderPage({
+  const pageInput: PageInput = {
     prTitle: input.prTitle,
     prDescription: input.prDescription,
     prUrl: input.prUrl,
+    headSha: input.headSha,
+    generatedAt: input.generatedAt,
     explanations: input.explanations,
     fileDiffs,
     generatedBy: formatVersion((deps.getBuildInfo ?? getBuildInfo)()),
-    serve: input.serve ?? false,
     inlineAssets: input.inlineAssets,
-  });
+  };
 
-  return assembleOutput(page, { ...deps, logger });
+  const page = renderPage(pageInput);
+  const signedPage = await deps.signPage?.(page);
+  const assembled = {
+    ...(await assembleOutput(signedPage ?? page, { ...deps, logger })),
+    ...(signedPage !== undefined && { signedPage }),
+  };
+  return input.serve
+    ? {
+        ...assembled,
+        servedPage: renderPage({
+          ...pageInput,
+          serve: true,
+          share: (input.share ?? false) && signedPage !== undefined,
+        }),
+      }
+    : assembled;
 }

@@ -19,10 +19,19 @@ import { explainCategories } from "../explanations/orchestrate.js";
 import type { PrMetadata, PrRef } from "../forge/types.js";
 import { forgeFor } from "../forge-registry/registry.js";
 import { startTimer } from "../logging/duration.js";
+import { errorMessage } from "../logging/error-message.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { loadInlineAssets } from "../rendering/inline-assets.js";
 import { renderExplanations } from "../rendering/render.js";
 import { serveForReview } from "../serve/server.js";
+import { signPage } from "../share/page-signature.js";
+import {
+  createShare,
+  memoizeUntilSuccess,
+  prepareAndLog,
+  shareCommand,
+  shareOrSuggestRetry,
+} from "../share/share.js";
 import { splitLargeChanges } from "../splitting/orchestrate.js";
 import { formatVersion } from "../version.js";
 
@@ -38,6 +47,11 @@ export interface PipelineOptions {
   /** Run a local review server that posts per-category PR comments (docs/adr/0019), instead of
    * rendering a static page and exiting. Fails when the PR's forge has no `commenter`. */
   serve: boolean;
+  /** Share the page on the PR once the run ends (docs/adr/0032). Fails when the PR's forge has no
+   * `previewPublisher`. */
+  attachPreviewAsComment: boolean;
+  /** Signs the page so `tulip share` can trust it later (see src/share/signing.ts). */
+  shareKeyPath: string;
   /** Which agent CLI runs every LLM pass (docs/adr/0027); see src/cli/agent-choice.ts. */
   agent: AgentId;
   /** Directories every session may read beyond the checkout (`--context-dir`). */
@@ -63,6 +77,7 @@ export interface PipelineDeps {
   loadInlineAssets?: typeof loadInlineAssets;
   renderExplanations?: typeof renderExplanations;
   serveForReview?: typeof serveForReview;
+  signPage?: typeof signPage;
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
    * never actually spawns a browser. */
   openInBrowser?: BrowserOpener;
@@ -78,7 +93,7 @@ export interface PipelineDeps {
  * on its type (e.g. AgentBinaryMissingError). */
 class PhaseError extends Error {
   constructor(phase: string, cause: unknown) {
-    super(`${phase} failed: ${causeMessage(cause)}`);
+    super(`${phase} failed: ${errorMessage(cause)}`);
     this.name = "PhaseError";
     this.cause = cause;
   }
@@ -105,6 +120,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doLoadInlineAssets = deps.loadInlineAssets ?? loadInlineAssets;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
   const doServeForReview = deps.serveForReview ?? serveForReview;
+  const doSignPage = deps.signPage ?? signPage;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
 
   const adapter = (deps.forgeFor ?? forgeFor)(options.pr);
@@ -150,6 +166,17 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       throw new Error(`--serve isn't supported for ${options.pr.forge} URLs`);
     }
     await commenter?.checkAuth(options.pr.host);
+    const publisher = adapter.previewPublisher;
+    if (options.attachPreviewAsComment && !publisher) {
+      throw new Error(`--attach-preview-as-comment isn't supported for ${options.pr.forge} URLs`);
+    }
+    const prepare =
+      publisher && memoizeUntilSuccess(() => prepareAndLog(publisher, options.pr, logger));
+    // Serve mode alone prepares only when the Share button is clicked, so a sharing problem never
+    // blocks reviewing.
+    if (prepare && options.attachPreviewAsComment) {
+      await runPhase("preparing the preview", prepare);
+    }
 
     // Before any LLM work, so a missing asset (e.g. no `pnpm build`) costs nothing.
     const inlineAssets = await runPhase("loading page assets", () => doLoadInlineAssets());
@@ -295,21 +322,40 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     logger.info("preparing output page...");
     const renamedFrom = buildRenamedFromMap(diff);
+    const generatedAt = new Date();
     // Safe: this phase only runs once "creating checkout" (above) has already succeeded, so
     // `checkout` is always assigned by this point — TypeScript just can't see that across the
     // try/finally.
-    const { dir, indexPath } = await runPhase("rendering", () =>
+    const { indexPath, servedPage, signedPage } = await runPhase("rendering", () =>
       doRenderExplanations(
         {
           prTitle: metadata.title,
           prDescription: metadata.body,
           prUrl,
+          headSha: metadata.head.sha,
+          generatedAt,
           explanations,
           renamedFrom,
           serve: options.serve,
           inlineAssets,
+          share: options.serve && publisher !== undefined,
         },
-        { checkout: checkout as PrCheckout, logger },
+        {
+          checkout: checkout as PrCheckout,
+          logger,
+          // An unsigned page is still worth reading; it just can't be shared.
+          signPage: async (page) => {
+            try {
+              return await doSignPage(page, options.shareKeyPath);
+            } catch (error) {
+              logger.info(
+                `warning: couldn't sign the page, so it can't be shared on the PR, ` +
+                  `now or later with tulip share: ${errorMessage(error)}`,
+              );
+              return undefined;
+            }
+          },
+        },
       ),
     );
     logger.debug(`rendered output at ${indexPath}`);
@@ -317,25 +363,62 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
 
     const categoryNames = explanations.map((explanation) => explanation.category.name);
 
-    if (commenter) {
-      // Serves the rendered dir over http://, opens it (honoring --no-open), and blocks until
-      // Ctrl+C; on resolve the finally below cleans up the checkout, as in the static path.
-      await doServeForReview({
-        dir,
-        prUrl,
-        categoryNames,
-        postComment: commenter.postComment,
-        open: options.open,
-        logger,
-        openInBrowser: doOpenInBrowser,
-      });
-    } else if (options.open) {
+    if (!commenter && options.open) {
       try {
         await doOpenInBrowser(indexPath);
       } catch (error) {
         // Never fail the run over this — the file:// path logged by assembleOutput (above,
         // unconditional) is always there as a fallback.
-        logger.debug(`could not auto-open the page: ${causeMessage(error)}`);
+        logger.debug(`could not auto-open the page: ${errorMessage(error)}`);
+      }
+    }
+
+    // The user asked for a share that can't happen; the reason was logged when signing failed.
+    if (options.attachPreviewAsComment && signedPage === undefined) {
+      process.exitCode = 1;
+    }
+    const share =
+      prepare && signedPage !== undefined
+        ? createShare({
+            prepare,
+            preview: { page: signedPage, headSha: metadata.head.sha, generatedAt },
+            logger,
+          })
+        : undefined;
+    const sharing =
+      share && options.attachPreviewAsComment
+        ? shareOrSuggestRetry(share, indexPath, logger)
+        : undefined;
+    if (share && !sharing) {
+      logger.info(
+        `to share it on the PR later: ${shareCommand(indexPath)} (in a temp dir the OS removes eventually)`,
+      );
+    }
+
+    if (commenter) {
+      // Serves the page over http://, opens it (honoring --no-open), and blocks until
+      // Ctrl+C; on resolve the finally below cleans up the checkout, as in the static path. A
+      // share started above runs alongside, so the page isn't held back by the upload.
+      await doServeForReview({
+        // Rendered whenever `options.serve` is set, as `commenter` is.
+        page: servedPage as string,
+        prUrl,
+        categoryNames,
+        postComment: commenter.postComment,
+        ...(share && {
+          share: async () => (await share()).commentUrl,
+          onShutdown: () => share.stop(),
+        }),
+        open: options.open,
+        logger,
+        openInBrowser: doOpenInBrowser,
+      });
+    }
+    // A failure the page's Share button later retried successfully doesn't count.
+    if (sharing) {
+      await sharing;
+      if (!share?.succeeded()) {
+        process.exitCode = 1;
       }
     }
   } catch (error) {
@@ -363,7 +446,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       } catch (error) {
         // Never let a cleanup failure escape the finally: it would surface as an unhandled
         // rejection past this function's own no-stack-trace error reporting above.
-        logger.info(`warning: failed to clean up checkout: ${causeMessage(error)}`);
+        logger.info(`warning: failed to clean up checkout: ${errorMessage(error)}`);
       }
     }
   }
@@ -413,11 +496,7 @@ function describeFailure(error: unknown): string {
   if (cause instanceof AgentBinaryMissingError) {
     return cause.message;
   }
-  return causeMessage(error);
-}
-
-function causeMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return errorMessage(error);
 }
 
 function categoryNamesOf(categories: Category[]): string {

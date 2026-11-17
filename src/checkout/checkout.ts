@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { config } from "../config.js";
+import { COMMIT_SHA_PATTERN } from "../forge/sha.js";
 import { runCommand } from "../process/exec.js";
 import { credentialHelperArgs, GIT_NO_PROMPT_ENV, wrapAuthFailure } from "./git-auth.js";
 
@@ -46,10 +47,6 @@ export interface CreateCheckoutOptions {
   rm?: DirRemover;
 }
 
-/** A full SHA-1 or SHA-256 object name. Revisions come from the PR's host, and are passed to git
- * as operands: anything else (an option-shaped string, say) is refused rather than handed to git. */
-const COMMIT_SHA_PATTERN = /^([0-9a-f]{40}|[0-9a-f]{64})$/;
-
 /**
  * Creates a local checkout containing just enough history to read any file at the PR's base or
  * head revision, with the head revision's working tree checked out (so an agent session's
@@ -65,6 +62,8 @@ export async function createCheckout(
   auth: CheckoutAuth,
   options: CreateCheckoutOptions = {},
 ): Promise<PrCheckout> {
+  // Revisions come from the PR's host, and are passed to git as operands: anything else (an
+  // option-shaped string, say) is refused rather than handed to git.
   for (const sha of [revisions.base.sha, revisions.head.sha]) {
     if (!COMMIT_SHA_PATTERN.test(sha)) {
       throw new Error(`Not a commit SHA: ${JSON.stringify(sha)}`);

@@ -1,23 +1,24 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
-import * as path from "node:path";
 import { config } from "../config.js";
 import type { PrCommenter } from "../forge/types.js";
+import { errorMessage } from "../logging/error-message.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 
-/** What {@link createReviewServer} needs: the render temp dir to serve, the PR to post to, the
- * ordered category names a `categoryIndex` is validated against, and injectable seams. */
+/** What {@link createReviewServer} needs: the page to serve, the PR to post to, the ordered
+ * category names a `categoryIndex` is validated against, and injectable seams. */
 export interface ReviewServerOptions {
-  /** Absolute path of the already-rendered temp dir, holding `index.html`. */
-  dir: string;
+  /** The serve-mode page (src/rendering/render.ts's `servedPage`). */
+  page: string;
   /** The PR every comment is posted to. Fixed here — a request can't name another repo/PR. */
   prUrl: string;
   /** Category names in render order; the POST body's `categoryIndex` indexes into this. */
   categoryNames: string[];
   /** Posts a comment, e.g. the PR's forge's {@link PrCommenter.postComment}. */
   postComment: PrCommenter["postComment"];
+  /** Shares the page on the PR (docs/adr/0032); resolves with the comment's URL. */
+  share?: () => Promise<string>;
   logger?: Logger;
 }
 
@@ -28,8 +29,9 @@ function sendJson(res: http.ServerResponse, status: number, payload: unknown): v
 }
 
 /**
- * Builds the localhost review server: serves the rendered `index.html` at `/` and `/index.html`
- * (anything else is a 404) and posts per-category PR comments via `POST /api/comment`. No signal handlers and no browser open — those live in
+ * Builds the localhost review server: serves the page at `/` and `/index.html` (anything else is a
+ * 404), posts per-category PR comments via `POST /api/comment`, and shares the page via
+ * `POST /api/share`. No signal handlers and no browser open — those live in
  * {@link serveForReview}, so request-behavior tests can drive this directly on an ephemeral port.
  *
  * Security: every request must carry `Host: 127.0.0.1:<port>` (DNS-rebinding guard), POSTs with a
@@ -37,7 +39,6 @@ function sendJson(res: http.ServerResponse, status: number, payload: unknown): v
  */
 export function createReviewServer(opts: ReviewServerOptions): http.Server {
   const logger = opts.logger ?? createLogger();
-  const indexPath = path.join(opts.dir, "index.html");
 
   return http.createServer((req, res) => {
     // Per-request, so the guards need no pre-known port (works on an ephemeral port).
@@ -52,20 +53,12 @@ export function createReviewServer(opts: ReviewServerOptions): http.Server {
     }
 
     if (req.method === "GET") {
-      void handleGet(req, res, indexPath);
-      return;
-    }
-
-    if (
-      req.method === "POST" &&
-      (req.url === "/api/comment" || req.url?.startsWith("/api/comment?"))
-    ) {
-      void handleComment(req, res, opts, logger, expectedOrigin);
+      handleGet(req, res, opts.page);
       return;
     }
 
     if (req.method === "POST") {
-      sendJson(res, 404, { error: "not found" });
+      handlePost(req, res, opts, logger, expectedOrigin);
       return;
     }
 
@@ -73,34 +66,24 @@ export function createReviewServer(opts: ReviewServerOptions): http.Server {
   });
 }
 
-/** Serves the page. Only `index.html` exists: the page embeds everything (docs/adr/0030). */
-async function handleGet(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  indexPath: string,
-): Promise<void> {
+/** Serves the page, the only resource: it embeds everything (docs/adr/0030). */
+function handleGet(req: http.IncomingMessage, res: http.ServerResponse, page: string): void {
   const pathname = (req.url ?? "/").split("?")[0];
   if (pathname !== "/" && pathname !== "/index.html") {
     sendJson(res, 404, { error: "not found" });
     return;
   }
-  try {
-    const content = await readFile(indexPath);
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(content);
-  } catch {
-    sendJson(res, 500, { error: "internal error" });
-  }
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  res.end(page);
 }
 
-/** Handles `POST /api/comment`: validates the body, builds the comment server-side, posts it. */
-async function handleComment(
+function handlePost(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   opts: ReviewServerOptions,
   logger: Logger,
   expectedOrigin: string,
-): Promise<void> {
+): void {
   // Absent Origin is allowed (Host guard + random port already cover the no-Origin case); a
   // present-but-foreign Origin is a cross-site driver → reject.
   const origin = req.headers.origin;
@@ -109,6 +92,26 @@ async function handleComment(
     return;
   }
 
+  if (req.url === "/api/comment" || req.url?.startsWith("/api/comment?")) {
+    void handleComment(req, res, opts, logger);
+    return;
+  }
+
+  if (opts.share && (req.url === "/api/share" || req.url?.startsWith("/api/share?"))) {
+    void handleShare(req, res, opts.share, logger);
+    return;
+  }
+
+  sendJson(res, 404, { error: "not found" });
+}
+
+/** Handles `POST /api/comment`: validates the body, builds the comment server-side, posts it. */
+async function handleComment(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  opts: ReviewServerOptions,
+  logger: Logger,
+): Promise<void> {
   const cap = config.serve.maxRequestBodyBytes;
   const declared = Number(req.headers["content-length"]);
   if (Number.isFinite(declared) && declared > cap) {
@@ -158,10 +161,29 @@ async function handleComment(
     sendJson(res, 200, { url });
   } catch (error) {
     // Detail stays in the log; the response never carries it (no stack leak to the browser).
-    logger.info(
-      `failed to post PR comment: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    logger.info(`failed to post PR comment: ${errorMessage(error)}`);
     sendJson(res, 500, { error: "failed to post comment" });
+  }
+}
+
+/** Handles `POST /api/share`. It takes no input: what's shared is fixed when the server starts. */
+async function handleShare(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  share: () => Promise<string>,
+  logger: Logger,
+): Promise<void> {
+  // With no body to validate, this is what stops a cross-site form: it can't send this type, and a
+  // cross-site fetch that does needs a CORS preflight, which this server never answers.
+  if (!req.headers["content-type"]?.startsWith("application/json")) {
+    sendJson(res, 415, { error: "expected application/json" });
+    return;
+  }
+  try {
+    sendJson(res, 200, { url: await share() });
+  } catch (error) {
+    logger.info(`failed to share the preview: ${errorMessage(error)}`);
+    sendJson(res, 500, { error: "failed to share the preview" });
   }
 }
 
@@ -196,6 +218,8 @@ export type ServeOptions = ReviewServerOptions & {
   open: boolean;
   /** Browser opener; defaults to spawning the OS opener. Injected in tests / by the pipeline. */
   openInBrowser?: (url: string) => Promise<void>;
+  /** Called as shutdown starts. Closing waits for in-flight requests, e.g. a share. */
+  onShutdown?: () => void;
 };
 
 /**
@@ -211,6 +235,7 @@ export function serveForReview(opts: ServeOptions): Promise<void> {
     const shutdown = () => {
       process.off("SIGINT", shutdown);
       process.off("SIGTERM", shutdown);
+      opts.onShutdown?.();
       // Close idle keep-alive sockets (e.g. the still-open browser page) first, so close()'s
       // callback fires promptly instead of waiting out keepAliveTimeout — otherwise Ctrl+C appears
       // to hang, and a second Ctrl+C during the wait would hit Node's default handler and hard-exit

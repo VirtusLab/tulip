@@ -26,6 +26,8 @@ export interface RunOptions {
   /** Run a local review server that posts a per-category PR comment (docs/adr/0019). Only for
    * forges with a `commenter`. Defaults to false (render a static page and exit). */
   serve: boolean;
+  /** Share the page on the PR once the run ends (docs/adr/0032). */
+  attachPreviewAsComment: boolean;
   /** Which agent CLI runs the LLM passes (docs/adr/0027), when given as `--agent`. When absent,
    * the remembered choice or the default is used (see ./agent-choice.ts). */
   agent?: AgentId;
@@ -48,8 +50,11 @@ export class VersionRequestedError extends Error {}
 export function usage(): string {
   return [
     "Usage: tulip <PR URL> [options]",
+    "       tulip share <page>",
     "",
     "Explains a GitHub pull request or GitLab merge request to reviewers using LLMs.",
+    "`tulip share` posts an earlier run's page on its PR, as --attach-preview-as-comment does;",
+    "pass the index.html path (or file:// URL) that the run logged.",
     "",
     "Arguments:",
     "  <PR URL>              GitHub PR or GitLab MR URL, e.g.",
@@ -62,6 +67,10 @@ export function usage(): string {
     "  --verbose             Show debug-level progress logging",
     "  --no-open             Don't automatically open the rendered page in your browser",
     "  --serve               Run a local review server; post a PR comment per category via gh",
+    "                        (GitHub PRs only)",
+    "  --attach-preview-as-comment",
+    "                        Share the page on the PR once the run ends: store it on a hidden ref",
+    "                        (in your fork if you can't push) and link it from a PR comment",
     "                        (GitHub PRs only)",
     `  --agent <id>          Agent CLI that runs the analysis (default: ${DEFAULT_AGENT}). Remembered for`,
     `                        later runs. One of: ${AGENT_IDS.join(" | ")}`,
@@ -82,6 +91,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
     verbose?: boolean;
     "no-open"?: boolean;
     serve?: boolean;
+    "attach-preview-as-comment"?: boolean;
     agent?: string;
     "context-dir"?: string[];
     help?: boolean;
@@ -96,6 +106,7 @@ export function parseCliArgs(argv: string[]): RunOptions {
         verbose: { type: "boolean" },
         "no-open": { type: "boolean" },
         serve: { type: "boolean" },
+        "attach-preview-as-comment": { type: "boolean" },
         agent: { type: "string" },
         "context-dir": { type: "string", multiple: true },
         help: { type: "boolean", short: "h" },
@@ -140,9 +151,40 @@ export function parseCliArgs(argv: string[]): RunOptions {
     verbose: values.verbose ?? false,
     open: !values["no-open"],
     serve: values.serve ?? false,
+    attachPreviewAsComment: values["attach-preview-as-comment"] ?? false,
     ...(values.agent === undefined ? {} : { agent: parseAgent(values.agent) }),
     ...(contextDirs.length === 0 ? {} : { contextDirs }),
   };
+}
+
+export interface ShareOptions {
+  location: string;
+  verbose: boolean;
+}
+
+export function parseShareArgs(argv: string[]): ShareOptions {
+  let values: { verbose?: boolean; help?: boolean };
+  let positionals: string[];
+  try {
+    ({ values, positionals } = parseArgs({
+      args: argv,
+      options: { verbose: { type: "boolean" }, help: { type: "boolean", short: "h" } },
+      allowPositionals: true,
+    }));
+  } catch (error) {
+    throw new CliUsageError(error instanceof Error ? error.message : String(error));
+  }
+  if (values.help) {
+    throw new HelpRequestedError();
+  }
+  const [location, ...extra] = positionals;
+  if (location === undefined) {
+    throw new CliUsageError("Missing required argument: <page>");
+  }
+  if (extra.length > 0) {
+    throw new CliUsageError(`Unexpected extra arguments: ${extra.join(" ")}`);
+  }
+  return { location, verbose: values.verbose ?? false };
 }
 
 function parseAgent(raw: string): AgentId {

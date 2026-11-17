@@ -144,4 +144,11 @@ export const config = {
      * units; 512 KB clears it. Tune together with `maxCommentChars`. */
     maxRequestBodyBytes: 512 * 1024,
   },
+
+  preview: {
+    /** Outside refs/heads, so clones don't fetch previews and branch rules don't apply. */
+    refPrefix: "refs/tulip/previews",
+    maxEarlierPreviews: 20,
+    ghCommandTimeoutMs: 10 * 60 * 1000,
+  },
 } as const;

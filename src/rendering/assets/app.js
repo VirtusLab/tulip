@@ -580,6 +580,31 @@
     document.querySelectorAll(".snippet[data-lang]").forEach(highlightSnippetContainer);
   }
 
+  // Serve mode: a POST to the local server; rejects on a non-2xx response.
+  function postJson(path, body) {
+    return fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((response) => {
+      if (!response.ok) {
+        throw new Error("request failed");
+      }
+      return response.json();
+    });
+  }
+
+  function showCommentLink(status, text, url) {
+    status.textContent = text;
+    // Build the link element-wise — never assign untrusted text to innerHTML.
+    var link = document.createElement("a");
+    link.href = url;
+    link.textContent = "view comment";
+    link.target = "_blank";
+    link.rel = "noopener";
+    status.appendChild(link);
+  }
+
   // Serve mode only (docs/adr/0019): each `.review-box` (./template.ts's renderReviewBox) posts a
   // per-category PR comment to the local server's `/api/comment`. A no-op on the static page,
   // which renders no boxes. Deliberately placed AFTER setupHighlighting and OUTSIDE the mirrored
@@ -600,26 +625,9 @@
         }
         button.disabled = true;
         status.textContent = "Posting…";
-        fetch("/api/comment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ categoryIndex: categoryIndex, text: text }),
-        })
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error("request failed");
-            }
-            return response.json();
-          })
+        postJson("/api/comment", { categoryIndex: categoryIndex, text: text })
           .then((data) => {
-            status.textContent = "Posted ✓ ";
-            // Build the link element-wise — never assign untrusted text to innerHTML.
-            var link = document.createElement("a");
-            link.href = data.url;
-            link.textContent = "view comment";
-            link.target = "_blank";
-            link.rel = "noopener";
-            status.appendChild(link);
+            showCommentLink(status, "Posted ✓ ", data.url);
             textarea.value = "";
           })
           .catch(() => {
@@ -633,6 +641,32 @@
     });
   }
 
+  // Serve mode only (docs/adr/0032): the server publishes at most once, so a second click just
+  // shows the same comment again.
+  function setupShareButton() {
+    var button = document.querySelector(".share-submit");
+    var status = document.querySelector(".share-status");
+    if (!button || !status) {
+      return;
+    }
+    button.addEventListener("click", () => {
+      status.classList.remove("error");
+      button.disabled = true;
+      status.textContent = "Sharing…";
+      postJson("/api/share", {})
+        .then((data) => {
+          showCommentLink(status, "Shared ✓ ", data.url);
+        })
+        .catch(() => {
+          status.textContent = "Could not share the page; the terminal says why. Try again.";
+          status.classList.add("error");
+        })
+        .finally(() => {
+          button.disabled = false;
+        });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     setupThemeToggle();
     setupToc();
@@ -642,5 +676,6 @@
     setupSnippetExpansion();
     setupHighlighting();
     setupReviewBoxes();
+    setupShareButton();
   });
 })();

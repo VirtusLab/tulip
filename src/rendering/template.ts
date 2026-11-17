@@ -6,6 +6,7 @@ import { renderFileTree } from "./file-tree.js";
 import { categoryId, PR_DESCRIPTION_ID, type SubsectionWithId, withSubsectionIds } from "./ids.js";
 import { type InlineAssets, scriptHash } from "./inline-assets.js";
 import { type MarkdownRenderContext, renderCategoryMarkdown } from "./markdown.js";
+import { pageRunMetaTags } from "./page-meta.js";
 import { splitCategoryMarkdown } from "./sections.js";
 import { buildToc, renderTocHtml } from "./toc.js";
 
@@ -31,6 +32,9 @@ export interface PageInput {
   prTitle: string;
   prDescription: string;
   prUrl: string;
+  /** The PR head commit the page explains; with `generatedAt`, recorded for sharing. */
+  headSha: string;
+  generatedAt: Date;
   explanations: CategoryExplanation[];
   fileDiffs: Map<string, FileDiffData>;
   /** Display line for the Tulip build that produced this page (see src/version.ts's
@@ -43,6 +47,8 @@ export interface PageInput {
    * per-category PR comment via the local server's `/api/comment` (see ./assets/app.js). Default
    * (false/omitted) renders the static page with no boxes — byte-for-byte unchanged. */
   serve?: boolean;
+  /** Adds the header's Share button, for a server that can share the page (docs/adr/0032). */
+  share?: boolean;
   /** The stylesheet and scripts embedded into the page (docs/adr/0030). */
   inlineAssets: InlineAssets;
 }
@@ -97,6 +103,7 @@ export function renderPage(input: PageInput): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
+${pageRunMetaTags({ prUrl: input.prUrl, headSha: input.headSha, generatedAt: input.generatedAt })}
 <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy(input.inlineAssets.scripts)}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.prTitle)} — Tulip</title>
@@ -110,7 +117,7 @@ ${renderTocHtml(toc)}
 <header id="pr-header">
 <h1>${escapeHtml(input.prTitle)}</h1>
 <p class="pr-link"><a href="${escapeHtml(input.prUrl)}">${escapeHtml(input.prUrl)}</a></p>
-</header>
+${input.share ? SHARE_BOX : ""}</header>
 <section id="${PR_DESCRIPTION_ID}" class="page-section">
 <h2>Original PR description</h2>
 <p class="section-note">Written by the PR author — not part of Tulip's analysis below.</p>
@@ -176,6 +183,14 @@ function renderCategorySection(
   const head = tree === "" ? heading : `${heading}\n${tree}`;
   return `<section id="${categoryId(index)}" class="category page-section">\n${head}\n${bodyWithBox}\n</section>`;
 }
+
+/** Serve-mode Share button (docs/adr/0032); ./assets/app.js's `setupShareButton` wires it to the
+ * local server's `/api/share`. */
+const SHARE_BOX = `<div class="share-box">
+<button type="button" class="review-submit share-submit">Share on PR</button>
+<span class="review-status share-status">Posts a downloadable copy of this page as a PR comment.</span>
+</div>
+`;
 
 /** Serve-mode review box for one category (docs/adr/0019) — fully static markup, nothing
  * user-supplied to escape. `index` is the category's array position, matching `categoryId(index)`

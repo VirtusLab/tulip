@@ -10,6 +10,9 @@ const APP_JS = readFileSync(`${import.meta.dirname}/assets/app.js`, "utf8");
 /** Empty page assets, for tests that don't need the real ones. */
 export const NO_ASSETS: InlineAssets = { style: "", scripts: [] };
 
+/** The commit and time a test page explains. */
+export const PAGE_RUN = { headSha: "c".repeat(40), generatedAt: new Date("2026-10-19T14:32:00Z") };
+
 /** Renders the common one-category skeleton the app.js tests mount into jsdom. `extraCategory`
  * adds a second category (`#category-1`) with that markdown. */
 export function renderFixturePage(input: {
@@ -34,6 +37,7 @@ export function renderFixturePage(input: {
     prTitle: "t",
     prDescription: "d",
     prUrl: "https://github.com/a/b/pull/1",
+    ...PAGE_RUN,
     fileDiffs: input.fileDiffs ?? new Map(),
     explanations,
   });
