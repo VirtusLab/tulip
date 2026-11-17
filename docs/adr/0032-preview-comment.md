@@ -95,8 +95,9 @@ code), a draft release asset (misuses releases), and the browser upload endpoint
 needs a cookie).
 
 ### Comment
-- The user's latest preview comment among the PR's last 100 comments is found by a hidden
-  `<!-- tulip-preview {...} -->` marker, through one GraphQL query.
+- The user's latest preview comment among the PR's last 100 comments is found through one
+  GraphQL query: it starts with Tulip's fixed header line and ends with a hidden
+  `<!-- tulip-preview {...} -->` marker. A comment that merely quotes the marker isn't matched.
 - Same commit: the comment is edited in place.
 - New commit: a new comment is posted, which notifies reviewers, carrying the list of earlier
   previews (up to 20). The old comment is then minimized as outdated, or, for a user who can't

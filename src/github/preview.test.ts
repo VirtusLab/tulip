@@ -382,6 +382,18 @@ describe("publish", () => {
     ]);
   });
 
+  it("leaves alone the user's own comment that quotes a preview comment", async () => {
+    const quoting = previewComment(OLD_SHA, {
+      body: `${previewComment(OLD_SHA).body}\n\nWhy is this preview outdated?`,
+    });
+    const { runGh, calls } = fakeGh({ ...PUBLISH, query: commentsResponse([quoting]) });
+
+    await publish(runGh);
+
+    expect(calls.some((call) => call.method === "PATCH")).toBe(false);
+    expect(JSON.stringify(calls)).not.toContain("minimizeComment");
+  });
+
   it("posts a new comment, retiring nothing, when the user's latest one is already hidden", async () => {
     const { runGh, calls } = fakeGh({
       ...PUBLISH,

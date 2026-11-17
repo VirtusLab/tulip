@@ -11,7 +11,14 @@ export interface PreviewEntry {
 /** Marks Tulip's own comment, and carries the earlier previews it lists, so a re-run can find
  * the comment and update it. */
 export const PREVIEW_MARKER = "<!-- tulip-preview";
-const STATE = new RegExp(`${PREVIEW_MARKER} (\\{.*\\}) -->`);
+const HEADER = "🌷 **[Tulip](https://github.com/VirtusLab/tulip) explanation of this PR**";
+// Only a marker on the body's last line counts: one quoted earlier is ignored.
+const STATE = new RegExp(`(?:^|\\n)${PREVIEW_MARKER} (\\{.*\\}) -->\\s*$`);
+
+/** Whether `body` is a preview comment, and not, say, a comment that quotes one. */
+export function isPreviewComment(body: string): boolean {
+  return body.startsWith(HEADER) && STATE.test(body);
+}
 
 /** `downloadCommand` is a shell command that downloads the current preview. */
 export function buildPreviewComment(
@@ -27,7 +34,7 @@ export function buildPreviewComment(
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e");
   return [
-    `🌷 **[Tulip](https://github.com/VirtusLab/tulip) explanation of this PR** (as of ` +
+    `${HEADER} (as of ` +
       `\`${shortSha(current.sha)}\`): ${link(current)} (${formatTime(current.generatedAt)})`,
     "The changes grouped by concern, most important first, with diagrams. Download the file " +
       "(from its page, or with this command) and open it in a browser:",

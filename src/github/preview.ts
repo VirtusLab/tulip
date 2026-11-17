@@ -10,7 +10,7 @@ import { githubPrLabel } from "./pr-url.js";
 import {
   buildPreviewComment,
   buildSupersededComment,
-  PREVIEW_MARKER,
+  isPreviewComment,
   type PreviewEntry,
   previewEntries,
 } from "./preview-comment.js";
@@ -291,7 +291,7 @@ async function fetchLatestPreviewComment(
     { owner, name, number: pr.number },
   );
   return data.repository.pullRequest.comments.nodes.findLast(
-    (comment) => comment.viewerDidAuthor && comment.body.includes(PREVIEW_MARKER),
+    (comment) => comment.viewerDidAuthor && isPreviewComment(comment.body),
   );
 }
 

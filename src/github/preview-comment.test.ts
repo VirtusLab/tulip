@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPreviewComment,
   buildSupersededComment,
+  isPreviewComment,
   PREVIEW_MARKER,
   type PreviewEntry,
   previewEntries,
@@ -51,9 +52,33 @@ describe("buildPreviewComment", () => {
   });
 });
 
+describe("isPreviewComment", () => {
+  const body = buildPreviewComment(entry(SHA_A), DOWNLOAD, []);
+
+  it("recognizes a preview comment, also with CRLF line endings and trailing whitespace", () => {
+    expect(isPreviewComment(body)).toBe(true);
+    expect(isPreviewComment(`${body.replace(/\n/g, "\r\n")}\r\n`)).toBe(true);
+  });
+
+  it("ignores a comment quoting the marker before its end", () => {
+    expect(isPreviewComment(`${body}\n\nThanks, looks good`)).toBe(false);
+  });
+
+  it("ignores a comment ending with the marker but without the header", () => {
+    expect(isPreviewComment(`Look:\n\n${body.slice(body.indexOf(PREVIEW_MARKER))}`)).toBe(false);
+  });
+});
+
 describe("previewEntries", () => {
   it("is empty for a body without state", () => {
     expect(previewEntries("just a comment")).toEqual([]);
+  });
+
+  it("reads the state at the end, not one quoted earlier", () => {
+    const quoted = buildPreviewComment(entry(SHA_B), DOWNLOAD, []);
+    const body = buildPreviewComment(entry(SHA_A), quoted, []);
+
+    expect(previewEntries(body)).toEqual([entry(SHA_A)]);
   });
 
   it("is empty for malformed state", () => {
