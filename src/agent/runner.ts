@@ -64,8 +64,7 @@ export async function invokeAgent<T = unknown>(
   // session state apart. The pipeline always passes the run's agent.
   const agent = deps.agent ?? createAgent(claudeBackend);
 
-  const first = await execute(invocation, agent, deps, false);
-  const firstAttempt = extractStructuredOutput<T>(first, invocation.schema, agent.backend.id);
+  const { reply: first, attempt: firstAttempt } = await execute<T>(invocation, agent, deps, false);
   if (firstAttempt.ok) {
     return { result: firstAttempt.value, sessionId: first.sessionId };
   }
@@ -76,8 +75,7 @@ export async function invokeAgent<T = unknown>(
     prompt: `${RETRY_PREFIX}: ${firstAttempt.error}. Reply again with ONLY valid JSON matching the schema.`,
     ...(invocation.label === undefined ? {} : { label: invocation.label }),
   };
-  const second = await execute(retry, agent, deps, true);
-  const secondAttempt = extractStructuredOutput<T>(second, invocation.schema, agent.backend.id);
+  const { reply: second, attempt: secondAttempt } = await execute<T>(retry, agent, deps, true);
   if (secondAttempt.ok) {
     return { result: secondAttempt.value, sessionId: second.sessionId };
   }
@@ -88,15 +86,16 @@ export async function invokeAgent<T = unknown>(
 }
 
 /**
- * Spawns one agent process under the shared concurrency cap (see ./concurrency.ts), then records
- * the session's tier and the call's usage. The prompt goes on stdin (see ./exec.ts).
+ * Spawns one agent process under the shared concurrency cap (see ./concurrency.ts), extracts its
+ * structured output, then records the session's tier and the call's usage. The prompt goes on
+ * stdin (see ./exec.ts).
  */
-async function execute(
+async function execute<T>(
   invocation: AgentInvocation,
   agent: Agent,
   deps: RunnerDeps,
   schemaRetry: boolean,
-): Promise<AgentReply> {
+): Promise<{ reply: AgentReply; attempt: ExtractResult<T> }> {
   const { backend } = agent;
   const tier =
     invocation.model ??
@@ -104,17 +103,11 @@ async function execute(
   const call: UsageCall | undefined =
     tier === undefined ? undefined : { tier, model: agent.modelFor(tier) };
 
-  const planned = await backend.planSpawn({
-    prompt: invocation.prompt,
-    schema: invocation.schema,
-    ...(call === undefined ? {} : { model: call.model }),
-    ...(invocation.resumeSessionId === undefined
-      ? {}
-      : { resumeSessionId: invocation.resumeSessionId }),
-  });
   const runProcess = deps.runAgentProcess ?? agent.runProcess;
   let wallMs = 0;
-  const record: Omit<CallRecord, "wallMs"> = {
+  // Replaced by the prompt the backend actually sends, which may add to it, once planned.
+  let promptChars = invocation.prompt.length;
+  const record: Omit<CallRecord, "wallMs" | "promptChars"> = {
     type: "call",
     label: invocation.label ?? { step: "unlabelled" },
     schemaRetry,
@@ -123,10 +116,18 @@ async function execute(
     ...(invocation.resumeSessionId === undefined
       ? {}
       : { resumedFrom: invocation.resumeSessionId }),
-    promptChars: invocation.prompt.length,
   };
   let reply: AgentReply;
   try {
+    const planned = await backend.planSpawn({
+      prompt: invocation.prompt,
+      schema: invocation.schema,
+      ...(call === undefined ? {} : { model: call.model }),
+      ...(invocation.resumeSessionId === undefined
+        ? {}
+        : { resumeSessionId: invocation.resumeSessionId }),
+    });
+    promptChars = planned.prompt.length;
     const { stdout } = await withSpawnFiles(planned.files, () =>
       agentConcurrencyLimiter.run(async () => {
         const started = Date.now();
@@ -145,6 +146,7 @@ async function execute(
   } catch (error) {
     deps.callLog?.record({
       ...record,
+      promptChars,
       wallMs,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -155,14 +157,18 @@ async function execute(
     agent.sessionTiers.set(reply.sessionId, call.tier);
   }
   const tokens = callUsage(agent, invocation, reply);
+  const costUsd = callCost(agent, invocation, reply);
+  const attempt = extractStructuredOutput<T>(reply, invocation.schema, backend.id);
   deps.usage?.record(call, tokens);
   deps.callLog?.record({
     ...record,
     sessionId: reply.sessionId,
+    promptChars,
     wallMs,
     ...(tokens === undefined ? {} : { tokens }),
     ...(reply.numTurns === undefined ? {} : { numTurns: reply.numTurns }),
-    ...(reply.costUsd === undefined ? {} : { costUsd: reply.costUsd }),
+    ...(costUsd === undefined ? {} : { costUsd }),
+    ...(attempt.ok ? {} : { error: attempt.error }),
   });
   if (deps.logger) {
     // `--verbose` trace. Turn count and duration aren't reported by every CLI, so a missing one
@@ -172,7 +178,7 @@ async function execute(
     const duration = reply.durationMs === undefined ? "?" : formatDuration(reply.durationMs);
     deps.logger.debug(`${backend.id} ${label}: ${turns} turn(s), ${duration}`);
   }
-  return reply;
+  return { reply, attempt };
 }
 
 /** The call's own tokens. For a backend reporting session totals, that's the difference from the
@@ -200,6 +206,25 @@ function callUsage(
     cacheWrite: Math.max(0, usage.cacheWrite - previous.cacheWrite),
     cacheRead: Math.max(0, usage.cacheRead - previous.cacheRead),
   };
+}
+
+/** The call's own cost. For a backend reporting session totals, that's the difference from the
+ * total last seen for the resumed session. */
+function callCost(
+  agent: Agent,
+  invocation: AgentInvocation,
+  reply: AgentReply,
+): number | undefined {
+  const { costUsd } = reply;
+  if (!agent.backend.costIsSessionTotal || costUsd === undefined) {
+    return costUsd;
+  }
+  const previous =
+    invocation.resumeSessionId === undefined
+      ? undefined
+      : agent.sessionCost.get(invocation.resumeSessionId);
+  agent.sessionCost.set(reply.sessionId, costUsd);
+  return previous === undefined ? costUsd : Math.max(0, costUsd - previous);
 }
 
 /** Writes `files` (a backend's schema file, say), runs `run`, then removes them — including when

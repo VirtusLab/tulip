@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CallLogRecord } from "../agent/call-log.js";
 import { AgentBinaryMissingError, AgentOutputError } from "../agent/errors.js";
 import type { Agent, AgentBackend, ModelTokens } from "../agent/types.js";
 import type { UsageLedger } from "../agent/usage.js";
@@ -455,6 +456,18 @@ describe("run", () => {
     });
   });
 
+  it("writes the end record before serving, so the open server isn't counted", async () => {
+    const order: string[] = [];
+    const deps = baseDeps(order);
+    deps.callLog.record = vi.fn((record: CallLogRecord) => {
+      order.push(record.type);
+    });
+
+    await run(options({ serve: true }), deps);
+
+    expect(order.slice(-2)).toEqual(["end", "serve"]);
+  });
+
   it("logs the welcome message and what it will process, before fetching", async () => {
     const deps = baseDeps();
 
@@ -483,6 +496,9 @@ describe("run", () => {
     expect(deps.renderExplanations).not.toHaveBeenCalled();
     const lines = infoLines(deps);
     expect(lines.some((line) => line.includes("nothing to review"))).toBe(true);
+    expect(deps.callLog.record).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: "end", ok: true }),
+    );
   });
 
   it("passes a renamed-file path map to rendering, built from the parsed diff", async () => {

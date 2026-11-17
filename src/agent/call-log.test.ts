@@ -8,13 +8,13 @@ describe("createCallLog", () => {
     const now = () => new Date("2026-01-02T03:04:05.000Z");
     const log = createCallLog(createLogger({ write: () => {} }), now);
     try {
-      log.record({ type: "run", agent: "claude" });
-      log.record({ type: "end", ok: true });
+      log.record({ type: "end", ok: false, wallMs: 1, error: "boom" });
+      log.record({ type: "end", ok: true, wallMs: 2 });
 
       const lines = (await readFile(log.path, "utf8")).trimEnd().split("\n");
       expect(lines.map((line) => JSON.parse(line))).toEqual([
-        { time: "2026-01-02T03:04:05.000Z", type: "run", agent: "claude" },
-        { time: "2026-01-02T03:04:05.000Z", type: "end", ok: true },
+        { time: "2026-01-02T03:04:05.000Z", type: "end", ok: false, wallMs: 1, error: "boom" },
+        { time: "2026-01-02T03:04:05.000Z", type: "end", ok: true, wallMs: 2 },
       ]);
     } finally {
       await rm(log.path, { force: true });

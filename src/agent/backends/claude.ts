@@ -17,6 +17,8 @@ export const claudeBackend: AgentBackend = {
   planSpawn,
   parseReply,
   describeFailure,
+  // A resume's `total_cost_usd` includes the earlier calls of its session (seen in a live run).
+  costIsSessionTotal: true,
 };
 
 async function planSpawn(call: AgentCallArgs): Promise<AgentSpawnPlan> {

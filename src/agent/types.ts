@@ -43,7 +43,8 @@ export interface AgentReply {
   usage?: ModelTokens;
   numTurns?: number;
   durationMs?: number;
-  /** The call's cost in USD, as the CLI reports it. */
+  /** Cost in USD, as the CLI reports it: the call's own, or its session's running total for a
+   * backend with {@link AgentBackend.costIsSessionTotal}. */
   costUsd?: number;
 }
 
@@ -92,6 +93,8 @@ export interface AgentBackend {
   /** Set when a reply's usage is its session's running total rather than that call's own; the
    * runner then records the difference from the session's previous total. */
   usageIsSessionTotal?: boolean;
+  /** Set when a reply's cost is its session's running total rather than that call's own. */
+  costIsSessionTotal?: boolean;
 }
 
 /** One run's handle on an agent: its backend, process runner, and per-session state. Built by
@@ -107,4 +110,7 @@ export interface Agent {
   /** Each session's latest running usage total, for a backend with
    * {@link AgentBackend.usageIsSessionTotal}. */
   sessionUsage: Map<string, ModelTokens>;
+  /** Each session's latest running cost, for a backend with
+   * {@link AgentBackend.costIsSessionTotal}. */
+  sessionCost: Map<string, number>;
 }

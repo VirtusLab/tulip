@@ -116,6 +116,21 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const usage = createUsageLedger();
   const callLog = deps.callLog ?? createCallLog(logger);
   const runStartedAt = Date.now();
+  // Written once: after rendering (so --serve's open server isn't counted), on failure, or, for an
+  // early return, in the finally below.
+  let ended = false;
+  const recordEnd = (error?: string): void => {
+    if (ended) {
+      return;
+    }
+    ended = true;
+    callLog.record({
+      type: "end",
+      ok: error === undefined,
+      wallMs: Date.now() - runStartedAt,
+      ...(error === undefined ? {} : { error }),
+    });
+  };
 
   let checkout: PrCheckout | undefined;
   try {
@@ -286,6 +301,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       ),
     );
     logger.debug(`rendered output at ${indexPath}`);
+    recordEnd();
 
     const categoryNames = explanations.map((explanation) => explanation.category.name);
 
@@ -310,17 +326,13 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
         logger.debug(`could not auto-open the page: ${causeMessage(error)}`);
       }
     }
-    callLog.record({ type: "end", ok: true, wallMs: Date.now() - runStartedAt });
   } catch (error) {
-    logger.info(describeFailure(error));
+    const failure = describeFailure(error);
+    logger.info(failure);
     process.exitCode = 1;
-    callLog.record({
-      type: "end",
-      ok: false,
-      wallMs: Date.now() - runStartedAt,
-      error: describeFailure(error),
-    });
+    recordEnd(failure);
   } finally {
+    recordEnd();
     // Printed whenever any LLM work ran — on success, and after a mid-run failure that still
     // burned tokens; empty for an untouched ledger.
     const usageSummary = formatUsageSummary(usage);
@@ -331,9 +343,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     if (unreported > 0) {
       logger.info(`${unreported} ${agent.backend.id} call(s) didn't report token usage`);
     }
-    if (usageSummary || unreported > 0) {
-      logger.info(`per-call statistics: ${callLog.path}`);
-    }
+    logger.info(`per-call statistics: ${callLog.path}`);
     if (checkout) {
       logger.debug("cleaning up checkout...");
       try {

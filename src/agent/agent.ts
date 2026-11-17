@@ -16,5 +16,6 @@ export function createAgent(backend: AgentBackend): Agent {
     }),
     sessionTiers: new Map(),
     sessionUsage: new Map(),
+    sessionCost: new Map(),
   };
 }

@@ -37,12 +37,38 @@ export interface CallRecord {
   tokens?: ModelTokens;
   numTurns?: number;
   costUsd?: number;
-  /** Set when the process failed or its reply couldn't be parsed. */
+  /** Set when the process failed, or its reply couldn't be parsed or didn't match the schema. */
+  error?: string;
+}
+
+/** The PR a run explains; written once its diff is fetched. */
+export interface RunRecord {
+  type: "run";
+  version: string;
+  agent: string;
+  pr: string;
+  files: number;
+  changes: number;
+  diffLines: number;
+  diffThreshold: number;
+}
+
+/** The final categories, written once classification is done. */
+export interface CategoriesRecord {
+  type: "categories";
+  categories: { name: string; attention: string; production: number; test: number }[];
+}
+
+/** How a run ended; `wallMs` excludes the time a `--serve` review server stays open. */
+export interface EndRecord {
+  type: "end";
+  ok: boolean;
+  wallMs: number;
   error?: string;
 }
 
 /** Any record written to a call log. Every record also gets an ISO `time` when written. */
-export type CallLogRecord = CallRecord | { type: string; [field: string]: unknown };
+export type CallLogRecord = CallRecord | RunRecord | CategoriesRecord | EndRecord;
 
 /** Collects per-call statistics of one run, for later cost analysis. */
 export interface CallLog {

@@ -158,6 +158,40 @@ describe("invokeAgent", () => {
     ]);
   });
 
+  it("logs the schema error on both calls when the retry is still invalid", async () => {
+    const runAgentProcess = vi.fn(async () =>
+      processResult(JSON.stringify({ result: "oops", session_id: "session-1" })),
+    );
+    const callLog = memoryCallLog();
+
+    await expect(invokeAgent(BASE_INVOCATION, { runAgentProcess, callLog })).rejects.toThrow(
+      AgentOutputError,
+    );
+
+    expect(callLog.records).toMatchObject([
+      { schemaRetry: false, error: expect.stringContaining("no structured output") },
+      { schemaRetry: true, error: expect.stringContaining("no structured output") },
+    ]);
+  });
+
+  it("logs a resume's cost as the increase over its session's previous total", async () => {
+    let call = 0;
+    const runAgentProcess = vi.fn(async () => {
+      call++;
+      return processResult(envelope({ total_cost_usd: call === 1 ? 0.25 : 0.375 }));
+    });
+    const agent = createAgentFor("claude");
+    const callLog = memoryCallLog();
+
+    const first = await invokeAgent(BASE_INVOCATION, { runAgentProcess, agent, callLog });
+    await invokeAgent(
+      { resumeSessionId: first.sessionId, schema: SCHEMA, prompt: "amend" },
+      { runAgentProcess, agent, callLog },
+    );
+
+    expect(callLog.records).toMatchObject([{ costUsd: 0.25 }, { costUsd: 0.125 }]);
+  });
+
   it("logs a failed call with its error", async () => {
     const runAgentProcess = vi.fn(async () => {
       throw new Error("timed out");
