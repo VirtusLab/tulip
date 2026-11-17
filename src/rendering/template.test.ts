@@ -6,6 +6,7 @@ import type { FileDiffData } from "./file-diffs.js";
 import { scriptHash } from "./inline-assets.js";
 import { buildAlignedDiff } from "./line-diff.js";
 import { NO_ASSETS, PAGE_RUN } from "./page.fixture.js";
+import { UNSIGNED } from "./page-meta.js";
 import { renderPage } from "./template.js";
 
 function explanation(overrides: Partial<CategoryExplanation> = {}): CategoryExplanation {
@@ -56,7 +57,7 @@ describe("renderPage", () => {
         '<meta name="tulip-pr-url" content="https://github.com/acme/widgets/pull/7">',
         `<meta name="tulip-head-sha" content="${PAGE_RUN.headSha}">`,
         '<meta name="tulip-generated-at" content="2026-10-19T14:32:00.000Z">',
-        `<meta name="tulip-signature" content="${"0".repeat(64)}">`,
+        `<meta name="tulip-signature" content="${UNSIGNED}">`,
       ].join("\n"),
     );
     expect(html.match(/<meta name="tulip-pr-url"/g)).toHaveLength(1);

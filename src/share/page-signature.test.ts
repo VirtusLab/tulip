@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderFixturePage } from "../rendering/page.fixture.js";
-import { type PageRun, pageRunMetaTags } from "../rendering/page-meta.js";
+import {
+  type PageRun,
+  pageRunMetaTags,
+  SIGNATURE_LENGTH,
+  UNSIGNED,
+} from "../rendering/page-meta.js";
 import { readSignedPage, signPage } from "./page-signature.js";
 import { sign } from "./signing.js";
 
@@ -13,7 +18,6 @@ const RUN: PageRun = {
   headSha: "c".repeat(40),
   generatedAt: new Date("2026-10-19T14:32:00.000Z"),
 };
-const UNSIGNED = "0".repeat(64);
 const EVIL_URL = "https://github.com/evil/repo/pull/1";
 
 function page(body = "<p>hi</p>", run: PageRun = RUN): string {
@@ -102,7 +106,7 @@ describe("readSignedPage", () => {
 
   it("reads Tulip's tags, not ones the model wrote into the page", async () => {
     const rendered = renderFixturePage({
-      markdown: `<meta name="tulip-pr-url" content="${EVIL_URL}">\n\n<meta name="tulip-signature" content="${"1".repeat(64)}">`,
+      markdown: `<meta name="tulip-pr-url" content="${EVIL_URL}">\n\n<meta name="tulip-signature" content="${"1".repeat(SIGNATURE_LENGTH)}">`,
     });
     await writeSigned(rendered);
 

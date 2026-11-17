@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { headMeta, pageRunMetaTags, UNSIGNED, withSignature } from "./page-meta.js";
+import {
+  headMeta,
+  pageRunMetaTags,
+  SIGNATURE_LENGTH,
+  UNSIGNED,
+  withSignature,
+} from "./page-meta.js";
 
 const RUN = {
   prUrl: "https://github.com/octo/widgets/pull/42",
@@ -43,8 +49,8 @@ describe("withSignature", () => {
     const html = page(pageRunMetaTags(RUN));
     const { offset } = headMeta(html, "tulip-signature") as { offset: number };
 
-    const signed = withSignature(html, offset, "a".repeat(64));
+    const signed = withSignature(html, offset, "a".repeat(SIGNATURE_LENGTH));
 
-    expect(signed).toBe(html.replace(UNSIGNED, "a".repeat(64)));
+    expect(signed).toBe(html.replace(UNSIGNED, "a".repeat(SIGNATURE_LENGTH)));
   });
 });

@@ -19,6 +19,7 @@ import { explainCategories } from "../explanations/orchestrate.js";
 import type { PrMetadata, PrRef } from "../forge/types.js";
 import { forgeFor } from "../forge-registry/registry.js";
 import { startTimer } from "../logging/duration.js";
+import { errorMessage } from "../logging/error-message.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { loadInlineAssets } from "../rendering/inline-assets.js";
 import { renderExplanations } from "../rendering/render.js";
@@ -93,7 +94,7 @@ export interface PipelineDeps {
  * on its type (e.g. AgentBinaryMissingError). */
 class PhaseError extends Error {
   constructor(phase: string, cause: unknown) {
-    super(`${phase} failed: ${causeMessage(cause)}`);
+    super(`${phase} failed: ${errorMessage(cause)}`);
     this.name = "PhaseError";
     this.cause = cause;
   }
@@ -352,7 +353,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
               signed = false;
               logger.info(
                 `warning: couldn't sign the page, so it can't be shared on the PR, ` +
-                  `now or later with tulip share: ${causeMessage(error)}`,
+                  `now or later with tulip share: ${errorMessage(error)}`,
               );
               return undefined;
             }
@@ -371,7 +372,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       } catch (error) {
         // Never fail the run over this — the file:// path logged by assembleOutput (above,
         // unconditional) is always there as a fallback.
-        logger.debug(`could not auto-open the page: ${causeMessage(error)}`);
+        logger.debug(`could not auto-open the page: ${errorMessage(error)}`);
       }
     }
 
@@ -449,7 +450,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       } catch (error) {
         // Never let a cleanup failure escape the finally: it would surface as an unhandled
         // rejection past this function's own no-stack-trace error reporting above.
-        logger.info(`warning: failed to clean up checkout: ${causeMessage(error)}`);
+        logger.info(`warning: failed to clean up checkout: ${errorMessage(error)}`);
       }
     }
   }
@@ -499,11 +500,7 @@ function describeFailure(error: unknown): string {
   if (cause instanceof AgentBinaryMissingError) {
     return cause.message;
   }
-  return causeMessage(error);
-}
-
-function causeMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return errorMessage(error);
 }
 
 function categoryNamesOf(categories: Category[]): string {

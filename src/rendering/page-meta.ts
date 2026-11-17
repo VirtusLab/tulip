@@ -1,8 +1,11 @@
 import { escapeHtml } from "./escape.js";
 
+/** Hex characters in a signature (an HMAC-SHA256, see src/share/signing.ts). */
+export const SIGNATURE_LENGTH = 64;
+
 /** Stands in for the signature while signing, so the signature can sit inside what it signs
  * (docs/adr/0032). */
-export const UNSIGNED = "0".repeat(64);
+export const UNSIGNED = "0".repeat(SIGNATURE_LENGTH);
 
 /** What `tulip share` needs to know about a page (docs/adr/0032). */
 export interface PageRun {
@@ -54,8 +57,8 @@ export function headMeta(
   return { value: unescapeHtml(head.slice(offset, close)), offset };
 }
 
-/** Puts `signature` in place of the signature found by {@link headMeta} at `offset`; both are 64
- * characters, so no other byte moves. */
+/** Puts `signature` in place of the signature found by {@link headMeta} at `offset`; both are
+ * {@link SIGNATURE_LENGTH} characters, so no other byte moves. */
 export function withSignature(page: string, offset: number, signature: string): string {
   return page.slice(0, offset) + signature + page.slice(offset + signature.length);
 }

@@ -214,7 +214,7 @@ function previewFileUrl(host: string, repo: string, commitSha: string, file: str
 }
 
 const HOST = new RegExp(`^${HOST_PATTERN}$`);
-const FILE_NAME = /^tulip-pr-\d+-[0-9a-f]{7}\.html$/;
+const SHELL_SAFE_FILE = /^[\w.-]+$/;
 
 /** A `gh` command that saves the file under its own name. GitHub serves the HTML as text
  * everywhere, so a reviewer opens a local copy. */
@@ -229,7 +229,7 @@ function previewDownloadCommand(
     !HOST.test(host) ||
     !isValidRepoPath(repo) ||
     !COMMIT_SHA_PATTERN.test(commitSha) ||
-    !FILE_NAME.test(file)
+    !SHELL_SAFE_FILE.test(file)
   ) {
     throw new Error(`unexpected preview location: ${host} ${repo} ${commitSha} ${file}`);
   }

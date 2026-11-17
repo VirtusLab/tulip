@@ -13,9 +13,6 @@ export interface AssembleDeps {
   writeFile?: FileWriter;
 }
 
-/** The run dir's page: the static one, also what's shared (docs/adr/0032). */
-export const PAGE_FILENAME = "index.html";
-
 export interface AssembleResult {
   /** Absolute path to the output directory. */
   dir: string;
@@ -36,7 +33,7 @@ export async function assembleOutput(
   const write = deps.writeFile ?? defaultWriteFile;
 
   const dir = await makeTempDir();
-  const indexPath = join(dir, PAGE_FILENAME);
+  const indexPath = join(dir, "index.html");
 
   await write(indexPath, page);
 

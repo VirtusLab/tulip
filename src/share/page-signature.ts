@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { COMMIT_SHA_PATTERN } from "../forge/sha.js";
 import type { Preview, PrRef } from "../forge/types.js";
 import { parsePrUrl } from "../forge-registry/pr-url.js";
-import { headMeta, UNSIGNED, withSignature } from "../rendering/page-meta.js";
+import { headMeta, SIGNATURE_LENGTH, UNSIGNED, withSignature } from "../rendering/page-meta.js";
 import { isSignedByThisUser, sign } from "./signing.js";
 
 export interface SharableRun {
@@ -21,6 +21,8 @@ export async function signPage(page: string, keyPath: string): Promise<string> {
   return withSignature(page, signature.offset, await sign(page, keyPath));
 }
 
+const SIGNATURE = new RegExp(`^[0-9a-f]{${SIGNATURE_LENGTH}}$`);
+
 /** Reads a page from a path or `file://` URL. Refuses a page this user's Tulip didn't sign, or
  * that changed since. */
 export async function readSignedPage(location: string, keyPath: string): Promise<SharableRun> {
@@ -30,7 +32,7 @@ export async function readSignedPage(location: string, keyPath: string): Promise
   const signature = headMeta(page, "tulip-signature");
   if (
     signature === undefined ||
-    !/^[0-9a-f]{64}$/.test(signature.value) ||
+    !SIGNATURE.test(signature.value) ||
     signature.value === UNSIGNED ||
     !(await isSignedByThisUser(
       withSignature(page, signature.offset, UNSIGNED),
