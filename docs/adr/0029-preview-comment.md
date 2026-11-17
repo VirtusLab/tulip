@@ -28,8 +28,8 @@ analysis; and that edits notify nobody.
 ### Three ways to share, one code path
 - `--attach-preview-as-comment`: share once the run ends (after opening the page; alongside the
   server in `--serve` mode). A failed share doesn't discard the run: it exits non-zero and prints
-  the `tulip share` command to retry. Ctrl+C, or stopping the server, stops the share between steps
-  and during a wait for a new fork, and the run still cleans up.
+  the `tulip share` command to retry. Ctrl+C, or stopping the server, stops the share between steps,
+  and the run still cleans up.
 - `tulip share <run dir>`: share an earlier run, so the user can read the page first or retry. The
   run dir is a temp dir the OS eventually removes, so this is for "after reading" and "retry", not
   "next week". A directory can come from anyone, so the run must carry this user's signature
@@ -62,9 +62,9 @@ analysis; and that edits notify nobody.
   unless the repo reports `allow_forking: false`. A private repo's fork inherits its access, so a
   preview of private code is only readable by people who can read the code.
 - Preparing is read-only (auth, repo and PR state), so it can run before the LLM work. The fork is
-  created only when sharing. GitHub creates forks asynchronously (it says up to five minutes), so
-  the first write to a fork GitHub reports as created in the last ten minutes is retried on
-  404/409 with backoff, for up to five minutes. An older fork's 404 is reported at once. The
+  created only when sharing. GitHub creates forks asynchronously (it says up to five minutes). If a
+  write to a fork created in the last ten minutes fails with 404/409, the share fails asking the
+  user to retry in a minute, rather than waiting. An older fork's 404 is reported as is. The
   preview's `gh` calls get a 10-minute timeout: the page upload is megabytes.
 - Before writing, publishing checks the PR is open and still at the previewed commit. Otherwise a
   stale share would replace the newer preview as the current comment.

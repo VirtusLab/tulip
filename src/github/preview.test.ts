@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it, vi } from "vitest";
-import { config } from "../config.js";
 import type { PrRef } from "../forge/types.js";
 import { preparePreview } from "./preview.js";
 import { buildPreviewComment, buildSupersededComment } from "./preview-comment.js";
@@ -109,12 +108,8 @@ const PUBLISH = {
     "https://github.com/octo/widgets/pull/42#issuecomment-1",
 } satisfies Record<string, Response>;
 
-async function publish(
-  runGh: (args: string[]) => Promise<string>,
-  sleep = vi.fn(async (_ms: number, _signal?: AbortSignal) => {}),
-  signal?: AbortSignal,
-) {
-  const prepared = await preparePreview(PR, { runGh, sleep });
+async function publish(runGh: (args: string[]) => Promise<string>, signal?: AbortSignal) {
+  const prepared = await preparePreview(PR, { runGh });
   return prepared.publish(
     {
       page: "<html>preview</html>",
@@ -407,34 +402,37 @@ describe("publish", () => {
     expect(posted.body).not.toContain("attacker");
   });
 
-  it("stores the page in a fork it just created, retrying while the fork isn't ready", async () => {
-    let blobAttempts = 0;
+  it("stores the page in a fork it just created", async () => {
     const { runGh, bodyOf } = fakeGh({
       ...PUBLISH,
       ...FORK_STORE,
       "POST repos/octo/widgets/forks": forkResponse(new Date()),
-      "POST repos/me/widgets/git/blobs": () => {
-        blobAttempts++;
-        if (blobAttempts < 3) {
-          throw ghError("Git Repository is empty.", 409);
-        }
-        return "blob-sha";
-      },
+      "POST repos/me/widgets/git/blobs": "blob-sha",
     });
-    const sleep = vi.fn(async (_ms: number, _signal?: AbortSignal) => {});
 
-    const result = await publish(runGh, sleep);
+    const result = await publish(runGh);
 
-    expect(blobAttempts).toBe(3);
-    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([
-      config.preview.forkWriteRetryDelayMs,
-      config.preview.forkWriteRetryDelayMs * 2,
-    ]);
     expect(bodyOf("POST", "repos/octo/widgets/forks")).toEqual({ default_branch_only: true });
     expect(result.previewUrl).toBe(`https://github.com/me/widgets/blob/commit-sha/${FILE}`);
   });
 
-  it("reports a fork that already existed failing a write at once, without waiting", async () => {
+  it("asks to retry later when a fork it just created isn't ready yet", async () => {
+    const { runGh, calls } = fakeGh({
+      ...PUBLISH,
+      ...FORK_STORE,
+      "POST repos/octo/widgets/forks": forkResponse(new Date()),
+      "POST repos/me/widgets/git/blobs": () => {
+        throw ghError("Git Repository is empty.", 409);
+      },
+    });
+
+    await expect(publish(runGh)).rejects.toThrow(
+      "your fork me/widgets is still being created; retry in a minute",
+    );
+    expect(calls.filter((call) => call.endpoint === "repos/me/widgets/git/blobs")).toHaveLength(1);
+  });
+
+  it("reports a fork that already existed failing a write as is", async () => {
     const { runGh } = fakeGh({
       ...PUBLISH,
       ...FORK_STORE,
@@ -443,10 +441,8 @@ describe("publish", () => {
         throw ghError("Not Found", 404);
       },
     });
-    const sleep = vi.fn(async (_ms: number, _signal?: AbortSignal) => {});
 
-    await expect(publish(runGh, sleep)).rejects.toThrow("Not Found (HTTP 404)");
-    expect(sleep).not.toHaveBeenCalled();
+    await expect(publish(runGh)).rejects.toThrow("Not Found (HTTP 404)");
   });
 
   it("stops before its next step once asked to", async () => {
@@ -459,40 +455,18 @@ describe("publish", () => {
       },
     });
 
-    await expect(publish(runGh, undefined, stop.signal)).rejects.toThrow();
+    await expect(publish(runGh, stop.signal)).rejects.toThrow();
     expect(calls.at(-1)?.endpoint).toBe("repos/octo/widgets/git/blobs");
   });
 
-  it("passes the stop signal to the wait for a new fork", async () => {
-    const stop = new AbortController();
-    const { runGh } = fakeGh({
-      ...PUBLISH,
-      ...FORK_STORE,
-      "POST repos/octo/widgets/forks": forkResponse(new Date()),
-      "POST repos/me/widgets/git/blobs": () => {
-        throw ghError("Git Repository is empty.", 409);
-      },
-    });
-    const sleep = vi.fn(async (_ms: number, signal?: AbortSignal) => {
-      stop.abort();
-      signal?.throwIfAborted();
-    });
-
-    await expect(publish(runGh, sleep, stop.signal)).rejects.toThrow();
-    expect(sleep).toHaveBeenCalledTimes(1);
-    expect(sleep.mock.calls[0]?.[1]).toBe(stop.signal);
-  });
-
-  it("doesn't retry writes to the PR's own repo", async () => {
+  it("reports a write to the PR's own repo failing as is", async () => {
     const { runGh } = fakeGh({
       ...PUBLISH,
       "POST repos/octo/widgets/git/blobs": () => {
         throw ghError("Not Found", 404);
       },
     });
-    const sleep = vi.fn(async () => {});
 
-    await expect(publish(runGh, sleep)).rejects.toThrow("Not Found (HTTP 404)");
-    expect(sleep).not.toHaveBeenCalled();
+    await expect(publish(runGh)).rejects.toThrow("Not Found (HTTP 404)");
   });
 });

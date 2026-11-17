@@ -1,4 +1,3 @@
-import { setTimeout } from "node:timers/promises";
 import { config } from "../config.js";
 import { shortSha } from "../forge/sha.js";
 import type { PreparedPreview, Preview, PrRef, PublishedPreview } from "../forge/types.js";
@@ -16,7 +15,6 @@ import {
 
 export interface PreviewDeps {
   runGh?: CommandRunner;
-  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
 // The page upload is megabytes, too much for the default timeout on a slow connection.
@@ -74,7 +72,7 @@ export async function preparePreview(
     }),
     publish: (preview, signal) =>
       publishPreview(
-        // A stop request takes effect before the next call, and during a wait for a new fork.
+        // A stop request takes effect before the next call.
         (endpoint, request) => {
           signal?.throwIfAborted();
           return api(endpoint, request);
@@ -82,7 +80,6 @@ export async function preparePreview(
         pr,
         useFork,
         preview,
-        (ms) => (deps.sleep ?? sleepFor)(ms, signal),
       ),
   };
 }
@@ -92,7 +89,6 @@ async function publishPreview(
   pr: PrRef,
   useFork: boolean,
   preview: Preview,
-  wait: (ms: number) => Promise<void>,
 ): Promise<PublishedPreview> {
   const [pull, latestComment] = await Promise.all([
     fetchPull(api, pr),
@@ -109,11 +105,11 @@ async function publishPreview(
 
   const fork = useFork ? await forkOf(api, pr) : undefined;
   const storeRepo = fork?.fullName ?? pr.repoPath;
-  // A fork that already existed won't become writable by waiting: its 404 is a real error.
-  const firstWrite = fork?.isNew
-    ? (write: () => Promise<string>) => retryWhileForkIsNew(write, wait)
-    : (write: () => Promise<string>) => write();
-  const previewUrl = await storePreviewFile(api, pr, storeRepo, preview, firstWrite);
+  const previewUrl = await storePreviewFile(api, pr, storeRepo, preview).catch((error: unknown) => {
+    throw fork?.isNew && isNotReady(error)
+      ? new Error(`your fork ${fork.fullName} is still being created; retry in a minute`)
+      : error;
+  });
   const current = {
     sha: preview.headSha,
     url: previewUrl,
@@ -160,18 +156,15 @@ async function storePreviewFile(
   pr: PrRef,
   storeRepo: string,
   preview: Preview,
-  firstWrite: (write: () => Promise<string>) => Promise<string>,
 ): Promise<string> {
   const repo = `repos/${storeRepo}`;
   const file = `tulip-pr-${pr.number}-${shortSha(preview.headSha)}.html`;
 
-  const blobSha = await firstWrite(() =>
-    api(`${repo}/git/blobs`, {
-      method: "POST",
-      body: { content: preview.page, encoding: "utf-8" },
-      jq: ".sha",
-    }),
-  );
+  const blobSha = await api(`${repo}/git/blobs`, {
+    method: "POST",
+    body: { content: preview.page, encoding: "utf-8" },
+    jq: ".sha",
+  });
   const treeSha = await api(`${repo}/git/trees`, {
     method: "POST",
     body: { tree: [{ path: file, mode: "100644", type: "blob", sha: blobSha }] },
@@ -196,24 +189,9 @@ async function storePreviewFile(
 }
 
 /** A just-created fork answers writes with 404 or 409 until GitHub has copied the repo, which
- * GitHub says can take up to five minutes. */
-async function retryWhileForkIsNew(
-  write: () => Promise<string>,
-  wait: (ms: number) => Promise<void>,
-): Promise<string> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await write();
-    } catch (error) {
-      const notReady =
-        error instanceof GhApiError && (error.status === 404 || error.status === 409);
-      if (!notReady || attempt >= config.preview.forkWriteAttempts) {
-        throw error;
-      }
-      const { forkWriteRetryDelayMs, forkWriteMaxRetryDelayMs } = config.preview;
-      await wait(Math.min(forkWriteRetryDelayMs * 2 ** (attempt - 1), forkWriteMaxRetryDelayMs));
-    }
-  }
+ * GitHub says can take up to five minutes. An older fork's 404 is a real error. */
+function isNotReady(error: unknown): boolean {
+  return error instanceof GhApiError && (error.status === 404 || error.status === 409);
 }
 
 interface PreviewComment {
@@ -320,10 +298,6 @@ async function retire(
 
 function blobUrlPrefix(host: string, repo: string): string {
   return `https://${host}/${repo}/blob/`;
-}
-
-function sleepFor(ms: number, signal?: AbortSignal): Promise<void> {
-  return setTimeout(ms, undefined, signal ? { signal } : {});
 }
 
 function errorMessage(error: unknown): string {
