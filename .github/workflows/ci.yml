@@ -21,6 +21,16 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm lint
+      # Catches runtime imports of packages missing from `dependencies`.
+      - name: Run the packed package with production dependencies only
+        run: |
+          pnpm build:dist
+          mkdir -p "$RUNNER_TEMP/pkg"
+          pnpm pack --pack-destination "$RUNNER_TEMP/pkg"
+          cd "$RUNNER_TEMP/pkg"
+          npm init -y
+          npm install --omit=dev --no-audit --no-fund ./*.tgz
+          npx --no-install tulip --help
 
   auto-merge-dependabot:
     if: github.event.pull_request.user.login == 'dependabot[bot]'
