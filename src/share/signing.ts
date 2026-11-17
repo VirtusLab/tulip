@@ -1,5 +1,5 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { link, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 /** Only this user's Tulip can sign a page, so `tulip share` publishes nothing it didn't render,
@@ -35,13 +35,17 @@ async function shareKey(keyPath: string): Promise<Buffer> {
     }
   }
   await mkdir(dirname(keyPath), { recursive: true });
+  // The key appears complete or not at all, and `link` never replaces a key another run created.
+  const tmpPath = `${keyPath}.${randomUUID()}.tmp`;
   try {
-    await writeFile(keyPath, randomBytes(KEY_BYTES), { mode: 0o600, flag: "wx" });
+    await writeFile(tmpPath, randomBytes(KEY_BYTES), { mode: 0o600, flag: "wx" });
+    await link(tmpPath, keyPath);
   } catch (error) {
-    // Another run created it first.
     if ((error as { code?: string }).code !== "EEXIST") {
       throw error;
     }
+  } finally {
+    await rm(tmpPath, { force: true });
   }
   return readKey(keyPath);
 }

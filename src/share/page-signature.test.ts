@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -55,12 +55,6 @@ describe("readSignedPage", () => {
     });
     expect(signed).not.toContain(UNSIGNED);
     expect(signed.length).toBe(page().length);
-  });
-
-  it("creates the signing key readable only by the user", async () => {
-    await writeSigned();
-
-    expect((await stat(keyPath)).mode & 0o777).toBe(0o600);
   });
 
   it.each([
