@@ -252,7 +252,7 @@ posts a new comment, so reviewers are notified, and hides the old one.
 
 Sharing needs an authenticated `gh`, like `--serve`, and works with GitHub PRs
 only. Tulip doesn't delete old previews; see
-[ADR 0029](docs/adr/0029-preview-comment.md) for how to clean them up and for the
+[ADR 0032](docs/adr/0032-preview-comment.md) for how to clean them up and for the
 details.
 
 ## Development

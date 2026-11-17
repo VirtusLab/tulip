@@ -1,10 +1,10 @@
 import { escapeHtml } from "./escape.js";
 
 /** Stands in for the signature while signing, so the signature can sit inside what it signs
- * (docs/adr/0029). */
+ * (docs/adr/0032). */
 export const UNSIGNED = "0".repeat(64);
 
-/** What `tulip share` needs to know about a page (docs/adr/0029). */
+/** What `tulip share` needs to know about a page (docs/adr/0032). */
 export interface PageRun {
   prUrl: string;
   headSha: string;

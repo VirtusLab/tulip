@@ -13,7 +13,7 @@ export interface AssembleDeps {
   writeFile?: FileWriter;
 }
 
-/** The run dir's page: the static one, also what's shared (docs/adr/0029). */
+/** The run dir's page: the static one, also what's shared (docs/adr/0032). */
 export const PAGE_FILENAME = "index.html";
 
 export interface AssembleResult {

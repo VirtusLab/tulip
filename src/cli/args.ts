@@ -26,7 +26,7 @@ export interface RunOptions {
   /** Run a local review server that posts a per-category PR comment (docs/adr/0019). Only for
    * forges with a `commenter`. Defaults to false (render a static page and exit). */
   serve: boolean;
-  /** Share the page on the PR once the run ends (docs/adr/0029). */
+  /** Share the page on the PR once the run ends (docs/adr/0032). */
   attachPreviewAsComment: boolean;
   /** Which agent CLI runs the LLM passes (docs/adr/0027), when given as `--agent`. When absent,
    * the remembered choice or the default is used (see ./agent-choice.ts). */

@@ -46,7 +46,7 @@ export interface PipelineOptions {
   /** Run a local review server that posts per-category PR comments (docs/adr/0019), instead of
    * rendering a static page and exiting. Fails when the PR's forge has no `commenter`. */
   serve: boolean;
-  /** Share the page on the PR once the run ends (docs/adr/0029). Fails when the PR's forge has no
+  /** Share the page on the PR once the run ends (docs/adr/0032). Fails when the PR's forge has no
    * `previewPublisher`. */
   attachPreviewAsComment: boolean;
   /** Signs the page so `tulip share` can trust it later (see src/share/signing.ts). */

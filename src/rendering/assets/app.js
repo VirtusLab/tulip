@@ -641,7 +641,7 @@
     });
   }
 
-  // Serve mode only (docs/adr/0029): the server publishes at most once, so a second click just
+  // Serve mode only (docs/adr/0032): the server publishes at most once, so a second click just
   // shows the same comment again.
   function setupShareButton() {
     var button = document.querySelector(".share-submit");

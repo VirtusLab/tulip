@@ -47,7 +47,7 @@ export interface PageInput {
    * per-category PR comment via the local server's `/api/comment` (see ./assets/app.js). Default
    * (false/omitted) renders the static page with no boxes — byte-for-byte unchanged. */
   serve?: boolean;
-  /** Adds the header's Share button, for a server that can share the page (docs/adr/0029). */
+  /** Adds the header's Share button, for a server that can share the page (docs/adr/0032). */
   share?: boolean;
   /** The stylesheet and scripts embedded into the page (docs/adr/0030). */
   inlineAssets: InlineAssets;
@@ -184,7 +184,7 @@ function renderCategorySection(
   return `<section id="${categoryId(index)}" class="category page-section">\n${head}\n${bodyWithBox}\n</section>`;
 }
 
-/** Serve-mode Share button (docs/adr/0029); ./assets/app.js's `setupShareButton` wires it to the
+/** Serve-mode Share button (docs/adr/0032); ./assets/app.js's `setupShareButton` wires it to the
  * local server's `/api/share`. */
 const SHARE_BOX = `<div class="share-box">
 <button type="button" class="review-submit share-submit">Share on PR</button>

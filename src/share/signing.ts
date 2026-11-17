@@ -3,7 +3,7 @@ import { link, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 /** Only this user's Tulip can sign a page, so `tulip share` publishes nothing it didn't render,
- * wherever the file came from (docs/adr/0029). The key lives next to the settings. */
+ * wherever the file came from (docs/adr/0032). The key lives next to the settings. */
 export function shareKeyPath(settingsPath: string): string {
   return join(dirname(settingsPath), "share-key");
 }

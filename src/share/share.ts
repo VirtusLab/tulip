@@ -16,7 +16,7 @@ export interface ShareDeps {
   logger?: Logger;
 }
 
-/** `tulip share`: publishes an earlier run's page on its PR (docs/adr/0029). */
+/** `tulip share`: publishes an earlier run's page on its PR (docs/adr/0032). */
 export async function shareRun(
   location: string,
   keyPath: string,

@@ -42,7 +42,7 @@ export interface ForgeAdapter {
   readonly checkoutAuth: CheckoutAuth;
   /** Posts PR comments for serve mode (docs/adr/0019); absent when the forge doesn't support it. */
   readonly commenter?: PrCommenter;
-  /** Shares the page on the PR (docs/adr/0029); absent when the forge doesn't support it. */
+  /** Shares the page on the PR (docs/adr/0032); absent when the forge doesn't support it. */
   readonly previewPublisher?: PreviewPublisher;
 }
 

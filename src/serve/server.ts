@@ -17,7 +17,7 @@ export interface ReviewServerOptions {
   categoryNames: string[];
   /** Posts a comment, e.g. the PR's forge's {@link PrCommenter.postComment}. */
   postComment: PrCommenter["postComment"];
-  /** Shares the page on the PR (docs/adr/0029); resolves with the comment's URL. */
+  /** Shares the page on the PR (docs/adr/0032); resolves with the comment's URL. */
   share?: () => Promise<string>;
   logger?: Logger;
 }
