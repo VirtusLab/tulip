@@ -18,6 +18,8 @@ export const claudeBackend: AgentBackend = {
   planSpawn,
   parseReply,
   describeFailure,
+  // A resume's `total_cost_usd` includes the earlier calls of its session (seen in a live run).
+  costIsSessionTotal: true,
 };
 
 /** Built-in tools that write files or run commands. */

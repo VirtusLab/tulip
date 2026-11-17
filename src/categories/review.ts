@@ -62,6 +62,7 @@ export async function reviewAndAmendCategories(
         files: input.files,
         categories: input.categories,
       }),
+      label: { step: "category-review" },
     },
     deps,
   );
@@ -77,6 +78,7 @@ export async function reviewAndAmendCategories(
       sessionId: input.generateSessionId,
       schema: GENERATE_CATEGORIES_SCHEMA,
       prompt: buildCategoryReviewAmendPrompt(review.result.issues),
+      label: { step: "category-review-amend" },
     },
     deps,
   );

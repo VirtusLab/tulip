@@ -124,7 +124,7 @@ describe("style.css layout — computed grid-column (real CSS, real DOM)", () =>
     }
     expect(gridColumn(folded)).toBe("1 / -1");
     const summary = folded.querySelector("summary");
-    expect(getComputedStyle(summary as Element).width).toBe("min(var(--prose-measure), 100%)");
+    expect(getComputedStyle(summary as Element).width).toBe("min(576px, 100%)"); // --prose-measure
     expect(getComputedStyle(summary as Element).marginLeft).toBe("auto");
     // The content below is an ordinary subsection grid, so its snippets can still break out.
     expect(getComputedStyle(folded.querySelector(".subsection") as Element).display).toBe("grid");
@@ -238,10 +238,8 @@ describe("style.css layout — spacing/alignment fixes (real CSS, real DOM)", ()
 });
 
 describe("style.css layout — vertical rhythm (real CSS, real DOM)", () => {
-  // jsdom's CSS engine resolves a `var(...)` reference for a longhand property like
-  // `margin-top` to the literal, unresolved token (never a computed px value) — good enough to
-  // distinguish which spacing-scale step a rule applies (or that a rule was zeroed to "0px"),
-  // which is all these checks need.
+  // jsdom resolves `var(...)` and rem to px (1rem = 16px), so each spacing-scale step is
+  // checked by its px value: --space-1 = 8px, --space-2 = 16px, --space-3 = 24px.
   it("zeroes a section/category heading's own margin so it doesn't double the section's padding", () => {
     const doc = renderIntoJsdom();
     const categoryHeading = mustQuery(doc, "#category-0 > h2");
@@ -252,14 +250,14 @@ describe("style.css layout — vertical rhythm (real CSS, real DOM)", () => {
     const doc = renderIntoJsdom();
     const description = mustQuery(doc, "#category-0 > .category-description");
     const introParagraph = mustQuery(doc, "#category-0 > p:not(.category-description)");
-    expect(getComputedStyle(description).marginTop).toBe("var(--space-1)");
-    expect(getComputedStyle(introParagraph).marginTop).toBe("var(--space-2)");
+    expect(getComputedStyle(description).marginTop).toBe("8px"); // --space-1
+    expect(getComputedStyle(introParagraph).marginTop).toBe("16px"); // --space-2
   });
 
   it("gives a subsection a bigger jump than the general paragraph rhythm", () => {
     const doc = renderIntoJsdom();
     const subsection = mustQuery(doc, ".subsection");
-    expect(getComputedStyle(subsection).marginTop).toBe("var(--space-3)");
+    expect(getComputedStyle(subsection).marginTop).toBe("24px"); // --space-3
   });
 
   it("zeroes a subsection's own h3 margin so it doesn't double the subsection's own margin-top", () => {
@@ -289,7 +287,7 @@ describe("style.css layout — vertical rhythm (real CSS, real DOM)", () => {
     // Was an off-scale 2rem (docs/adr/0009's fix-up) — now the --space-2 rhythm step. Combined
     // with .page-section's own 1.5rem padding-top (a literal — see that rule's own comment for
     // why), the border->heading gap drops from ~3.5rem to ~2.5rem.
-    expect(getComputedStyle(prHeader).marginBottom).toBe("var(--space-2)");
+    expect(getComputedStyle(prHeader).marginBottom).toBe("16px"); // --space-2
     expect(getComputedStyle(prDescriptionSection).paddingTop).toBe("24px"); // 1.5rem
   });
 });

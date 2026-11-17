@@ -67,6 +67,7 @@ export async function resolveNoneClassifications(
       sessionId: state.classifierSessionId,
       schema: buildClassifyBatchSchema(state.categories),
       prompt: buildEscapeHatchResumePrompt(state.categories, outcomes),
+      label: { step: "classify-escape-hatch" },
     },
     deps,
   );

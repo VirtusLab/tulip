@@ -43,6 +43,9 @@ export interface AgentReply {
   usage?: ModelTokens;
   numTurns?: number;
   durationMs?: number;
+  /** Cost in USD, as the CLI reports it: the call's own, or its session's running total for a
+   * backend with {@link AgentBackend.costIsSessionTotal}. */
+  costUsd?: number;
 }
 
 /** One invocation, as handed to {@link AgentBackend.planSpawn}. */
@@ -93,6 +96,8 @@ export interface AgentBackend {
   /** Set when a reply's usage is its session's running total rather than that call's own; the
    * runner then records the difference from the session's previous total. */
   usageIsSessionTotal?: boolean;
+  /** Set when a reply's cost is its session's running total rather than that call's own. */
+  costIsSessionTotal?: boolean;
   /** Set when {@link planSpawn} grants read access to {@link AgentCallArgs.contextDirs}; the
    * pipeline refuses `--context-dir` for any other backend rather than silently ignoring it. */
   supportsContextDirs?: boolean;
@@ -111,6 +116,9 @@ export interface Agent {
   /** Each session's latest running usage total, for a backend with
    * {@link AgentBackend.usageIsSessionTotal}. */
   sessionUsage: Map<string, ModelTokens>;
+  /** Each session's latest running cost, for a backend with
+   * {@link AgentBackend.costIsSessionTotal}. */
+  sessionCost: Map<string, number>;
   /** Absolute paths from `--context-dir`, readable by every session; empty when none were
    * given. */
   contextDirs: string[];

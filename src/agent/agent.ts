@@ -16,6 +16,7 @@ export function createAgent(backend: AgentBackend, contextDirs: string[] = []): 
     }),
     sessionTiers: new Map(),
     sessionUsage: new Map(),
+    sessionCost: new Map(),
     contextDirs,
   };
 }

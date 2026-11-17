@@ -11,6 +11,8 @@ const SCHEMA: JsonSchema = {
   properties: { ok: { type: "boolean" } },
 };
 
+const LABEL = { step: "test" };
+
 function envelope(sessionId = "session-1"): AgentProcessResult {
   return {
     stdout: JSON.stringify({
@@ -26,7 +28,10 @@ describe("runSession", () => {
   it("prepends the shared preamble to the prompt, sent via stdin", async () => {
     const runAgentProcess = vi.fn(async (_args: string[], _input: string) => envelope());
 
-    await runSession({ model: "balanced", schema: SCHEMA, prompt: "say hi" }, { runAgentProcess });
+    await runSession(
+      { model: "balanced", schema: SCHEMA, prompt: "say hi", label: LABEL },
+      { runAgentProcess },
+    );
 
     const input = runAgentProcess.mock.calls[0]?.[1];
     expect(input).toBe(`${PREAMBLE}\n\nsay hi`);
@@ -36,7 +41,7 @@ describe("runSession", () => {
     const runAgentProcess = vi.fn(async (_args: string[], _input: string) => envelope("abc"));
 
     const { result, sessionId } = await runSession(
-      { model: "fast", schema: SCHEMA, prompt: "say hi" },
+      { model: "fast", schema: SCHEMA, prompt: "say hi", label: LABEL },
       { runAgentProcess },
     );
 
@@ -52,7 +57,7 @@ describe("resumeSession", () => {
     agent.sessionTiers.set("abc", "strong");
 
     await resumeSession(
-      { sessionId: "abc", schema: SCHEMA, prompt: "follow up" },
+      { sessionId: "abc", schema: SCHEMA, prompt: "follow up", label: LABEL },
       { runAgentProcess, agent },
     );
 

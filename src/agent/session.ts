@@ -1,3 +1,4 @@
+import type { CallLabel } from "./call-log.js";
 import { withPreamble } from "./preamble.js";
 import { type AgentRunResult, invokeAgent, type RunnerDeps } from "./runner.js";
 import type { JsonSchema } from "./schema.js";
@@ -7,6 +8,8 @@ export interface RunSessionOptions {
   model: ModelTier;
   schema: JsonSchema;
   prompt: string;
+  /** Tags the call in the run's call log (see ./call-log.ts). */
+  label: CallLabel;
 }
 
 export interface ResumeSessionOptions {
@@ -14,6 +17,8 @@ export interface ResumeSessionOptions {
   sessionId: string;
   schema: JsonSchema;
   prompt: string;
+  /** Tags the call in the run's call log (see ./call-log.ts). */
+  label: CallLabel;
 }
 
 /**
@@ -25,7 +30,12 @@ export function runSession<T = unknown>(
   deps: RunnerDeps = {},
 ): Promise<AgentRunResult<T>> {
   return invokeAgent<T>(
-    { model: options.model, schema: options.schema, prompt: withPreamble(options.prompt) },
+    {
+      model: options.model,
+      schema: options.schema,
+      prompt: withPreamble(options.prompt),
+      label: options.label,
+    },
     deps,
   );
 }
@@ -40,7 +50,12 @@ export function resumeSession<T = unknown>(
   deps: RunnerDeps = {},
 ): Promise<AgentRunResult<T>> {
   return invokeAgent<T>(
-    { resumeSessionId: options.sessionId, schema: options.schema, prompt: options.prompt },
+    {
+      resumeSessionId: options.sessionId,
+      schema: options.schema,
+      prompt: options.prompt,
+      label: options.label,
+    },
     deps,
   );
 }

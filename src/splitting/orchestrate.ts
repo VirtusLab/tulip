@@ -63,13 +63,14 @@ export async function splitLargeChanges(
   // src/agent/concurrency.ts) caps actual parallelism. Results are merged in batch order so the
   // outcome doesn't depend on which session finished first.
   const batchResults = await Promise.all(
-    batches.map(async (batch): Promise<SplitResponse["splits"]> => {
+    batches.map(async (batch, index): Promise<SplitResponse["splits"]> => {
       try {
         const { result } = await runSession<SplitResponse>(
           {
             model: config.models.changeSplitting,
             schema: SPLIT_SCHEMA,
             prompt: buildSplitPrompt({ categories: input.categories, candidates: batch }),
+            label: { step: "split", batch: index + 1 },
           },
           deps,
         );

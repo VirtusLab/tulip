@@ -110,6 +110,7 @@ export async function verifyAndRepairCoverage(
         sessionId: state.classifierSessionId,
         schema: buildClassifyBatchSchema(state.categories),
         prompt: buildCoverageRepairPrompt(state.categories, missing),
+        label: { step: "classify-repair", attempt: attempt + 1 },
       },
       deps,
     );
