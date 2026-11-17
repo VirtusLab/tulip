@@ -7,6 +7,7 @@ import type {
   PublishedPreview,
 } from "../forge/types.js";
 import { forgeFor } from "../forge-registry/registry.js";
+import { errorMessage } from "../logging/error-message.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 import { readSignedPage } from "./page-signature.js";
 
@@ -115,9 +116,7 @@ export async function shareOrSuggestRetry(
   try {
     await share();
   } catch (error) {
-    logger.info(
-      `sharing the preview failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    logger.info(`sharing the preview failed: ${errorMessage(error)}`);
     if (pagePath !== undefined) {
       logger.info(`retry without re-running the analysis: ${shareCommand(pagePath)}`);
     }

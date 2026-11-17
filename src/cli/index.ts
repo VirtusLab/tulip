@@ -23,27 +23,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  let options: ReturnType<typeof parseCliArgs>;
-  try {
-    options = parseCliArgs(process.argv.slice(2));
-  } catch (error) {
-    if (error instanceof HelpRequestedError) {
-      console.log(usage());
-      process.exitCode = 0;
-      return;
-    }
-    if (error instanceof VersionRequestedError) {
-      console.log(formatVersion());
-      process.exitCode = 0;
-      return;
-    }
-    if (error instanceof CliUsageError) {
-      console.error(`tulip: ${error.message}\n`);
-      console.error(usage());
-      process.exitCode = 1;
-      return;
-    }
-    throw error;
+  const options = parseOrReport(() => parseCliArgs(process.argv.slice(2)));
+  if (options === undefined) {
+    return;
   }
 
   const agent = await resolveAgent(options.agent, {
@@ -54,25 +36,38 @@ async function main(): Promise<void> {
 }
 
 async function shareMain(argv: string[]): Promise<void> {
-  let options: ReturnType<typeof parseShareArgs>;
+  const options = parseOrReport(() => parseShareArgs(argv));
+  if (options === undefined) {
+    return;
+  }
+  await shareRun(options.location, shareKeyPath(userSettingsPath()), {
+    logger: createLogger({ verbose: options.verbose }),
+  });
+}
+
+/** Undefined when the arguments asked for help or the version, or were invalid; that's reported. */
+function parseOrReport<T>(parse: () => T): T | undefined {
   try {
-    options = parseShareArgs(argv);
+    return parse();
   } catch (error) {
     if (error instanceof HelpRequestedError) {
       console.log(usage());
-      return;
+      process.exitCode = 0;
+      return undefined;
+    }
+    if (error instanceof VersionRequestedError) {
+      console.log(formatVersion());
+      process.exitCode = 0;
+      return undefined;
     }
     if (error instanceof CliUsageError) {
       console.error(`tulip: ${error.message}\n`);
       console.error(usage());
       process.exitCode = 1;
-      return;
+      return undefined;
     }
     throw error;
   }
-  await shareRun(options.location, shareKeyPath(userSettingsPath()), {
-    logger: createLogger({ verbose: options.verbose }),
-  });
 }
 
 main().catch((error: unknown) => {

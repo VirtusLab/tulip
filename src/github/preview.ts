@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { COMMIT_SHA_PATTERN, shortSha } from "../forge/sha.js";
 import type { PreparedPreview, Preview, PrRef, PublishedPreview } from "../forge/types.js";
+import { errorMessage } from "../logging/error-message.js";
 import { runCommand } from "../process/exec.js";
 import { type CommandRunner, type GhApi, GhApiError, ghApi, ghGraphql } from "./gh.js";
 import { checkGhAuth } from "./gh-auth.js";
@@ -312,8 +313,4 @@ async function retire(
   } catch (error) {
     return [`couldn't retire the earlier preview comment ${comment.url}: ${errorMessage(error)}`];
   }
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

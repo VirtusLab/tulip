@@ -3,6 +3,7 @@ import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { config } from "../config.js";
 import type { PrCommenter } from "../forge/types.js";
+import { errorMessage } from "../logging/error-message.js";
 import { createLogger, type Logger } from "../logging/logger.js";
 
 /** What {@link createReviewServer} needs: the page to serve, the PR to post to, the ordered
@@ -56,25 +57,8 @@ export function createReviewServer(opts: ReviewServerOptions): http.Server {
       return;
     }
 
-    if (
-      req.method === "POST" &&
-      (req.url === "/api/comment" || req.url?.startsWith("/api/comment?"))
-    ) {
-      void handleComment(req, res, opts, logger, expectedOrigin);
-      return;
-    }
-
-    if (
-      req.method === "POST" &&
-      opts.share &&
-      (req.url === "/api/share" || req.url?.startsWith("/api/share?"))
-    ) {
-      void handleShare(req, res, opts.share, logger, expectedOrigin);
-      return;
-    }
-
     if (req.method === "POST") {
-      sendJson(res, 404, { error: "not found" });
+      handlePost(req, res, opts, logger, expectedOrigin);
       return;
     }
 
@@ -93,14 +77,13 @@ function handleGet(req: http.IncomingMessage, res: http.ServerResponse, page: st
   res.end(page);
 }
 
-/** Handles `POST /api/comment`: validates the body, builds the comment server-side, posts it. */
-async function handleComment(
+function handlePost(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   opts: ReviewServerOptions,
   logger: Logger,
   expectedOrigin: string,
-): Promise<void> {
+): void {
   // Absent Origin is allowed (Host guard + random port already cover the no-Origin case); a
   // present-but-foreign Origin is a cross-site driver → reject.
   const origin = req.headers.origin;
@@ -109,6 +92,26 @@ async function handleComment(
     return;
   }
 
+  if (req.url === "/api/comment" || req.url?.startsWith("/api/comment?")) {
+    void handleComment(req, res, opts, logger);
+    return;
+  }
+
+  if (opts.share && (req.url === "/api/share" || req.url?.startsWith("/api/share?"))) {
+    void handleShare(req, res, opts.share, logger);
+    return;
+  }
+
+  sendJson(res, 404, { error: "not found" });
+}
+
+/** Handles `POST /api/comment`: validates the body, builds the comment server-side, posts it. */
+async function handleComment(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  opts: ReviewServerOptions,
+  logger: Logger,
+): Promise<void> {
   const cap = config.serve.maxRequestBodyBytes;
   const declared = Number(req.headers["content-length"]);
   if (Number.isFinite(declared) && declared > cap) {
@@ -158,9 +161,7 @@ async function handleComment(
     sendJson(res, 200, { url });
   } catch (error) {
     // Detail stays in the log; the response never carries it (no stack leak to the browser).
-    logger.info(
-      `failed to post PR comment: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    logger.info(`failed to post PR comment: ${errorMessage(error)}`);
     sendJson(res, 500, { error: "failed to post comment" });
   }
 }
@@ -171,13 +172,7 @@ async function handleShare(
   res: http.ServerResponse,
   share: () => Promise<string>,
   logger: Logger,
-  expectedOrigin: string,
 ): Promise<void> {
-  const origin = req.headers.origin;
-  if (origin !== undefined && origin !== expectedOrigin) {
-    sendJson(res, 403, { error: "forbidden" });
-    return;
-  }
   // With no body to validate, this is what stops a cross-site form: it can't send this type, and a
   // cross-site fetch that does needs a CORS preflight, which this server never answers.
   if (!req.headers["content-type"]?.startsWith("application/json")) {
@@ -187,9 +182,7 @@ async function handleShare(
   try {
     sendJson(res, 200, { url: await share() });
   } catch (error) {
-    logger.info(
-      `failed to share the preview: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    logger.info(`failed to share the preview: ${errorMessage(error)}`);
     sendJson(res, 500, { error: "failed to share the preview" });
   }
 }
