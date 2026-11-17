@@ -4,18 +4,20 @@ import { escapeHtml, escapeInlineScript } from "./escape.js";
 import type { FileDiffData } from "./file-diffs.js";
 import { renderFileTree } from "./file-tree.js";
 import { categoryId, PR_DESCRIPTION_ID, type SubsectionWithId, withSubsectionIds } from "./ids.js";
-import { type InlineAssets, scriptHash } from "./inline-assets.js";
 import { type MarkdownRenderContext, renderCategoryMarkdown } from "./markdown.js";
+import { type PageAssets, type PageScript, scriptHash } from "./page-assets.js";
 import { pageRunMetaTags } from "./page-meta.js";
 import { splitCategoryMarkdown } from "./sections.js";
 import { buildToc, renderTocHtml } from "./toc.js";
 
-/** Why: docs/adr/0028 and docs/adr/0030. The inline `<script type="application/json">` blocks
- * are data, which `script-src` doesn't govern. */
-function contentSecurityPolicy(scripts: string[]): string {
+/** Why: docs/adr/0028, docs/adr/0030 and docs/adr/0033. The inline
+ * `<script type="application/json">` blocks are data, which `script-src` doesn't govern. A CDN
+ * script is allowed by its full URL, so no other file on that host can run. */
+function contentSecurityPolicy(scripts: PageScript[]): string {
+  const sources = scripts.map((script) => ("src" in script ? script.src : scriptHash(script.text)));
   return [
     "default-src 'none'",
-    `script-src ${scripts.map(scriptHash).join(" ")}`,
+    `script-src ${sources.join(" ")}`,
     "style-src 'unsafe-inline'",
     "img-src data:",
     "font-src data:",
@@ -49,8 +51,8 @@ export interface PageInput {
   serve?: boolean;
   /** Adds the header's Share button, for a server that can share the page (docs/adr/0032). */
   share?: boolean;
-  /** The stylesheet and scripts embedded into the page (docs/adr/0030). */
-  inlineAssets: InlineAssets;
+  /** The page's stylesheet and scripts (docs/adr/0030, docs/adr/0033). */
+  assets: PageAssets;
 }
 
 /** Everything `renderCategorySection` needs for one category, computed once in `renderPage`: the
@@ -104,10 +106,10 @@ export function renderPage(input: PageInput): string {
 <head>
 <meta charset="utf-8">
 ${pageRunMetaTags({ prUrl: input.prUrl, headSha: input.headSha, generatedAt: input.generatedAt })}
-<meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy(input.inlineAssets.scripts)}">
+<meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy(input.assets.scripts)}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(input.prTitle)} — Tulip</title>
-<style>${input.inlineAssets.style}</style>
+<style>${input.assets.style}</style>
 </head>
 <body>
 <button id="theme-toggle" type="button" aria-label="Toggle light/dark theme">◐</button>
@@ -130,10 +132,16 @@ ${sections}
 </main>
 <script type="application/json" id="tulip-mermaid-sources">${escapeInlineScript(JSON.stringify(ctx.mermaidSources))}</script>
 <script type="application/json" id="tulip-file-data">${escapeInlineScript(JSON.stringify(embeddableFileData(input.fileDiffs)))}</script>
-${input.inlineAssets.scripts.map((script) => `<script>${script}</script>`).join("\n")}
+${input.assets.scripts.map(scriptElement).join("\n")}
 </body>
 </html>
 `;
+}
+
+function scriptElement(script: PageScript): string {
+  return "src" in script
+    ? `<script src="${escapeHtml(script.src)}" integrity="${escapeHtml(script.integrity)}" crossorigin="anonymous"></script>`
+    : `<script>${script.text}</script>`;
 }
 
 /** Rows for every path under the embed-size cap, keyed by path — lets ./assets/app.js reveal

@@ -5,7 +5,7 @@ import { createLogger, type Logger } from "../logging/logger.js";
 import { type BuildInfo, formatVersion, getBuildInfo } from "../version.js";
 import { type AssembleDeps, type AssembleResult, assembleOutput } from "./assemble.js";
 import { loadFileDiffs } from "./file-diffs.js";
-import type { InlineAssets } from "./inline-assets.js";
+import type { PageAssets } from "./page-assets.js";
 import { type PageInput, renderPage } from "./template.js";
 
 /** What's needed to render the final page: PR context plus the reviewed, coverage-verified
@@ -28,7 +28,7 @@ export interface RenderInput {
   share?: boolean;
   /** Embedded into the page (docs/adr/0030). Loaded by the caller, so missing assets fail a run
    * before its LLM work rather than after. */
-  inlineAssets: InlineAssets;
+  assets: PageAssets;
 }
 
 export interface RenderResult extends AssembleResult {
@@ -76,7 +76,7 @@ export async function renderExplanations(
     explanations: input.explanations,
     fileDiffs,
     generatedBy: formatVersion((deps.getBuildInfo ?? getBuildInfo)()),
-    inlineAssets: input.inlineAssets,
+    assets: input.assets,
   };
 
   const page = renderPage(pageInput);

@@ -1,7 +1,7 @@
 // tsc only compiles .ts files, so the static rendering assets (CSS/JS/vendored mermaid — see
 // src/rendering/assets) need a separate copy step to land next to the compiled JS in dist/,
 // where src/rendering/render.ts looks for them at runtime when running from a build.
-import { cp, mkdir, readdir } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHljsBundle } from "./build-hljs-bundle.mjs";
@@ -12,13 +12,16 @@ const dest = fileURLToPath(new URL("../dist/rendering/assets", import.meta.url))
 
 // The vendored mermaid bundle isn't checked into git (see .gitignore) — refresh it here from
 // the installed npm package, rather than hand-copying it, so it can never drift from the
-// `mermaid` devDependency in package.json.
-const mermaidSrc = fileURLToPath(
-  new URL("../node_modules/mermaid/dist/mermaid.min.js", import.meta.url),
-);
+// `mermaid` dependency in package.json.
+const mermaidPkg = fileURLToPath(new URL("../node_modules/mermaid/", import.meta.url));
 const vendorDir = join(src, "vendor");
 await mkdir(vendorDir, { recursive: true });
-await cp(mermaidSrc, join(vendorDir, "mermaid.min.js"));
+await cp(join(mermaidPkg, "dist/mermaid.min.js"), join(vendorDir, "mermaid.min.js"));
+// The page loads this version from jsDelivr unless --offline (src/rendering/page-assets.ts).
+const { version: mermaidVersion } = JSON.parse(
+  await readFile(join(mermaidPkg, "package.json"), "utf8"),
+);
+await writeFile(join(vendorDir, "mermaid.version"), `${mermaidVersion}\n`);
 
 // The vendored syntax-highlighting bundle isn't checked into git either (see .gitignore) — it's
 // built fresh from the `highlight.js` devDependency by ./build-hljs-bundle.mjs, since that
@@ -30,7 +33,7 @@ await buildHljsBundle(join(vendorDir, "highlight.min.js"));
 // woff2 files; only the "wght"-axis (no optical-size axis — smaller file), non-italic, latin
 // subset is copied, since that's all this page needs (docs/adr/0004). The OFL requires the
 // license to travel with the font: each is copied as `<font>.LICENSE.txt`, the name
-// src/rendering/inline-assets.ts derives from the font to embed it in the page.
+// src/rendering/page-assets.ts derives from the font to embed it in the page.
 const fontsDir = join(vendorDir, "fonts");
 await mkdir(fontsDir, { recursive: true });
 const FONTS = [

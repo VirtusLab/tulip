@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { serializeSnippetRef } from "../explanations/markup.js";
 import type { CategoryExplanation } from "../explanations/types.js";
 import type { FileDiffData } from "./file-diffs.js";
-import { scriptHash } from "./inline-assets.js";
 import { buildAlignedDiff } from "./line-diff.js";
 import { NO_ASSETS, PAGE_RUN } from "./page.fixture.js";
+import { type PageScript, scriptHash } from "./page-assets.js";
 import { UNSIGNED } from "./page-meta.js";
 import { renderPage } from "./template.js";
 
@@ -22,10 +22,22 @@ function explanation(overrides: Partial<CategoryExplanation> = {}): CategoryExpl
   };
 }
 
+function pageWithScripts(scripts: PageScript[]): string {
+  return renderPage({
+    prTitle: "t",
+    prDescription: "",
+    prUrl: "https://github.com/acme/widgets/pull/7",
+    ...PAGE_RUN,
+    fileDiffs: new Map(),
+    explanations: [],
+    assets: { style: "body{color:red}", scripts },
+  });
+}
+
 describe("renderPage", () => {
   it("renders the PR header with title, description and link", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "Add retry logic",
       prDescription: "Retries flaky requests.",
       prUrl: "https://github.com/acme/widgets/pull/7",
@@ -43,7 +55,7 @@ describe("renderPage", () => {
 
   it("records what sharing needs at the start of the head, before the PR title", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: '<meta name="tulip-pr-url" content="x">',
       prDescription: "",
       prUrl: "https://github.com/acme/widgets/pull/7",
@@ -64,35 +76,42 @@ describe("renderPage", () => {
   });
 
   it("embeds its assets and lets the page load nothing else but data: images and fonts", () => {
-    const scripts = ["var m=1;", "var h=2;", "var a=3;"];
-    const html = renderPage({
-      prTitle: "t",
-      prDescription: "",
-      prUrl: "https://github.com/acme/widgets/pull/7",
-      ...PAGE_RUN,
-      fileDiffs: new Map(),
-      explanations: [],
-      inlineAssets: { style: "body{color:red}", scripts },
-    });
+    const texts = ["var m=1;", "var h=2;", "var a=3;"];
+    const html = pageWithScripts(texts.map((text) => ({ text })));
     const root = parse(html);
 
     expect(root.querySelector("style")?.text).toBe("body{color:red}");
-    expect(root.querySelectorAll("script:not([type])").map((script) => script.text)).toEqual(
-      scripts,
-    );
+    expect(root.querySelectorAll("script:not([type])").map((script) => script.text)).toEqual(texts);
     expect(root.querySelectorAll("link, [src]")).toEqual([]);
     expect(
       root.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content"),
     ).toBe(
-      `default-src 'none'; script-src ${scripts.map(scriptHash).join(" ")}; ` +
+      `default-src 'none'; script-src ${texts.map(scriptHash).join(" ")}; ` +
         "style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'self'; " +
         "form-action 'none'; base-uri 'none'",
     );
   });
 
+  it("loads a CDN script with its integrity, allowed by its exact URL", () => {
+    const cdn = { src: "https://cdn.example/npm/m@1.0.0/m.js", integrity: "sha384-abc" };
+    const root = parse(pageWithScripts([cdn, { text: "var a=3;" }]));
+
+    const [external, inline] = root.querySelectorAll("script:not([type])");
+    expect(external?.attributes).toEqual({
+      src: cdn.src,
+      integrity: cdn.integrity,
+      crossorigin: "anonymous",
+    });
+    expect(external?.text).toBe("");
+    expect(inline?.text).toBe("var a=3;");
+    expect(
+      root.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content"),
+    ).toContain(`script-src ${cdn.src} ${scriptHash("var a=3;")};`);
+  });
+
   it("renders the PR's original description as its own labeled section, before the analysis, with a TOC entry", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "Retries flaky requests.",
       prUrl: "https://github.com/a/b/pull/1",
@@ -129,7 +148,7 @@ describe("renderPage", () => {
     const rows = buildAlignedDiff("a\n", "a\n");
     const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: `Some prose.\n\n${ref}\n`,
       prUrl: "https://github.com/a/b/pull/1",
@@ -154,7 +173,7 @@ describe("renderPage", () => {
     const rows = buildAlignedDiff("a\n", "a\n");
     const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -188,7 +207,7 @@ describe("renderPage", () => {
 
   it("renders no empty heading for a ## line that names nothing", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -205,7 +224,7 @@ describe("renderPage", () => {
 
   it("renders one section per category, in given order", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -233,7 +252,7 @@ describe("renderPage", () => {
 
   it("renders a category's file tree at the top, before its body, and omits it when no files", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -268,7 +287,7 @@ describe("renderPage", () => {
 
   it("renders each category's attention badge in its section heading, with the right label and weight class", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -295,7 +314,7 @@ describe("renderPage", () => {
 
   it("renders no attention badge on a subsection", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -309,7 +328,7 @@ describe("renderPage", () => {
 
   it("splits a category into subsections when the markdown has ## headings", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -337,7 +356,7 @@ describe("renderPage", () => {
       ["src/a.test.ts", { rows, embeddable: true }],
     ]);
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -367,7 +386,7 @@ describe("renderPage", () => {
       ["src/a.test.ts", { rows, embeddable: true }],
     ]);
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -382,7 +401,7 @@ describe("renderPage", () => {
 
   it("renders Tests and Documentation open when the category has no main content", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -400,7 +419,7 @@ describe("renderPage", () => {
 
   it("gives duplicate same-kind subsections distinct ids instead of colliding", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -424,7 +443,7 @@ describe("renderPage", () => {
 
   it("does not force subsections when the markdown has none", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -448,7 +467,7 @@ describe("renderPage", () => {
     const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
 
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -473,7 +492,7 @@ describe("renderPage", () => {
 
   it("includes a TOC entry per category and per present subsection", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -507,7 +526,7 @@ describe("renderPage", () => {
 
   it("turns mermaid fences into diagram placeholders and embeds their sources", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -538,7 +557,7 @@ describe("renderPage", () => {
     const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
 
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -569,7 +588,7 @@ describe("renderPage", () => {
     const fileDiffs = new Map<string, FileDiffData>([["src/big.ts", { rows, embeddable: false }]]);
 
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -586,7 +605,7 @@ describe("renderPage", () => {
 
   it("carries a highlight.js language-class hook for a fenced code block in prose", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -613,7 +632,7 @@ describe("renderPage", () => {
     const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
 
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -627,7 +646,7 @@ describe("renderPage", () => {
 
   it("carries the toggles with no network references", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -643,7 +662,7 @@ describe("renderPage", () => {
 
   it("renders a footer crediting the given build/version line", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -661,7 +680,7 @@ describe("renderPage", () => {
 
   it("renders the footer with a plain fallback line when generatedBy is omitted (e.g. the dev fallback)", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -674,7 +693,7 @@ describe("renderPage", () => {
 
   it("renders one review box per category when serve is true", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -713,14 +732,14 @@ describe("renderPage", () => {
       ...PAGE_RUN,
       fileDiffs: new Map(),
       explanations: [explanation()],
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
     };
     expect(renderPage(base)).not.toContain("review-box");
     expect(renderPage({ ...base, serve: false })).not.toContain("review-box");
   });
   it("renders the Share button in the header only when the server can share", () => {
     const base = {
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -741,7 +760,7 @@ describe("renderPage", () => {
 describe("renderPage XSS safety", () => {
   it("escapes a <script> tag in the PR title, description and URL", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: '<script>alert("title")</script>',
       prDescription: "before <script>alert(1)</script> after",
       prUrl: 'https://github.com/a/b/pull/1"><script>alert(2)</script>',
@@ -755,7 +774,7 @@ describe("renderPage XSS safety", () => {
 
   it("escapes a <script> tag in a category's name and description", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -779,7 +798,7 @@ describe("renderPage XSS safety", () => {
 
   it("escapes untrusted content inside the embedded mermaid-sources JSON, including a closing </script> sequence", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -812,7 +831,7 @@ describe("renderPage XSS safety", () => {
     const fileDiffs = new Map<string, FileDiffData>([["src/a.ts", { rows, embeddable: true }]]);
 
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -840,7 +859,7 @@ describe("renderPage XSS safety", () => {
     const fileDiffs = new Map<string, FileDiffData>([[path, { rows, embeddable: true }]]);
 
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",
@@ -856,7 +875,7 @@ describe("renderPage XSS safety", () => {
 
   it("escapes a <script> tag in the footer's generatedBy line", () => {
     const html = renderPage({
-      inlineAssets: NO_ASSETS,
+      assets: NO_ASSETS,
       prTitle: "t",
       prDescription: "d",
       prUrl: "https://github.com/a/b/pull/1",

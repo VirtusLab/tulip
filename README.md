@@ -135,15 +135,16 @@ tulip https://gitlab.com/group/project/-/merge_requests/45
 ```
 
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
-`--attach-preview-as-comment`, `--agent <id>`, `--context-dir <path>`. Run
-`tulip --help` for details, or `tulip --version` for the build. `tulip share
-<page>` shares an earlier run's page on its PR (see [Sharing the page on the
-PR](#sharing-the-page-on-the-pr)).
+`--attach-preview-as-comment`, `--offline`, `--agent <id>`,
+`--context-dir <path>`. Run `tulip --help` for details, or `tulip --version` for
+the build. `tulip share <page>` shares an earlier run's page on its PR (see
+[Sharing the page on the PR](#sharing-the-page-on-the-pr)).
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
 in a browser. The page is a single `index.html` with its CSS, scripts and fonts
-embedded, so you can send it as one file. Most of its few MB is the diagram
-library.
+embedded, so you can send it as one file. It loads the diagram library from the
+jsDelivr CDN; with `--offline` it embeds that too (about 5 MB more), so it works
+without network.
 
 ### Extra context from other repositories
 

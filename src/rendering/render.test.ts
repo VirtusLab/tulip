@@ -8,7 +8,10 @@ function explanation(markdown: string): CategoryExplanation {
   return { category: { id: "c1", name: "Auth", description: "", attention: "normal" }, markdown };
 }
 
-const ASSETS = { style: "body{color:red}", scripts: ["var m=1;", "var h=2;", "var a=3;"] };
+const ASSETS = {
+  style: "body{color:red}",
+  scripts: [{ text: "var m=1;" }, { text: "var h=2;" }, { text: "var a=3;" }],
+};
 
 describe("renderExplanations", () => {
   it("resolves every referenced file via the checkout and renders it into the page", async () => {
@@ -29,7 +32,7 @@ describe("renderExplanations", () => {
         prDescription: "desc",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation(`## What changed\n\n${ref}\n`)],
       },
       {
@@ -66,7 +69,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation(`## What changed\n\n${ref}\n`)],
         renamedFrom: new Map([["new/name.ts", "old/name.ts"]]),
       },
@@ -100,7 +103,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation(`## What changed\n\n${ref}\n`)],
       },
       {
@@ -139,7 +142,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation(`${refA}\n\n${refB}\n`)],
       },
       {
@@ -165,7 +168,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation("Just prose, no markers.")],
       },
       {
@@ -189,7 +192,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation("Just prose.")],
       },
       {
@@ -226,7 +229,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation("Just prose, no markers.")],
       },
       {
@@ -259,7 +262,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation("Just prose, no markers.")],
       },
       {
@@ -286,7 +289,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation("## What changed\n\nprose\n")],
         serve: true,
         share: true,
@@ -322,7 +325,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation("## What changed\n\nprose\n")],
         serve: true,
         share: true,
@@ -351,7 +354,7 @@ describe("renderExplanations", () => {
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
         ...PAGE_RUN,
-        inlineAssets: ASSETS,
+        assets: ASSETS,
         explanations: [explanation("prose\n")],
       },
       {

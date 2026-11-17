@@ -16,8 +16,8 @@
 import { fileURLToPath } from "node:url";
 import { serializeSnippetRef } from "../src/explanations/markup.js";
 import { assembleOutput } from "../src/rendering/assemble.js";
-import { loadInlineAssets } from "../src/rendering/inline-assets.js";
 import { buildAlignedDiff } from "../src/rendering/line-diff.js";
+import { loadPageAssets } from "../src/rendering/page-assets.js";
 import { renderPage } from "../src/rendering/template.js";
 
 const codeRef = serializeSnippetRef({
@@ -97,7 +97,8 @@ const markdown = `A short intro paragraph, followed by a list:\n\n- validates em
 const prDescription = `This PR adds validation to \`parse()\` so empty or malformed input fails fast with a clear error, instead of letting \`JSON.parse\` throw an opaque \`SyntaxError\` further down the call stack.\n\n> Follow-up to the incident where a malformed webhook payload crashed the ingest worker.\n\n${prDescriptionRef}\n`;
 
 const html = renderPage({
-  inlineAssets: await loadInlineAssets(
+  assets: await loadPageAssets(
+    { offline: true },
     fileURLToPath(new URL("../src/rendering/assets", import.meta.url)),
   ),
   prTitle: "Add input validation to parse()",

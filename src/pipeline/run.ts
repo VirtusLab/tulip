@@ -21,7 +21,7 @@ import { forgeFor } from "../forge-registry/registry.js";
 import { startTimer } from "../logging/duration.js";
 import { errorMessage } from "../logging/error-message.js";
 import { createLogger, type Logger } from "../logging/logger.js";
-import { loadInlineAssets } from "../rendering/inline-assets.js";
+import { loadPageAssets } from "../rendering/page-assets.js";
 import { renderExplanations } from "../rendering/render.js";
 import { serveForReview } from "../serve/server.js";
 import { signPage } from "../share/page-signature.js";
@@ -50,6 +50,8 @@ export interface PipelineOptions {
   /** Share the page on the PR once the run ends (docs/adr/0032). Fails when the PR's forge has no
    * `previewPublisher`. */
   attachPreviewAsComment: boolean;
+  /** Embed mermaid in the page instead of loading it from a CDN (docs/adr/0033). */
+  offline: boolean;
   /** Signs the page so `tulip share` can trust it later (see src/share/signing.ts). */
   shareKeyPath: string;
   /** Which agent CLI runs every LLM pass (docs/adr/0027); see src/cli/agent-choice.ts. */
@@ -74,7 +76,7 @@ export interface PipelineDeps {
   splitLargeChanges?: typeof splitLargeChanges;
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
-  loadInlineAssets?: typeof loadInlineAssets;
+  loadPageAssets?: typeof loadPageAssets;
   renderExplanations?: typeof renderExplanations;
   serveForReview?: typeof serveForReview;
   signPage?: typeof signPage;
@@ -117,7 +119,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doSplitLargeChanges = deps.splitLargeChanges ?? splitLargeChanges;
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
-  const doLoadInlineAssets = deps.loadInlineAssets ?? loadInlineAssets;
+  const doLoadPageAssets = deps.loadPageAssets ?? loadPageAssets;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
   const doServeForReview = deps.serveForReview ?? serveForReview;
   const doSignPage = deps.signPage ?? signPage;
@@ -179,7 +181,9 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
     }
 
     // Before any LLM work, so a missing asset (e.g. no `pnpm build`) costs nothing.
-    const inlineAssets = await runPhase("loading page assets", () => doLoadInlineAssets());
+    const assets = await runPhase("loading page assets", () =>
+      doLoadPageAssets({ offline: options.offline }),
+    );
 
     logger.info(`fetching ${adapter.label(options.pr)}...`);
     const metadata = await runPhase("fetching PR", () => adapter.fetchPrMetadata(options.pr));
@@ -337,7 +341,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           explanations,
           renamedFrom,
           serve: options.serve,
-          inlineAssets,
+          assets,
           share: options.serve && publisher !== undefined,
         },
         {
