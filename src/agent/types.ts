@@ -57,6 +57,9 @@ export interface AgentCallArgs {
    * a session that was never recorded (see {@link Agent.sessionTiers}). */
   model?: string;
   resumeSessionId?: string;
+  /** Extra directories, outside the checkout, the session may read (`--context-dir`). Absent
+   * or empty when none were given. */
+  contextDirs?: string[];
 }
 
 /** One call as the runner spawns it. `files` are written before the process starts and removed
@@ -95,6 +98,9 @@ export interface AgentBackend {
   usageIsSessionTotal?: boolean;
   /** Set when a reply's cost is its session's running total rather than that call's own. */
   costIsSessionTotal?: boolean;
+  /** Set when {@link planSpawn} grants read access to {@link AgentCallArgs.contextDirs}; the
+   * pipeline refuses `--context-dir` for any other backend rather than silently ignoring it. */
+  supportsContextDirs?: boolean;
 }
 
 /** One run's handle on an agent: its backend, process runner, and per-session state. Built by
@@ -113,4 +119,7 @@ export interface Agent {
   /** Each session's latest running cost, for a backend with
    * {@link AgentBackend.costIsSessionTotal}. */
   sessionCost: Map<string, number>;
+  /** Absolute paths from `--context-dir`, readable by every session; empty when none were
+   * given. */
+  contextDirs: string[];
 }

@@ -21,9 +21,9 @@ An opt-in `--serve` mode runs a localhost server that hosts the page and posts c
 
 ### Server (`src/serve`)
 - Node `http` server bound to `127.0.0.1` on an OS-assigned port, serving the render temp dir
-  (`index.html` + `assets/`), guarded against path traversal. Opens the `http://127.0.0.1:<port>`
-  URL (unless `--no-open`) and runs until SIGINT, then closes and returns so the normal cleanup
-  runs.
+  (`index.html` + `assets/`; only `index.html` since [ADR 0030](0030-single-file-output.md)),
+  guarded against path traversal. Opens the `http://127.0.0.1:<port>` URL (unless `--no-open`)
+  and runs until SIGINT, then closes and returns so the normal cleanup runs.
 - `POST /api/comment` with `{ categoryIndex: number, text: string }`. The PR ref is fixed to the
   launched PR — a request can't name another repo/PR. `categoryIndex` is validated against the
   server's own ordered category-name list; `text` is trimmed, required non-empty, and rejected

@@ -20,6 +20,7 @@ import type { PrMetadata, PrRef } from "../forge/types.js";
 import { forgeFor } from "../forge-registry/registry.js";
 import { startTimer } from "../logging/duration.js";
 import { createLogger, type Logger } from "../logging/logger.js";
+import { loadInlineAssets } from "../rendering/inline-assets.js";
 import { renderExplanations } from "../rendering/render.js";
 import { serveForReview } from "../serve/server.js";
 import { splitLargeChanges } from "../splitting/orchestrate.js";
@@ -39,6 +40,8 @@ export interface PipelineOptions {
   serve: boolean;
   /** Which agent CLI runs every LLM pass (docs/adr/0027); see src/cli/agent-choice.ts. */
   agent: AgentId;
+  /** Directories every session may read beyond the checkout (`--context-dir`). */
+  contextDirs?: string[];
 }
 
 /** Opens `path` (a local file) in the user's default browser. Rejects if the opener binary is
@@ -57,6 +60,7 @@ export interface PipelineDeps {
   splitLargeChanges?: typeof splitLargeChanges;
   classifyChanges?: typeof classifyChanges;
   explainCategories?: typeof explainCategories;
+  loadInlineAssets?: typeof loadInlineAssets;
   renderExplanations?: typeof renderExplanations;
   serveForReview?: typeof serveForReview;
   /** Defaults to spawning the OS's own "open a file" command. Injected in tests so the suite
@@ -98,6 +102,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const doSplitLargeChanges = deps.splitLargeChanges ?? splitLargeChanges;
   const doClassifyChanges = deps.classifyChanges ?? classifyChanges;
   const doExplainCategories = deps.explainCategories ?? explainCategories;
+  const doLoadInlineAssets = deps.loadInlineAssets ?? loadInlineAssets;
   const doRenderExplanations = deps.renderExplanations ?? renderExplanations;
   const doServeForReview = deps.serveForReview ?? serveForReview;
   const doOpenInBrowser = deps.openInBrowser ?? defaultOpenInBrowser;
@@ -106,7 +111,10 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
   const prUrl = adapter.webUrl(options.pr);
 
   // One per run, so every phase's sessions (and their resumes) go through the same agent.
-  const agent = deps.agent ?? createAgentFor(options.agent);
+  const agent = deps.agent ?? createAgentFor(options.agent, options.contextDirs);
+  if (agent.contextDirs.length > 0 && !agent.backend.supportsContextDirs) {
+    throw new Error(`--context-dir is not supported with the ${agent.backend.id} agent.`);
+  }
 
   logger.info(formatVersion());
   logger.info(`Processing PR ${prUrl} with ${agent.backend.id}`);
@@ -142,6 +150,9 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
       throw new Error(`--serve isn't supported for ${options.pr.forge} URLs`);
     }
     await commenter?.checkAuth(options.pr.host);
+
+    // Before any LLM work, so a missing asset (e.g. no `pnpm build`) costs nothing.
+    const inlineAssets = await runPhase("loading page assets", () => doLoadInlineAssets());
 
     logger.info(`fetching ${adapter.label(options.pr)}...`);
     const metadata = await runPhase("fetching PR", () => adapter.fetchPrMetadata(options.pr));
@@ -296,6 +307,7 @@ export async function run(options: PipelineOptions, deps: PipelineDeps = {}): Pr
           explanations,
           renamedFrom,
           serve: options.serve,
+          inlineAssets,
         },
         { checkout: checkout as PrCheckout, logger },
       ),

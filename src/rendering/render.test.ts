@@ -7,6 +7,8 @@ function explanation(markdown: string): CategoryExplanation {
   return { category: { id: "c1", name: "Auth", description: "", attention: "normal" }, markdown };
 }
 
+const ASSETS = { style: "body{color:red}", scripts: ["var m=1;", "var h=2;", "var a=3;"] };
+
 describe("renderExplanations", () => {
   it("resolves every referenced file via the checkout and renders it into the page", async () => {
     const ref = serializeSnippetRef({
@@ -25,6 +27,7 @@ describe("renderExplanations", () => {
         prTitle: "Add feature",
         prDescription: "desc",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation(`## What changed\n\n${ref}\n`)],
       },
       {
@@ -33,8 +36,6 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -62,6 +63,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation(`## What changed\n\n${ref}\n`)],
         renamedFrom: new Map([["new/name.ts", "old/name.ts"]]),
       },
@@ -69,8 +71,6 @@ describe("renderExplanations", () => {
         checkout,
         mkdtemp: async () => "/tmp/tulip-render-rename",
         writeFile: async () => {},
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -96,6 +96,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation(`## What changed\n\n${ref}\n`)],
       },
       {
@@ -104,8 +105,6 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -135,14 +134,13 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation(`${refA}\n\n${refB}\n`)],
       },
       {
         checkout,
         mkdtemp: async () => "/tmp/tulip-render-2",
         writeFile: async () => {},
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
@@ -161,20 +159,46 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation("Just prose, no markers.")],
       },
       {
         checkout,
         mkdtemp: async () => "/tmp/tulip-render-3",
         writeFile: async () => {},
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );
 
     expect(checkout.getFileAtBase).not.toHaveBeenCalled();
     expect(result.dir).toBe("/tmp/tulip-render-3");
+  });
+
+  it("embeds the assets into the page", async () => {
+    let capturedPage = "";
+
+    await renderExplanations(
+      {
+        prTitle: "t",
+        prDescription: "d",
+        prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
+        explanations: [explanation("Just prose.")],
+      },
+      {
+        checkout: { getFileAtBase: vi.fn(), getFileAtHead: vi.fn() },
+        mkdtemp: async () => "/tmp/tulip-render-one",
+        writeFile: async (_, content) => {
+          capturedPage = content;
+        },
+        logger: { info: vi.fn(), debug: vi.fn() },
+      },
+    );
+
+    expect(capturedPage).toContain("<style>body{color:red}</style>");
+    expect(capturedPage).toContain(
+      "<script>var m=1;</script>\n<script>var h=2;</script>\n<script>var a=3;</script>",
+    );
   });
 
   it("renders the injected build info into the page footer, without touching the real dist/build-info.json", async () => {
@@ -194,6 +218,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation("Just prose, no markers.")],
       },
       {
@@ -202,8 +227,6 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
         logger: { info: vi.fn(), debug: vi.fn() },
         getBuildInfo,
       },
@@ -227,6 +250,7 @@ describe("renderExplanations", () => {
         prTitle: "t",
         prDescription: "d",
         prUrl: "https://github.com/a/b/pull/1",
+        inlineAssets: ASSETS,
         explanations: [explanation("Just prose, no markers.")],
       },
       {
@@ -235,8 +259,6 @@ describe("renderExplanations", () => {
         writeFile: async (_path, content) => {
           capturedPage = content;
         },
-        copyDir: async () => {},
-        assetsDir: "/fake/assets",
         logger: { info: vi.fn(), debug: vi.fn() },
       },
     );

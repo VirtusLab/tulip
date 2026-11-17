@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { config } from "../config.js";
 import {
   CliUsageError,
@@ -26,6 +29,53 @@ describe("parseCliArgs", () => {
 
   it("accepts --no-open, disabling auto-open", () => {
     expect(parseCliArgs([VALID_URL, "--no-open"]).open).toBe(false);
+  });
+
+  describe("--context-dir", () => {
+    const tempDirs: string[] = [];
+    const makeTempDir = (): string => {
+      const dir = mkdtempSync(join(tmpdir(), "tulip-ctx-"));
+      tempDirs.push(dir);
+      return dir;
+    };
+
+    afterEach(() => {
+      for (const dir of tempDirs.splice(0)) {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("resolves each repeated --context-dir to an absolute path", () => {
+      const first = makeTempDir();
+      const second = makeTempDir();
+
+      const parsed = parseCliArgs([
+        VALID_URL,
+        "--context-dir",
+        relative(process.cwd(), first),
+        "--context-dir",
+        second,
+      ]);
+
+      expect(parsed.contextDirs).toEqual([first, second]);
+    });
+
+    it("rejects a missing path", () => {
+      const path = join(makeTempDir(), "missing");
+
+      expect(() => parseCliArgs([VALID_URL, "--context-dir", path])).toThrow(
+        `Invalid --context-dir: "${path}" is not a directory.`,
+      );
+    });
+
+    it("rejects a file", () => {
+      const path = join(makeTempDir(), "file.txt");
+      writeFileSync(path, "");
+
+      expect(() => parseCliArgs([VALID_URL, "--context-dir", path])).toThrow(
+        `Invalid --context-dir: "${path}" is not a directory.`,
+      );
+    });
   });
 
   it("accepts --serve", () => {
@@ -122,6 +172,10 @@ describe("parseCliArgs", () => {
     const verboseLine = lines.find((line) => line.includes("--verbose"));
     const agentLine = lines.find((line) => line.includes("--agent"));
     expect(agentLine?.indexOf("Agent CLI")).toBe(verboseLine?.indexOf("Show"));
+  });
+
+  it("names the agents that support --context-dir in the usage text", () => {
+    expect(usage()).toContain("Read-only; only for: claude");
   });
 
   it("parses a GitLab MR URL", () => {

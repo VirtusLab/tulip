@@ -218,6 +218,11 @@ describe("invokeAgent", () => {
         "json",
         "--json-schema",
         JSON.stringify(SCHEMA),
+        "--disallowedTools",
+        "Edit",
+        "Write",
+        "NotebookEdit",
+        "Bash",
         "--model",
         "sonnet",
       ],
@@ -236,7 +241,20 @@ describe("invokeAgent", () => {
 
     const [args] = runAgentProcess.mock.calls[0] ?? [];
     expect(args as string[]).not.toContain("--allowedTools");
-    expect((args as string[]).some((arg) => arg.startsWith("Bash"))).toBe(false);
+  });
+
+  it("passes the agent's context dirs to the backend", async () => {
+    const runAgentProcess = vi.fn(async (_args: string[], _input: string) =>
+      processResult(envelope()),
+    );
+
+    await invokeAgent(BASE_INVOCATION, {
+      runAgentProcess,
+      agent: createAgentFor("claude", ["/repos/protos"]),
+    });
+
+    const [args] = runAgentProcess.mock.calls[0] ?? [];
+    expect(args).toEqual(expect.arrayContaining(["--add-dir", "/repos/protos"]));
   });
 
   it("passes cwd through to the process runner when given", async () => {

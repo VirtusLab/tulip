@@ -3,7 +3,7 @@
 Remaining tasks, roughly by priority.
 
 ## Security / robustness
-- [ ] Restrict the spawned `claude` process's tools (e.g. `--disallowedTools Edit,Write,Bash` or a read-only permission mode) — today it inherits the user's permission config and can modify files if the user pre-allowed those tools (the Cursor backends already run in read-only `--mode ask`)
+- [x] Restrict the spawned `claude` process's tools (e.g. `--disallowedTools Edit,Write,Bash` or a read-only permission mode) — today it inherits the user's permission config and can modify files if the user pre-allowed those tools (the Cursor backends already run in read-only `--mode ask`)
 - [ ] Check whether `claude -p` runs a PR's `.claude/settings.json` hooks from the checkout; if so, add `.claude` to the claude backend's `repoConfigDirs`, as the Cursor backends do (docs/adr/0027)
 - [ ] Aggregate page-embed budget: the 200KB context-embed cap is per file per side; a many-file PR can still produce a very large page
 - [ ] Reject protocol-relative (`//host`) URLs in prose links (inert under `file://`, still worth closing)
@@ -19,7 +19,7 @@ Remaining tasks, roughly by priority.
   once. Non-blocking diagnostic, not a fix.
 - [ ] Optionally feed phase-1 per-file churn (+/- counts) or diffs to sharpen attention ordering (needs CategoryInputFile + diff-stats plumbing)
 - [ ] Checkpointing & resumability of a partially-completed run (spec: "a later concern")
-- [ ] Surface per-run LLM cost (per-call `costUsd` is in the call log, docs/adr/0029; sum and log it)
+- [ ] Surface per-run LLM cost (per-call `costUsd` is in the call log, docs/adr/0031; sum and log it)
 - [ ] Category-level progress for phase 3 in non-verbose mode is minimal; consider a progress line per review/amend step
 
 ## Validation

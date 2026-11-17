@@ -135,11 +135,29 @@ tulip https://gitlab.com/group/project/-/merge_requests/45
 ```
 
 Flags: `--diff-threshold <n>`, `--verbose`, `--serve`, `--no-open`,
-`--agent <id>`. Run `tulip --help` for details, or `tulip --version` for the
-build.
+`--agent <id>`, `--context-dir <path>`. Run `tulip --help` for details, or
+`tulip --version` for the build.
 
 On success, Tulip logs a `file://...` path to the generated HTML page — open it
-in a browser.
+in a browser. The page is a single `index.html` with its CSS, scripts and fonts
+embedded, so you can send it as one file. Most of its few MB is the diagram
+library.
+
+### Extra context from other repositories
+
+A PR often uses things defined elsewhere: a shared library, a type from another
+repository, the service that calls it. Pass `--context-dir` (repeatable) to let
+every pass read those directories as well as the PR checkout:
+
+```sh
+tulip <PR URL> --context-dir ../shared-lib --context-dir ../other-service
+```
+
+Access is read-only, the same as for the checkout. Only the `claude` agent
+supports it for now. A malicious PR can trick the model into copying text from
+these directories into the generated page. Only pass directories you'd be happy
+for the PR's author to see, and never ones holding secrets (`.env` files, keys,
+credentials).
 
 Each run also writes per-call statistics (step, category, model, tokens, cost,
 time) to a JSONL file in the temp directory and logs its path, for analysing
@@ -182,9 +200,9 @@ file passed as `--output-schema` (made strict, as OpenAI requires); the prompt
 goes on stdin. Tulip validates the last agent message of the `--json` event
 stream (with one retry), as for the other agents.
 
-The page's Content Security Policy lets it load only its own assets, so
-model-written text can't make it fetch a URL on open. Remote images in the PR
-description don't show either.
+The page's Content Security Policy lets it load nothing but its own embedded
+assets, so model-written text can't make it fetch a URL on open. Remote images
+in the PR description don't show either.
 
 ### Reviewing on the page
 

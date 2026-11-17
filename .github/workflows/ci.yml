@@ -21,3 +21,11 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm lint
+
+  auto-merge-dependabot:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    needs: [build-test-lint]
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: softwaremill/github-actions-workflows/.github/workflows/auto-merge.yml@main

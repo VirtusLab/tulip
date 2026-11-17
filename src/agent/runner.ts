@@ -126,6 +126,7 @@ async function execute<T>(
       ...(invocation.resumeSessionId === undefined
         ? {}
         : { resumeSessionId: invocation.resumeSessionId }),
+      contextDirs: agent.contextDirs,
     });
     promptChars = planned.prompt.length;
     const { stdout } = await withSpawnFiles(planned.files, () =>

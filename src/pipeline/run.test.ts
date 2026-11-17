@@ -16,6 +16,7 @@ import type { ForgeAdapter, PrCommenter, PrMetadata, PrRef } from "../forge/type
 import { forgeFor } from "../forge-registry/registry.js";
 import { gitlabAdapter } from "../gitlab/adapter.js";
 import type { AssembleResult } from "../rendering/assemble.js";
+import type { InlineAssets } from "../rendering/inline-assets.js";
 import { type PipelineDeps, type PipelineOptions, run } from "./run.js";
 
 // Stubbed so the welcome-message test below asserts on a fixed string, independent of whether
@@ -174,6 +175,10 @@ function baseDeps(order: string[] = []) {
         },
       ];
     }),
+    loadInlineAssets: vi.fn(async (): Promise<InlineAssets> => {
+      order.push("assets");
+      return { style: "", scripts: [] };
+    }),
     renderExplanations: vi.fn(async (): Promise<AssembleResult> => {
       order.push("render");
       return { dir: "/tmp/tulip-render", indexPath: "/tmp/tulip-render/index.html" };
@@ -266,6 +271,7 @@ describe("run", () => {
     await run(options(), deps);
 
     expect(order).toEqual([
+      "assets",
       "fetch",
       "checkout",
       "materialize",
@@ -385,6 +391,15 @@ describe("run", () => {
     );
   });
 
+  it("refuses --context-dir for an agent that can't grant read access to it", async () => {
+    const deps = baseDeps();
+
+    await expect(
+      run(options({ agent: "codex", contextDirs: ["/repos/protos"] }), deps),
+    ).rejects.toThrow("--context-dir is not supported with the codex agent.");
+    expect(deps.createCheckout).not.toHaveBeenCalled();
+  });
+
   it("says token usage wasn't reported when calls ran but none carried usage", async () => {
     const deps = baseDeps();
     deps.generateCategories = recordingGenerate(undefined);
@@ -498,6 +513,30 @@ describe("run", () => {
     expect(lines.some((line) => line.includes("nothing to review"))).toBe(true);
     expect(deps.callLog.record).toHaveBeenLastCalledWith(
       expect.objectContaining({ type: "end", ok: true }),
+    );
+  });
+
+  it("fails on missing page assets before fetching the PR or running any LLM phase", async () => {
+    const deps = baseDeps();
+    deps.loadInlineAssets = vi.fn(async () => {
+      throw new Error("ENOENT: vendor/mermaid.min.js");
+    });
+
+    await run(options(), deps);
+
+    expect(process.exitCode).toBe(1);
+    expect(deps.fetchPrMetadata).not.toHaveBeenCalled();
+    expect(deps.generateCategories).not.toHaveBeenCalled();
+  });
+
+  it("passes the loaded assets to rendering", async () => {
+    const deps = baseDeps();
+
+    await run(options(), deps);
+
+    expect(deps.renderExplanations).toHaveBeenCalledWith(
+      expect.objectContaining({ inlineAssets: await deps.loadInlineAssets.mock.results[0]?.value }),
+      expect.anything(),
     );
   });
 
