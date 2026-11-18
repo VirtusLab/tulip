@@ -11,6 +11,9 @@ importers:
       diff:
         specifier: ^9.0.0
         version: 9.0.0
+      jsdom:
+        specifier: ^31.0.1
+        version: 31.0.1
       marked:
         specifier: ^18.0.11
         version: 18.2.0
@@ -39,9 +42,6 @@ importers:
       highlight.js:
         specifier: ^11.12.0
         version: 11.12.0
-      jsdom:
-        specifier: ^31.0.1
-        version: 31.0.1
       node-html-parser:
         specifier: ^9.0.1
         version: 9.0.7
